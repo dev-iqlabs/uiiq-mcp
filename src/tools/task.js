@@ -64,4 +64,61 @@ export const taskTools = [
       return Array.isArray(data) ? data : data.boards ?? [];
     }
   },
+  {
+    name: "uiiq_task_create",
+    description: "Create a new UVOS task card on a board.",
+    inputSchema: {
+      type: "object",
+      required: ["boardId", "title"],
+      properties: {
+        boardId: { type: "string" },
+        title: { type: "string" },
+        description: { type: "string" },
+        assigneeId: { type: "string", description: "User ID to assign the task to" },
+        dueDate: { type: "string", description: "ISO date string" },
+        priority: { type: "string", description: "low | medium | high" }
+      }
+    },
+    async handler({ boardId, title, description, assigneeId, dueDate, priority }) {
+      const body = { boardId, title };
+      if (description) body.description = description;
+      if (assigneeId)  body.assigneeId  = assigneeId;
+      if (dueDate)     body.dueDate     = dueDate;
+      if (priority)    body.priority    = priority;
+      const res = await apiClient("uvos")("/tasks/cards", {
+        method: "POST",
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    }
+  },
+  {
+    name: "uiiq_task_update",
+    description: "Update a UVOS task card — move status, reassign, or change due date.",
+    inputSchema: {
+      type: "object",
+      required: ["id"],
+      properties: {
+        id: { type: "string" },
+        status: { type: "string", description: "todo | in-progress | review | done | blocked" },
+        assigneeId: { type: "string" },
+        dueDate: { type: "string", description: "ISO date string" },
+        priority: { type: "string", description: "low | medium | high" }
+      }
+    },
+    async handler({ id, status, assigneeId, dueDate, priority }) {
+      const body = {};
+      if (status)     body.status     = status;
+      if (assigneeId) body.assigneeId = assigneeId;
+      if (dueDate)    body.dueDate    = dueDate;
+      if (priority)   body.priority   = priority;
+      const res = await apiClient("uvos")(`/tasks/cards/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    }
+  },
 ];

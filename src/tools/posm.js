@@ -83,4 +83,76 @@ export const posmTools = [
       return res.json();
     }
   },
+  {
+    name: "uiiq_posm_gift_card_balance",
+    description: "Check the remaining balance on a POSM gift card by code.",
+    inputSchema: {
+      type: "object",
+      required: ["code"],
+      properties: { code: { type: "string", description: "Gift card code" } }
+    },
+    async handler({ code }) {
+      const res = await apiClient("posm")(`/admin/gift-cards/${encodeURIComponent(code)}`);
+      if (!res.ok) throw new Error(`Gift card not found: ${code}`);
+      return res.json();
+    }
+  },
+  {
+    name: "uiiq_posm_booking_get",
+    description: "Get a POSM booking by ID.",
+    inputSchema: {
+      type: "object",
+      required: ["id"],
+      properties: { id: { type: "string" } }
+    },
+    async handler({ id }) {
+      const res = await apiClient("posm")(`/v1/bookings/${id}`);
+      if (!res.ok) throw new Error(`Booking not found: ${id}`);
+      return res.json();
+    }
+  },
+  {
+    name: "uiiq_posm_booking_create",
+    description: "Create a new POSM booking for an experience or session.",
+    inputSchema: {
+      type: "object",
+      required: ["experienceId", "customerEmail", "date"],
+      properties: {
+        experienceId: { type: "string", description: "Experience ID to book" },
+        customerEmail: { type: "string" },
+        customerName: { type: "string" },
+        date: { type: "string", description: "ISO date string for the booking slot" },
+        notes: { type: "string" },
+        quantity: { type: "number", description: "Number of places (default 1)" }
+      }
+    },
+    async handler({ experienceId, customerEmail, customerName, date, notes, quantity = 1 }) {
+      const res = await apiClient("posm")("/v1/bookings", {
+        method: "POST",
+        body: JSON.stringify({ experienceId, customerEmail, customerName, date, notes, quantity }),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    }
+  },
+  {
+    name: "uiiq_posm_booking_cancel",
+    description: "Cancel a POSM booking by ID. Optionally provide a reason.",
+    inputSchema: {
+      type: "object",
+      required: ["id"],
+      properties: {
+        id: { type: "string" },
+        reason: { type: "string" }
+      }
+    },
+    async handler({ id, reason }) {
+      const res = await apiClient("posm")(`/v1/bookings/${id}/cancel`, {
+        method: "POST",
+        body: JSON.stringify({ reason }),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      return { success: true, id };
+    }
+  },
 ];
