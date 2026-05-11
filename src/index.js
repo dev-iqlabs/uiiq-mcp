@@ -1,0 +1,61 @@
+#!/usr/bin/env node
+import { Server } from "@modelcontextprotocol/sdk/server/index.js";
+import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { ListToolsRequestSchema, CallToolRequestSchema } from "@modelcontextprotocol/sdk/types.js";
+
+import { tenantTools }    from "./tools/tenant.js";
+import { contactTools }   from "./tools/contact.js";
+import { orderTools }     from "./tools/order.js";
+import { portfolioTools } from "./tools/portfolio.js";
+import { taskTools }      from "./tools/task.js";
+import { posmTools }      from "./tools/posm.js";
+import { reportTools }    from "./tools/report.js";
+import { automationTools } from "./tools/automation.js";
+import { statusTools }    from "./tools/status.js";
+
+const ALL_TOOLS = [
+  ...statusTools,
+  ...tenantTools,
+  ...contactTools,
+  ...orderTools,
+  ...portfolioTools,
+  ...taskTools,
+  ...posmTools,
+  ...reportTools,
+  ...automationTools,
+];
+
+const TOOL_MAP = Object.fromEntries(ALL_TOOLS.map(t => [t.name, t]));
+
+const server = new Server(
+  { name: "uiiq-mcp", version: "1.0.0" },
+  { capabilities: { tools: {} } }
+);
+
+server.setRequestHandler(ListToolsRequestSchema, async () => ({
+  tools: ALL_TOOLS.map(({ name, description, inputSchema }) => ({ name, description, inputSchema })),
+}));
+
+server.setRequestHandler(CallToolRequestSchema, async (req) => {
+  const tool = TOOL_MAP[req.params.name];
+  if (!tool) {
+    return {
+      content: [{ type: "text", text: "Unknown tool: " + req.params.name }],
+      isError: true,
+    };
+  }
+  try {
+    const result = await tool.handler(req.params.arguments ?? {});
+    return {
+      content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+    };
+  } catch (err) {
+    return {
+      content: [{ type: "text", text: "Error: " + err.message }],
+      isError: true,
+    };
+  }
+});
+
+const transport = new StdioServerTransport();
+await server.connect(transport);

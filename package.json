@@ -1,0 +1,17 @@
+{
+  "name": "uiiq-mcp",
+  "version": "1.0.0",
+  "description": "MCP server for the UIIQ platform — exposes tenant, contact, order, portfolio, task, POSM and automation tools to Claude",
+  "type": "module",
+  "bin": {
+    "uiiq-mcp": "./src/index.js"
+  },
+  "scripts": {
+    "start": "node src/index.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.12.0",
+    "node-fetch": "^3.3.2",
+    "tough-cookie": "^4.1.4"
+  }
+}
