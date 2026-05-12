@@ -10,7 +10,7 @@ export const automationTools = [
     },
     async handler({ status } = {}) {
       const qs = status ? "?status=" + encodeURIComponent(status) : "";
-      const res = await apiClient("ubms")("/automations" + qs);
+      const res = await apiClient()("/automations" + qs);
       const data = await res.json();
       return Array.isArray(data) ? data : data.automations ?? [];
     }
@@ -24,7 +24,7 @@ export const automationTools = [
       properties: { id: { type: "string" }, enabled: { type: "boolean" } }
     },
     async handler({ id, enabled }) {
-      const res = await apiClient("ubms")("/automations/" + id, {
+      const res = await apiClient()("/automations/" + id, {
         method: "PATCH",
         body: JSON.stringify({ status: enabled ? "active" : "inactive" }),
       });
@@ -37,7 +37,7 @@ export const automationTools = [
     description: "List UBMS email/SMS campaigns.",
     inputSchema: { type: "object", properties: {} },
     async handler() {
-      const res = await apiClient("ubms")("/campaigns");
+      const res = await apiClient()("/campaigns");
       const data = await res.json();
       return Array.isArray(data) ? data : data.campaigns ?? [];
     }
@@ -47,7 +47,7 @@ export const automationTools = [
     description: "List UVOS workflow templates.",
     inputSchema: { type: "object", properties: {} },
     async handler() {
-      const res = await apiClient("uvos")("/tasks/workflows");
+      const res = await apiClient()("/tasks/workflows");
       const data = await res.json();
       return Array.isArray(data) ? data : data.workflows ?? [];
     }
@@ -63,7 +63,7 @@ export const automationTools = [
     },
     async handler({ status } = {}) {
       const qs = status ? `?status=${encodeURIComponent(status)}` : "";
-      const res = await apiClient("uvos")(`/tasks/workflows/instances${qs}`);
+      const res = await apiClient()(`/tasks/workflows/instances${qs}`);
       const data = await res.json();
       return Array.isArray(data) ? data : data.instances ?? [];
     }
@@ -80,7 +80,7 @@ export const automationTools = [
       }
     },
     async handler({ workflowId, reference }) {
-      const res = await apiClient("uvos")("/tasks/workflows/trigger", {
+      const res = await apiClient()("/tasks/workflows/trigger", {
         method: "POST",
         body: JSON.stringify({ workflowId, reference }),
       });

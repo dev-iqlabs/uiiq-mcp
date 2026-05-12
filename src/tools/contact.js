@@ -14,7 +14,7 @@ export const contactTools = [
     async handler({ search, limit = 50 } = {}) {
       const params = new URLSearchParams({ limit });
       if (search) params.set("search", search);
-      const res = await apiClient("ubms")(`/contacts?${params}`);
+      const res = await apiClient()(`/contacts?${params}`);
       const data = await res.json();
       return Array.isArray(data) ? data : data.contacts ?? [];
     }
@@ -28,7 +28,7 @@ export const contactTools = [
       properties: { id: { type: "string" } }
     },
     async handler({ id }) {
-      const res = await apiClient("ubms")(`/contacts/${id}`);
+      const res = await apiClient()(`/contacts/${id}`);
       if (!res.ok) throw new Error(`Contact not found: ${id}`);
       return res.json();
     }

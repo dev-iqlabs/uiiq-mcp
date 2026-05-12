@@ -10,7 +10,7 @@ export const posmTools = [
     },
     async handler({ status } = {}) {
       const qs = status ? "?status=" + encodeURIComponent(status) : "";
-      const res = await apiClient("posm")("/v1/bookings" + qs);
+      const res = await apiClient()("/v1/bookings" + qs);
       const data = await res.json();
       return Array.isArray(data) ? data : data.bookings ?? [];
     }
@@ -20,7 +20,7 @@ export const posmTools = [
     description: "List POSM experiences available for booking.",
     inputSchema: { type: "object", properties: {} },
     async handler() {
-      const res = await apiClient("posm")("/admin/experiences");
+      const res = await apiClient()("/admin/experiences");
       const data = await res.json();
       return Array.isArray(data) ? data : data.experiences ?? [];
     }
@@ -34,7 +34,7 @@ export const posmTools = [
     },
     async handler({ status } = {}) {
       const qs = status ? "?status=" + encodeURIComponent(status) : "";
-      const res = await apiClient("posm")("/admin/memberships/subscribers" + qs);
+      const res = await apiClient()("/admin/memberships/subscribers" + qs);
       const data = await res.json();
       return Array.isArray(data) ? data : data.subscribers ?? [];
     }
@@ -55,7 +55,7 @@ export const posmTools = [
     async handler({ code, discount, type, expires }) {
       const body = { code, discount, type };
       if (expires) body.expiresAt = expires;
-      const res = await apiClient("posm")("/admin/promo-codes", {
+      const res = await apiClient()("/admin/promo-codes", {
         method: "POST",
         body: JSON.stringify(body),
       });
@@ -75,7 +75,7 @@ export const posmTools = [
       }
     },
     async handler({ value, email }) {
-      const res = await apiClient("posm")("/admin/gift-cards", {
+      const res = await apiClient()("/admin/gift-cards", {
         method: "POST",
         body: JSON.stringify({ value, email }),
       });
@@ -92,7 +92,7 @@ export const posmTools = [
       properties: { code: { type: "string", description: "Gift card code" } }
     },
     async handler({ code }) {
-      const res = await apiClient("posm")(`/admin/gift-cards/${encodeURIComponent(code)}`);
+      const res = await apiClient()(`/admin/gift-cards/${encodeURIComponent(code)}`);
       if (!res.ok) throw new Error(`Gift card not found: ${code}`);
       return res.json();
     }
@@ -106,7 +106,7 @@ export const posmTools = [
       properties: { id: { type: "string" } }
     },
     async handler({ id }) {
-      const res = await apiClient("posm")(`/v1/bookings/${id}`);
+      const res = await apiClient()(`/v1/bookings/${id}`);
       if (!res.ok) throw new Error(`Booking not found: ${id}`);
       return res.json();
     }
@@ -127,7 +127,7 @@ export const posmTools = [
       }
     },
     async handler({ experienceId, customerEmail, customerName, date, notes, quantity = 1 }) {
-      const res = await apiClient("posm")("/v1/bookings", {
+      const res = await apiClient()("/v1/bookings", {
         method: "POST",
         body: JSON.stringify({ experienceId, customerEmail, customerName, date, notes, quantity }),
       });
@@ -147,7 +147,7 @@ export const posmTools = [
       }
     },
     async handler({ id, reason }) {
-      const res = await apiClient("posm")(`/v1/bookings/${id}/cancel`, {
+      const res = await apiClient()(`/v1/bookings/${id}/cancel`, {
         method: "POST",
         body: JSON.stringify({ reason }),
       });

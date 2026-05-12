@@ -12,7 +12,7 @@ export const portfolioTools = [
     },
     async handler({ status } = {}) {
       const qs = status ? `?status=${encodeURIComponent(status)}` : "";
-      const res = await apiClient("uvos")(`/portfolio/projects${qs}`);
+      const res = await apiClient()(`/portfolio/projects${qs}`);
       const data = await res.json();
       return Array.isArray(data) ? data : data.projects ?? [];
     }
@@ -26,7 +26,7 @@ export const portfolioTools = [
       properties: { id: { type: "string" } }
     },
     async handler({ id }) {
-      const api = apiClient("uvos");
+      const api = apiClient();
       const [proj, blockers, milestones] = await Promise.all([
         api(`/portfolio/projects/${id}`).then(r => r.json()),
         api(`/portfolio/projects/${id}/blockers`).then(r => r.json()).catch(() => []),
@@ -55,7 +55,7 @@ export const portfolioTools = [
       const body = {};
       if (status) body.status = status;
       if (progress != null) body.progress = progress;
-      const res = await apiClient("uvos")(`/portfolio/projects/${id}`, {
+      const res = await apiClient()(`/portfolio/projects/${id}`, {
         method: "PATCH",
         body: JSON.stringify(body),
       });
@@ -72,7 +72,7 @@ export const portfolioTools = [
       properties: { id: { type: "string" }, title: { type: "string" } }
     },
     async handler({ id, title }) {
-      const res = await apiClient("uvos")(`/portfolio/projects/${id}/blockers`, {
+      const res = await apiClient()(`/portfolio/projects/${id}/blockers`, {
         method: "POST",
         body: JSON.stringify({ title }),
       });
@@ -92,7 +92,7 @@ export const portfolioTools = [
       }
     },
     async handler({ projectId, blockerId }) {
-      const res = await apiClient("uvos")(`/portfolio/projects/${projectId}/blockers/${blockerId}`, {
+      const res = await apiClient()(`/portfolio/projects/${projectId}/blockers/${blockerId}`, {
         method: "PATCH",
         body: JSON.stringify({ resolved: true }),
       });

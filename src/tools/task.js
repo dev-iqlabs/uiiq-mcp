@@ -13,7 +13,7 @@ export const taskTools = [
       }
     },
     async handler({ mine, board, status } = {}) {
-      const api = apiClient("uvos");
+      const api = apiClient();
       if (mine) {
         const res = await api("/tasks/my-work");
         const data = await res.json();
@@ -32,7 +32,7 @@ export const taskTools = [
     description: "Get a UVOS task card by ID.",
     inputSchema: { type: "object", required: ["id"], properties: { id: { type: "string" } } },
     async handler({ id }) {
-      const res = await apiClient("uvos")("/tasks/cards/" + id);
+      const res = await apiClient()("/tasks/cards/" + id);
       if (!res.ok) throw new Error("Task not found: " + id);
       return res.json();
     }
@@ -46,7 +46,7 @@ export const taskTools = [
       properties: { id: { type: "string" }, body: { type: "string" } }
     },
     async handler({ id, body }) {
-      const res = await apiClient("uvos")("/tasks/cards/" + id + "/comments", {
+      const res = await apiClient()("/tasks/cards/" + id + "/comments", {
         method: "POST",
         body: JSON.stringify({ body }),
       });
@@ -59,7 +59,7 @@ export const taskTools = [
     description: "List all UVOS task boards.",
     inputSchema: { type: "object", properties: {} },
     async handler() {
-      const res = await apiClient("uvos")("/tasks/boards");
+      const res = await apiClient()("/tasks/boards");
       const data = await res.json();
       return Array.isArray(data) ? data : data.boards ?? [];
     }
@@ -85,7 +85,7 @@ export const taskTools = [
       if (assigneeId)  body.assigneeId  = assigneeId;
       if (dueDate)     body.dueDate     = dueDate;
       if (priority)    body.priority    = priority;
-      const res = await apiClient("uvos")("/tasks/cards", {
+      const res = await apiClient()("/tasks/cards", {
         method: "POST",
         body: JSON.stringify(body),
       });
@@ -113,7 +113,7 @@ export const taskTools = [
       if (assigneeId) body.assigneeId = assigneeId;
       if (dueDate)    body.dueDate    = dueDate;
       if (priority)   body.priority   = priority;
-      const res = await apiClient("uvos")(`/tasks/cards/${id}`, {
+      const res = await apiClient()(`/tasks/cards/${id}`, {
         method: "PATCH",
         body: JSON.stringify(body),
       });

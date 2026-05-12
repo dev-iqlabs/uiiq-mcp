@@ -18,7 +18,7 @@ export const hrTools = [
       if (status)     params.set("status", status);
       if (search)     params.set("search", search);
       const qs = params.toString() ? "?" + params : "";
-      const res = await apiClient("uvos")(`/hr/staff${qs}`);
+      const res = await apiClient()(`/hr/staff${qs}`);
       const data = await res.json();
       return Array.isArray(data) ? data : data.staff ?? [];
     }
@@ -32,7 +32,7 @@ export const hrTools = [
       properties: { id: { type: "string" } }
     },
     async handler({ id }) {
-      const api = apiClient("uvos");
+      const api = apiClient();
       const [profile, training, leave] = await Promise.all([
         api(`/hr/staff/${id}`).then(r => r.json()),
         api(`/hr/staff/${id}/training`).then(r => r.json()).catch(() => []),
@@ -60,7 +60,7 @@ export const hrTools = [
       if (to)               params.set("to", to);
       if (approved != null) params.set("approved", approved);
       const qs = params.toString() ? "?" + params : "";
-      const res = await apiClient("uvos")(`/hr/timesheets${qs}`);
+      const res = await apiClient()(`/hr/timesheets${qs}`);
       const data = await res.json();
       return Array.isArray(data) ? data : data.timesheets ?? [];
     }
@@ -78,7 +78,7 @@ export const hrTools = [
       }
     },
     async handler({ id, approved, note }) {
-      const res = await apiClient("uvos")(`/hr/timesheets/${id}`, {
+      const res = await apiClient()(`/hr/timesheets/${id}`, {
         method: "PATCH",
         body: JSON.stringify({ approved, note }),
       });
@@ -101,7 +101,7 @@ export const hrTools = [
       const params = new URLSearchParams({ limit });
       if (staffId) params.set("staffId", staffId);
       if (date)    params.set("date", date);
-      const res = await apiClient("uvos")(`/hr/clockins?${params}`);
+      const res = await apiClient()(`/hr/clockins?${params}`);
       const data = await res.json();
       return Array.isArray(data) ? data : data.clockins ?? [];
     }
@@ -121,7 +121,7 @@ export const hrTools = [
       if (staffId) params.set("staffId", staffId);
       if (status)  params.set("status", status);
       const qs = params.toString() ? "?" + params : "";
-      const res = await apiClient("uvos")(`/hr/leave${qs}`);
+      const res = await apiClient()(`/hr/leave${qs}`);
       const data = await res.json();
       return Array.isArray(data) ? data : data.requests ?? [];
     }
@@ -139,7 +139,7 @@ export const hrTools = [
       }
     },
     async handler({ id, approved, note }) {
-      const res = await apiClient("uvos")(`/hr/leave/${id}`, {
+      const res = await apiClient()(`/hr/leave/${id}`, {
         method: "PATCH",
         body: JSON.stringify({ approved, note }),
       });

@@ -1,7 +1,7 @@
 import fs from "fs";
 import os from "os";
 import path from "path";
-import { BASES } from "./config.js";
+import { BASE } from "./config.js";
 
 const CREDS_PATH = path.join(os.homedir(), ".uiiq", "credentials.json");
 
@@ -12,16 +12,16 @@ function loadCreds() {
   return JSON.parse(fs.readFileSync(CREDS_PATH, "utf8"));
 }
 
-export function apiClient(app) {
+export function apiClient() {
   const creds = loadCreds();
-  const base = BASES[app];
-  const cookie = creds[app]?.cookie ?? creds.cookie ?? "";
+  const cookieName = creds.cookieName ?? "authjs.session-token";
+  const cookie = `${cookieName}=${creds.sessionToken}`;
   return (path, init = {}) => {
     const headers = {
       "Content-Type": "application/json",
       Cookie: cookie,
       ...(init.headers ?? {}),
     };
-    return fetch(`${base}${path}`, { ...init, headers });
+    return fetch(`${BASE}${path}`, { ...init, headers });
   };
 }

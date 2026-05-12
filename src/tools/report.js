@@ -16,7 +16,7 @@ export const reportTools = [
       if (from) params.set("from", from);
       if (to)   params.set("to", to);
       const qs = params.toString() ? "?" + params : "";
-      const res = await apiClient("ubms")("/reports/revenue" + qs);
+      const res = await apiClient()("/reports/revenue" + qs);
       if (!res.ok) throw new Error(await res.text());
       return res.json();
     }
@@ -26,7 +26,7 @@ export const reportTools = [
     description: "Get UBMS platform usage stats (sends, contacts, workflows).",
     inputSchema: { type: "object", properties: {} },
     async handler() {
-      const res = await apiClient("ubms")("/usage");
+      const res = await apiClient()("/usage");
       if (!res.ok) throw new Error(await res.text());
       return res.json();
     }

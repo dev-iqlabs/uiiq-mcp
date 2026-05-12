@@ -10,7 +10,7 @@ export const tenantTools = [
     },
     async handler({ search } = {}) {
       const qs = search ? `?search=${encodeURIComponent(search)}` : "";
-      const res = await apiClient("ubms")(`/admin/tenants${qs}`);
+      const res = await apiClient()(`/admin/tenants${qs}`);
       const data = await res.json();
       return Array.isArray(data) ? data : data.tenants ?? [];
     }
@@ -24,7 +24,7 @@ export const tenantTools = [
       properties: { id: { type: "string", description: "Tenant ID" } }
     },
     async handler({ id }) {
-      const res = await apiClient("ubms")(`/admin/tenants/${id}`);
+      const res = await apiClient()(`/admin/tenants/${id}`);
       if (!res.ok) throw new Error(`Tenant not found: ${id}`);
       return res.json();
     }
@@ -42,7 +42,7 @@ export const tenantTools = [
       }
     },
     async handler({ name, slug, plan }) {
-      const res = await apiClient("ubms")("/admin/tenants", {
+      const res = await apiClient()("/admin/tenants", {
         method: "POST",
         body: JSON.stringify({ name, slug, plan }),
       });
@@ -59,12 +59,12 @@ export const tenantTools = [
       properties: { id: { type: "string", description: "Tenant ID" } }
     },
     async handler({ id }) {
-      const impRes = await apiClient("ubms")("/admin/impersonate", {
+      const impRes = await apiClient()("/admin/impersonate", {
         method: "POST",
         body: JSON.stringify({ tenantId: id }),
       });
       if (!impRes.ok) throw new Error(await impRes.text());
-      const res = await apiClient("ubms")("/api/seo/api-key", { method: "POST" });
+      const res = await apiClient()("/api/seo/api-key", { method: "POST" });
       if (!res.ok) throw new Error(await res.text());
       return res.json();
     }
@@ -82,7 +82,7 @@ export const tenantTools = [
       }
     },
     async handler({ id, enable, disable }) {
-      const api = apiClient("ubms");
+      const api = apiClient();
       if (enable || disable) {
         const body = enable ? { [enable]: true } : { [disable]: false };
         const res = await api(`/admin/tenants/${id}/features`, { method: "PATCH", body: JSON.stringify(body) });
@@ -103,7 +103,7 @@ export const tenantTools = [
       properties: { id: { type: "string" } }
     },
     async handler({ id }) {
-      const res = await apiClient("ubms")(`/admin/tenants/${id}/usage`);
+      const res = await apiClient()(`/admin/tenants/${id}/usage`);
       if (!res.ok) throw new Error(`Tenant not found: ${id}`);
       return res.json();
     }
