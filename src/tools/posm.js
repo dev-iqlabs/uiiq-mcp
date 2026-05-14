@@ -3,7 +3,7 @@ import { apiClient } from "../auth.js";
 export const posmTools = [
   {
     name: "uiiq_posm_booking_list",
-    description: "List POSM experience bookings. Filter by status.",
+    description: "List UIIQ experience bookings. Filter by status.",
     inputSchema: {
       type: "object",
       properties: { status: { type: "string", description: "confirmed | pending | cancelled | completed" } }
@@ -17,7 +17,7 @@ export const posmTools = [
   },
   {
     name: "uiiq_posm_experience_list",
-    description: "List POSM experiences available for booking.",
+    description: "List UIIQ experiences available for booking.",
     inputSchema: { type: "object", properties: {} },
     async handler() {
       const res = await apiClient()("/admin/experiences");
@@ -27,7 +27,7 @@ export const posmTools = [
   },
   {
     name: "uiiq_posm_subscription_list",
-    description: "List POSM membership subscribers. Filter by status.",
+    description: "List UIIQ membership subscribers. Filter by status.",
     inputSchema: {
       type: "object",
       properties: { status: { type: "string", description: "active | cancelled | expired" } }
@@ -41,7 +41,7 @@ export const posmTools = [
   },
   {
     name: "uiiq_posm_promo_create",
-    description: "Create a POSM promo discount code.",
+    description: "Create a UIIQ promo discount code.",
     inputSchema: {
       type: "object",
       required: ["code", "discount", "type"],
@@ -65,7 +65,7 @@ export const posmTools = [
   },
   {
     name: "uiiq_posm_gift_card_issue",
-    description: "Issue a POSM gift card to an email address.",
+    description: "Issue a UIIQ gift card to an email address.",
     inputSchema: {
       type: "object",
       required: ["value", "email"],
@@ -85,7 +85,7 @@ export const posmTools = [
   },
   {
     name: "uiiq_posm_gift_card_balance",
-    description: "Check the remaining balance on a POSM gift card by code.",
+    description: "Check the remaining balance on a UIIQ gift card by code.",
     inputSchema: {
       type: "object",
       required: ["code"],
@@ -99,7 +99,7 @@ export const posmTools = [
   },
   {
     name: "uiiq_posm_booking_get",
-    description: "Get a POSM booking by ID.",
+    description: "Get a UIIQ booking by ID.",
     inputSchema: {
       type: "object",
       required: ["id"],
@@ -113,7 +113,7 @@ export const posmTools = [
   },
   {
     name: "uiiq_posm_booking_create",
-    description: "Create a new POSM booking for an experience or session.",
+    description: "Create a new UIIQ booking for an experience or session.",
     inputSchema: {
       type: "object",
       required: ["experienceId", "customerEmail", "date"],
@@ -137,7 +137,7 @@ export const posmTools = [
   },
   {
     name: "uiiq_posm_booking_cancel",
-    description: "Cancel a POSM booking by ID. Optionally provide a reason.",
+    description: "Cancel a UIIQ booking by ID. Optionally provide a reason.",
     inputSchema: {
       type: "object",
       required: ["id"],
