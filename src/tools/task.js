@@ -3,7 +3,7 @@ import { apiClient } from "../auth.js";
 export const taskTools = [
   {
     name: "uiiq_task_list",
-    description: "List UVOS tasks. Filter by board, mine (assigned to me), or status.",
+    description: "List UIIQ tasks. Filter by board, mine (assigned to me), or status.",
     inputSchema: {
       type: "object",
       properties: {
@@ -29,7 +29,7 @@ export const taskTools = [
   },
   {
     name: "uiiq_task_get",
-    description: "Get a UVOS task card by ID.",
+    description: "Get a UIIQ task card by ID.",
     inputSchema: { type: "object", required: ["id"], properties: { id: { type: "string" } } },
     async handler({ id }) {
       const res = await apiClient()("/tasks/cards/" + id);
@@ -39,7 +39,7 @@ export const taskTools = [
   },
   {
     name: "uiiq_task_comment",
-    description: "Add a comment to a UVOS task card.",
+    description: "Add a comment to a UIIQ task card.",
     inputSchema: {
       type: "object",
       required: ["id", "body"],
@@ -56,7 +56,7 @@ export const taskTools = [
   },
   {
     name: "uiiq_board_list",
-    description: "List all UVOS task boards.",
+    description: "List all UIIQ task boards.",
     inputSchema: { type: "object", properties: {} },
     async handler() {
       const res = await apiClient()("/tasks/boards");
@@ -66,7 +66,7 @@ export const taskTools = [
   },
   {
     name: "uiiq_task_create",
-    description: "Create a new UVOS task card on a board.",
+    description: "Create a new UIIQ task card on a board.",
     inputSchema: {
       type: "object",
       required: ["boardId", "title"],
@@ -95,7 +95,7 @@ export const taskTools = [
   },
   {
     name: "uiiq_task_update",
-    description: "Update a UVOS task card — move status, reassign, or change due date.",
+    description: "Update a UIIQ task card — move status, reassign, or change due date.",
     inputSchema: {
       type: "object",
       required: ["id"],

@@ -3,7 +3,7 @@ import { apiClient } from "../auth.js";
 export const contactTools = [
   {
     name: "uiiq_contact_list",
-    description: "List UBMS contacts. Optionally search by name or email.",
+    description: "List UIIQ contacts. Optionally search by name or email.",
     inputSchema: {
       type: "object",
       properties: {
@@ -21,7 +21,7 @@ export const contactTools = [
   },
   {
     name: "uiiq_contact_get",
-    description: "Get a UBMS contact by ID.",
+    description: "Get a UIIQ contact by ID.",
     inputSchema: {
       type: "object",
       required: ["id"],

@@ -3,7 +3,7 @@ import { apiClient } from "../auth.js";
 export const orderTools = [
   {
     name: "uiiq_order_list",
-    description: "List UBMS workflow orders. Filter by status or tenant slug.",
+    description: "List UIIQ workflow orders. Filter by status or tenant slug.",
     inputSchema: {
       type: "object",
       properties: {

@@ -3,7 +3,7 @@ import { apiClient } from "../auth.js";
 export const reportTools = [
   {
     name: "uiiq_report_revenue",
-    description: "Get UBMS revenue report. Optionally filter by date range.",
+    description: "Get UIIQ revenue report. Optionally filter by date range.",
     inputSchema: {
       type: "object",
       properties: {
@@ -23,7 +23,7 @@ export const reportTools = [
   },
   {
     name: "uiiq_report_usage",
-    description: "Get UBMS platform usage stats (sends, contacts, workflows).",
+    description: "Get UIIQ platform usage stats (sends, contacts, workflows).",
     inputSchema: { type: "object", properties: {} },
     async handler() {
       const res = await apiClient()("/usage");

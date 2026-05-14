@@ -3,7 +3,7 @@ import { apiClient } from "../auth.js";
 export const portfolioTools = [
   {
     name: "uiiq_portfolio_list",
-    description: "List UVOS portfolio projects. Optionally filter by status.",
+    description: "List UIIQ portfolio projects. Optionally filter by status.",
     inputSchema: {
       type: "object",
       properties: {

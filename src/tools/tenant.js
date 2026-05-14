@@ -52,7 +52,7 @@ export const tenantTools = [
   },
   {
     name: "uiiq_tenant_api_key",
-    description: "Generate or retrieve the UBMS API key for a tenant (used for the ubms-connect WordPress plugin).",
+    description: "Generate or retrieve the UIIQ Connect API key for a tenant (used for the ubms-connect WordPress plugin).",
     inputSchema: {
       type: "object",
       required: ["id"],

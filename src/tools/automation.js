@@ -3,7 +3,7 @@ import { apiClient } from "../auth.js";
 export const automationTools = [
   {
     name: "uiiq_automation_list",
-    description: "List UBMS automations. Filter by status (active | inactive).",
+    description: "List UIIQ automations. Filter by status (active | inactive).",
     inputSchema: {
       type: "object",
       properties: { status: { type: "string", description: "active | inactive" } }
@@ -17,7 +17,7 @@ export const automationTools = [
   },
   {
     name: "uiiq_automation_toggle",
-    description: "Enable or disable a UBMS automation by ID.",
+    description: "Enable or disable a UIIQ automation by ID.",
     inputSchema: {
       type: "object",
       required: ["id", "enabled"],
@@ -34,7 +34,7 @@ export const automationTools = [
   },
   {
     name: "uiiq_campaign_list",
-    description: "List UBMS email/SMS campaigns.",
+    description: "List UIIQ email/SMS campaigns.",
     inputSchema: { type: "object", properties: {} },
     async handler() {
       const res = await apiClient()("/campaigns");
@@ -44,7 +44,7 @@ export const automationTools = [
   },
   {
     name: "uiiq_workflow_list",
-    description: "List UVOS workflow templates.",
+    description: "List UIIQ workflow templates.",
     inputSchema: { type: "object", properties: {} },
     async handler() {
       const res = await apiClient()("/tasks/workflows");
@@ -54,7 +54,7 @@ export const automationTools = [
   },
   {
     name: "uiiq_workflow_instances",
-    description: "List active UVOS workflow instances. Filter by status.",
+    description: "List active UIIQ workflow instances. Filter by status.",
     inputSchema: {
       type: "object",
       properties: {
@@ -70,7 +70,7 @@ export const automationTools = [
   },
   {
     name: "uiiq_workflow_trigger",
-    description: "Trigger a new UVOS workflow instance from a template.",
+    description: "Trigger a new UIIQ workflow instance from a template.",
     inputSchema: {
       type: "object",
       required: ["workflowId"],

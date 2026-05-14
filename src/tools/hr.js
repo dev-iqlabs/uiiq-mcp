@@ -3,7 +3,7 @@ import { apiClient } from "../auth.js";
 export const hrTools = [
   {
     name: "uiiq_hr_staff_list",
-    description: "List UVOS staff members. Optionally filter by department or status.",
+    description: "List UIIQ staff members. Optionally filter by department or status.",
     inputSchema: {
       type: "object",
       properties: {
@@ -25,7 +25,7 @@ export const hrTools = [
   },
   {
     name: "uiiq_hr_staff_get",
-    description: "Get full profile for a UVOS staff member by ID, including roles, training, and leave balance.",
+    description: "Get full profile for a UIIQ staff member by ID, including roles, training, and leave balance.",
     inputSchema: {
       type: "object",
       required: ["id"],
@@ -43,7 +43,7 @@ export const hrTools = [
   },
   {
     name: "uiiq_hr_timesheet_list",
-    description: "List UVOS timesheet entries. Filter by staff member or date range.",
+    description: "List UIIQ timesheet entries. Filter by staff member or date range.",
     inputSchema: {
       type: "object",
       properties: {
@@ -67,7 +67,7 @@ export const hrTools = [
   },
   {
     name: "uiiq_hr_timesheet_approve",
-    description: "Approve or reject a UVOS timesheet entry by ID.",
+    description: "Approve or reject a UIIQ timesheet entry by ID.",
     inputSchema: {
       type: "object",
       required: ["id", "approved"],
@@ -88,7 +88,7 @@ export const hrTools = [
   },
   {
     name: "uiiq_hr_clockin_list",
-    description: "List UVOS QR clock-in records. Filter by staff member or date.",
+    description: "List UIIQ QR clock-in records. Filter by staff member or date.",
     inputSchema: {
       type: "object",
       properties: {
@@ -108,7 +108,7 @@ export const hrTools = [
   },
   {
     name: "uiiq_hr_leave_list",
-    description: "List UVOS leave requests. Filter by staff member or status.",
+    description: "List UIIQ leave requests. Filter by staff member or status.",
     inputSchema: {
       type: "object",
       properties: {
@@ -128,7 +128,7 @@ export const hrTools = [
   },
   {
     name: "uiiq_hr_leave_approve",
-    description: "Approve or reject a UVOS leave request.",
+    description: "Approve or reject a UIIQ leave request.",
     inputSchema: {
       type: "object",
       required: ["id", "approved"],
