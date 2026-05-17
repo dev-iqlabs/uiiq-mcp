@@ -13,6 +13,7 @@ import { reportTools }    from "./tools/report.js";
 import { automationTools } from "./tools/automation.js";
 import { hrTools }         from "./tools/hr.js";
 import { statusTools }    from "./tools/status.js";
+import { agentTools }    from "./tools/agents.js";
 
 const ALL_TOOLS = [
   ...statusTools,
@@ -25,6 +26,7 @@ const ALL_TOOLS = [
   ...reportTools,
   ...automationTools,
   ...hrTools,
+  ...agentTools,
 ];
 
 const TOOL_MAP = Object.fromEntries(ALL_TOOLS.map(t => [t.name, t]));
