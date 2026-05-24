@@ -137,7 +137,7 @@ export const posmTools = [
   },
   {
     name: "uiiq_posm_booking_cancel",
-    description: "Cancel a UIIQ booking by ID. Optionally provide a reason.",
+    description: "Cancel a UIIQ Sell booking by ID. Optionally provide a reason.",
     inputSchema: {
       type: "object",
       required: ["id"],
@@ -153,6 +153,96 @@ export const posmTools = [
       });
       if (!res.ok) throw new Error(await res.text());
       return { success: true, id };
+    }
+  },
+  {
+    name: "uiiq_posm_calendar_week",
+    description: "Get the UIIQ Sell week calendar — sessions grouped by day, active staff (performers), and per-staff availability blocks. Week is anchored to the Monday of whatever date is supplied (defaults to current week).",
+    inputSchema: {
+      type: "object",
+      properties: {
+        date: { type: "string", description: "Any date YYYY-MM-DD inside the target week. Omit for current week." }
+      }
+    },
+    async handler({ date } = {}) {
+      const qs = date ? `?date=${encodeURIComponent(date)}` : "";
+      const res = await apiClient()(`/admin/calendar/week${qs}`);
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    }
+  },
+  {
+    name: "uiiq_posm_staff_availability_list",
+    description: "List availability blocks (full-day or time-range) for a UIIQ Sell staff member. Optionally filter by date range.",
+    inputSchema: {
+      type: "object",
+      required: ["staffId"],
+      properties: {
+        staffId: { type: "string", description: "Staff member (Performer) ID" },
+        from:    { type: "string", description: "Start date YYYY-MM-DD" },
+        to:      { type: "string", description: "End date YYYY-MM-DD" }
+      }
+    },
+    async handler({ staffId, from, to }) {
+      const params = new URLSearchParams();
+      if (from) params.set("from", from);
+      if (to)   params.set("to",   to);
+      const qs = params.toString() ? `?${params}` : "";
+      const res = await apiClient()(`/admin/staff/${encodeURIComponent(staffId)}/availability${qs}`);
+      if (!res.ok) throw new Error(await res.text());
+      const data = await res.json();
+      return Array.isArray(data) ? data : data.data ?? [];
+    }
+  },
+  {
+    name: "uiiq_posm_staff_availability_block",
+    description: "Block a UIIQ Sell staff member's availability on a date. Pass startTime+endTime (HH:MM) for a partial block, omit them for a full-day block.",
+    inputSchema: {
+      type: "object",
+      required: ["staffId", "date"],
+      properties: {
+        staffId:   { type: "string", description: "Staff member (Performer) ID" },
+        date:      { type: "string", description: "Date YYYY-MM-DD" },
+        startTime: { type: "string", description: "Block start HH:MM (omit for full day)" },
+        endTime:   { type: "string", description: "Block end HH:MM" },
+        reason:    { type: "string", description: "Reason for the block" }
+      }
+    },
+    async handler({ staffId, date, startTime, endTime, reason }) {
+      const body = { date };
+      if (startTime) body.startTime = startTime;
+      if (endTime)   body.endTime   = endTime;
+      if (reason)    body.reason    = reason;
+      const res = await apiClient()(`/admin/staff/${encodeURIComponent(staffId)}/availability`, {
+        method: "POST",
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    }
+  },
+  {
+    name: "uiiq_posm_staff_availability_unblock",
+    description: "Remove a UIIQ Sell staff availability block. Pass date to clear the whole day, or recordId to delete a single block record. Exactly one of date or recordId must be supplied.",
+    inputSchema: {
+      type: "object",
+      required: ["staffId"],
+      properties: {
+        staffId:  { type: "string", description: "Staff member (Performer) ID" },
+        date:     { type: "string", description: "Date YYYY-MM-DD to fully unblock" },
+        recordId: { type: "string", description: "Specific availability record ID to delete" }
+      }
+    },
+    async handler({ staffId, date, recordId }) {
+      if (!date && !recordId) throw new Error("Provide date (full day) or recordId (specific block)");
+      const params = new URLSearchParams();
+      if (recordId) params.set("recordId", recordId);
+      else          params.set("date",     date);
+      const res = await apiClient()(`/admin/staff/${encodeURIComponent(staffId)}/availability?${params}`, {
+        method: "DELETE",
+      });
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
     }
   },
 ];
