@@ -14,6 +14,7 @@ import { automationTools } from "./tools/automation.js";
 import { hrTools }         from "./tools/hr.js";
 import { statusTools }    from "./tools/status.js";
 import { agentTools }    from "./tools/agents.js";
+import { growTools }     from "./tools/grow.js";
 
 const ALL_TOOLS = [
   ...statusTools,
@@ -26,13 +27,14 @@ const ALL_TOOLS = [
   ...reportTools,
   ...automationTools,
   ...hrTools,
+  ...growTools,
   ...agentTools,
 ];
 
 const TOOL_MAP = Object.fromEntries(ALL_TOOLS.map(t => [t.name, t]));
 
 const server = new Server(
-  { name: "uiiq-mcp", version: "1.2.0" },
+  { name: "uiiq-mcp", version: "1.3.0" },
   { capabilities: { tools: {} } }
 );
 

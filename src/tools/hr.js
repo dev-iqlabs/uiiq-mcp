@@ -147,4 +147,36 @@ export const hrTools = [
       return { id, approved };
     }
   },
+
+  // ── Payroll ─────────────────────────────────────────────────────────────
+  {
+    name: "uiiq_hr_payroll_run",
+    description: "Fetch the monthly UIIQ Run pay-run for a given month (defaults to current). Returns gross pay, employer NI estimate, total cost and hours worked per staff. Cost-projection only — not a real payroll engine.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        month: { type: "string", description: "YYYY-MM (defaults to current month)" }
+      }
+    },
+    async handler({ month } = {}) {
+      const qs = month ? `?month=${encodeURIComponent(month)}` : "";
+      const res = await apiClient()(`/hr/payroll${qs}`);
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    }
+  },
+  {
+    name: "uiiq_hr_payroll_export_url",
+    description: "Returns the URL to download a UIIQ Run pay-run as CSV for the given month. Hand this URL to the user for browser download.",
+    inputSchema: {
+      type: "object",
+      required: ["month"],
+      properties: {
+        month: { type: "string", description: "YYYY-MM" }
+      }
+    },
+    async handler({ month }) {
+      return { url: `https://app.uiiq.co.uk/api/hr/payroll?month=${encodeURIComponent(month)}&format=csv` };
+    }
+  }
 ];
