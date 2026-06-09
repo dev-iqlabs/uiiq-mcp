@@ -17,6 +17,17 @@ import { agentTools }    from "./tools/agents.js";
 import { growTools }           from "./tools/grow.js";
 import { communicationsTools } from "./tools/communications.js";
 import { commerceTools }       from "./tools/commerce.js";
+import { billingTools }        from "./tools/billing.js";
+import { documentTools }       from "./tools/document.js";
+import { googleTools }         from "./tools/google.js";
+import { seoTools }            from "./tools/seo.js";
+import { smsTools }            from "./tools/sms.js";
+import { socialTools }         from "./tools/social.js";
+import { templateTools }       from "./tools/template.js";
+import { planTools }           from "./tools/plan.js";
+import { orgTools }            from "./tools/org.js";
+import { legacyTools }         from "./tools/legacy.js";
+import { campaignTools }       from "./tools/campaign.js";
 
 const ALL_TOOLS = [
   ...statusTools,
@@ -32,13 +43,24 @@ const ALL_TOOLS = [
   ...growTools,
   ...communicationsTools,
   ...commerceTools,
+  ...billingTools,
+  ...documentTools,
+  ...googleTools,
+  ...seoTools,
+  ...smsTools,
+  ...socialTools,
+  ...templateTools,
+  ...planTools,
+  ...orgTools,
+  ...legacyTools,
+  ...campaignTools,
   ...agentTools,
 ];
 
 const TOOL_MAP = Object.fromEntries(ALL_TOOLS.map(t => [t.name, t]));
 
 const server = new Server(
-  { name: "uiiq-mcp", version: "1.5.0" },
+  { name: "uiiq-mcp", version: "1.6.0" },
   { capabilities: { tools: {} } }
 );
 
