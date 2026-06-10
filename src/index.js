@@ -16,6 +16,24 @@ import { statusTools }    from "./tools/status.js";
 import { agentTools }    from "./tools/agents.js";
 import { growTools }           from "./tools/grow.js";
 import { communicationsTools } from "./tools/communications.js";
+import { commerceTools }       from "./tools/commerce.js";
+import { billingTools }        from "./tools/billing.js";
+import { documentTools }       from "./tools/document.js";
+import { googleTools }         from "./tools/google.js";
+import { seoTools }            from "./tools/seo.js";
+import { smsTools }            from "./tools/sms.js";
+import { socialTools }         from "./tools/social.js";
+import { templateTools }       from "./tools/template.js";
+import { planTools }           from "./tools/plan.js";
+import { orgTools }            from "./tools/org.js";
+import { legacyTools }         from "./tools/legacy.js";
+import { campaignTools }       from "./tools/campaign.js";
+import { retailTools }          from "./tools/retail.js";
+import { creditsTools }         from "./tools/credits.js";
+import { channelsTools }        from "./tools/channels.js";
+import { brainsTools }          from "./tools/brains.js";
+import { boardroomTools }       from "./tools/boardroom.js";
+import { tillTools }            from "./tools/till.js";
 
 const ALL_TOOLS = [
   ...statusTools,
@@ -30,13 +48,31 @@ const ALL_TOOLS = [
   ...hrTools,
   ...growTools,
   ...communicationsTools,
+  ...commerceTools,
+  ...billingTools,
+  ...documentTools,
+  ...googleTools,
+  ...seoTools,
+  ...smsTools,
+  ...socialTools,
+  ...templateTools,
+  ...planTools,
+  ...orgTools,
+  ...legacyTools,
+  ...campaignTools,
+  ...retailTools,
+  ...creditsTools,
+  ...channelsTools,
+  ...brainsTools,
+  ...boardroomTools,
+  ...tillTools,
   ...agentTools,
 ];
 
 const TOOL_MAP = Object.fromEntries(ALL_TOOLS.map(t => [t.name, t]));
 
 const server = new Server(
-  { name: "uiiq-mcp", version: "1.4.0" },
+  { name: "uiiq-mcp", version: "1.9.0" },
   { capabilities: { tools: {} } }
 );
 
