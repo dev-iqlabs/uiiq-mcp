@@ -1,8 +1,8 @@
 import { apiClient } from "../auth.js";
 
-export const posmTools = [
+export const sellTools = [
   {
-    name: "uiiq_posm_booking_list",
+    name: "uiiq_sell_booking_list",
     description: "List UIIQ experience bookings. Filter by status.",
     inputSchema: {
       type: "object",
@@ -16,7 +16,7 @@ export const posmTools = [
     }
   },
   {
-    name: "uiiq_posm_experience_list",
+    name: "uiiq_sell_experience_list",
     description: "List UIIQ experiences available for booking.",
     inputSchema: { type: "object", properties: {} },
     async handler() {
@@ -26,7 +26,7 @@ export const posmTools = [
     }
   },
   {
-    name: "uiiq_posm_subscription_list",
+    name: "uiiq_sell_subscription_list",
     description: "List UIIQ membership subscribers. Filter by status.",
     inputSchema: {
       type: "object",
@@ -40,7 +40,7 @@ export const posmTools = [
     }
   },
   {
-    name: "uiiq_posm_promo_create",
+    name: "uiiq_sell_promo_create",
     description: "Create a UIIQ promo discount code.",
     inputSchema: {
       type: "object",
@@ -64,7 +64,7 @@ export const posmTools = [
     }
   },
   {
-    name: "uiiq_posm_gift_card_issue",
+    name: "uiiq_sell_gift_card_issue",
     description: "Issue a UIIQ gift card to an email address.",
     inputSchema: {
       type: "object",
@@ -84,7 +84,7 @@ export const posmTools = [
     }
   },
   {
-    name: "uiiq_posm_gift_card_balance",
+    name: "uiiq_sell_gift_card_balance",
     description: "Check the remaining balance on a UIIQ gift card by code.",
     inputSchema: {
       type: "object",
@@ -98,7 +98,7 @@ export const posmTools = [
     }
   },
   {
-    name: "uiiq_posm_booking_get",
+    name: "uiiq_sell_booking_get",
     description: "Get a UIIQ booking by ID.",
     inputSchema: {
       type: "object",
@@ -112,7 +112,7 @@ export const posmTools = [
     }
   },
   {
-    name: "uiiq_posm_booking_create",
+    name: "uiiq_sell_booking_create",
     description: "Create a new UIIQ booking for an experience or session.",
     inputSchema: {
       type: "object",
@@ -136,7 +136,7 @@ export const posmTools = [
     }
   },
   {
-    name: "uiiq_posm_booking_cancel",
+    name: "uiiq_sell_booking_cancel",
     description: "Cancel a UIIQ Sell booking by ID. Optionally provide a reason.",
     inputSchema: {
       type: "object",
@@ -156,7 +156,7 @@ export const posmTools = [
     }
   },
   {
-    name: "uiiq_posm_calendar_week",
+    name: "uiiq_sell_calendar_week",
     description: "Get the UIIQ Sell week calendar — sessions grouped by day, active staff (performers), and per-staff availability blocks. Week is anchored to the Monday of whatever date is supplied (defaults to current week).",
     inputSchema: {
       type: "object",
@@ -172,7 +172,7 @@ export const posmTools = [
     }
   },
   {
-    name: "uiiq_posm_staff_availability_list",
+    name: "uiiq_sell_staff_availability_list",
     description: "List availability blocks (full-day or time-range) for a UIIQ Sell staff member. Optionally filter by date range.",
     inputSchema: {
       type: "object",
@@ -195,7 +195,7 @@ export const posmTools = [
     }
   },
   {
-    name: "uiiq_posm_staff_availability_block",
+    name: "uiiq_sell_staff_availability_block",
     description: "Block a UIIQ Sell staff member's availability on a date. Pass startTime+endTime (HH:MM) for a partial block, omit them for a full-day block.",
     inputSchema: {
       type: "object",
@@ -222,7 +222,7 @@ export const posmTools = [
     }
   },
   {
-    name: "uiiq_posm_staff_availability_unblock",
+    name: "uiiq_sell_staff_availability_unblock",
     description: "Remove a UIIQ Sell staff availability block. Pass date to clear the whole day, or recordId to delete a single block record. Exactly one of date or recordId must be supplied.",
     inputSchema: {
       type: "object",
@@ -248,7 +248,7 @@ export const posmTools = [
 
   // ── Resources (rooms, treatment chairs, equipment, vehicles) ────────────────
   {
-    name: "uiiq_posm_resource_list",
+    name: "uiiq_sell_resource_list",
     description: "List UIIQ Sell bookable resources (rooms, equipment, vehicles). Optionally filter by venue.",
     inputSchema: {
       type: "object",
@@ -263,7 +263,7 @@ export const posmTools = [
     }
   },
   {
-    name: "uiiq_posm_resource_create",
+    name: "uiiq_sell_resource_create",
     description: "Create a UIIQ Sell bookable resource (room, chair, equipment, vehicle). quantity defaults to 1.",
     inputSchema: {
       type: "object",
@@ -286,7 +286,7 @@ export const posmTools = [
     }
   },
   {
-    name: "uiiq_posm_resource_delete",
+    name: "uiiq_sell_resource_delete",
     description: "Delete a UIIQ Sell resource by ID. Fails with 409 if the resource has active session allocations.",
     inputSchema: {
       type: "object",
@@ -302,7 +302,7 @@ export const posmTools = [
 
   // ── Pricing rules ───────────────────────────────────────────────────────────
   {
-    name: "uiiq_posm_pricing_rule_list",
+    name: "uiiq_sell_pricing_rule_list",
     description: "List UIIQ Sell pricing rules (off-peak discounts, weekend surcharges, seasonal pricing).",
     inputSchema: {
       type: "object",
@@ -319,7 +319,7 @@ export const posmTools = [
     }
   },
   {
-    name: "uiiq_posm_pricing_rule_create",
+    name: "uiiq_sell_pricing_rule_create",
     description: "Create a UIIQ Sell pricing rule. type=DISCOUNT_PERCENT|DISCOUNT_FIXED|SURCHARGE_PERCENT|SURCHARGE_FIXED. value is percent (15) or pence (500=£5).",
     inputSchema: {
       type: "object",
@@ -346,7 +346,7 @@ export const posmTools = [
     }
   },
   {
-    name: "uiiq_posm_pricing_rule_delete",
+    name: "uiiq_sell_pricing_rule_delete",
     description: "Delete a UIIQ Sell pricing rule by ID.",
     inputSchema: {
       type: "object",
@@ -360,7 +360,7 @@ export const posmTools = [
     }
   },
   {
-    name: "uiiq_posm_pricing_rule_quote",
+    name: "uiiq_sell_pricing_rule_quote",
     description: "Preview what a UIIQ Sell experience would cost on a given date after all matching pricing rules cascade. Returns basePricePence, finalPricePence, and the applied[] breakdown.",
     inputSchema: {
       type: "object",
@@ -382,7 +382,7 @@ export const posmTools = [
 
   // ── Pricing Intelligence (IQEX-driven AI recommendations) ───────────────────
   {
-    name: "uiiq_posm_pricing_intelligence_recommend",
+    name: "uiiq_sell_pricing_intelligence_recommend",
     description: "Fetch AI-recommended price adjustments for upcoming UIIQ Sell sessions. UIIQ aggregates upcoming sessions + historical baselines and calls the IQEX dynamic_pricing_recommendation recipe. Returns recommendations with confidence + reasoning.",
     inputSchema: {
       type: "object",

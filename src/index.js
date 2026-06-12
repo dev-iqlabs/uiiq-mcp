@@ -8,7 +8,7 @@ import { contactTools }   from "./tools/contact.js";
 import { orderTools }     from "./tools/order.js";
 import { portfolioTools } from "./tools/portfolio.js";
 import { taskTools }      from "./tools/task.js";
-import { posmTools }      from "./tools/posm.js";
+import { sellTools }      from "./tools/sell.js";
 import { reportTools }    from "./tools/report.js";
 import { automationTools } from "./tools/automation.js";
 import { hrTools }         from "./tools/hr.js";
@@ -42,7 +42,7 @@ const ALL_TOOLS = [
   ...orderTools,
   ...portfolioTools,
   ...taskTools,
-  ...posmTools,
+  ...sellTools,
   ...reportTools,
   ...automationTools,
   ...hrTools,
