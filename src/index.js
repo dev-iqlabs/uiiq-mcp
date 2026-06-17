@@ -35,6 +35,7 @@ import { brainsTools }          from "./tools/brains.js";
 import { boardroomTools }       from "./tools/boardroom.js";
 import { tillTools }            from "./tools/till.js";
 import { systemTools }          from "./tools/system.js";
+import { merchSetTools }        from "./tools/merch.js";
 
 const ALL_TOOLS = [
   ...statusTools,
@@ -69,6 +70,7 @@ const ALL_TOOLS = [
   ...boardroomTools,
   ...tillTools,
   ...agentTools,
+  ...merchSetTools,
 ];
 
 const TOOL_MAP = Object.fromEntries(ALL_TOOLS.map(t => [t.name, t]));
