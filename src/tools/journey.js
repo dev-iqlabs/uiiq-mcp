@@ -14,12 +14,11 @@ import { apiClient } from "../auth.js";
 // refuses with 403. Per-step credits are charged IQEX-side on /advance; callers
 // never debit credits themselves.
 //
-// GAP (flagged, not faked): there is no tenant-facing endpoint to LIST journeys
-// or the Workshop catalogue — the catalogue is read straight from Prisma in the
-// Workshop server component, and the only catalogue API is the SuperAdmin CRUD
-// at /api/admin/workshop-cards. uiiq_journey_list therefore uses that admin
-// route and only returns data for a SuperAdmin session. A tenant-scoped
-// GET /api/journeys (entitlement-filtered cards) is the missing piece.
+// uiiq_journey_list reads the tenant-facing catalogue at GET /api/journeys —
+// the entitlement-filtered Workshop cards for the caller's tenant (same filter
+// the Workshop page applies). It is NOT the SuperAdmin CRUD at
+// /api/admin/workshop-cards, so a normal tenant user gets their entitled
+// journeys, not every card.
 
 async function jsonOrThrow(res) {
   if (!res.ok) {
@@ -41,7 +40,7 @@ export const journeyTools = [
   {
     name: "uiiq_journey_list",
     description:
-      "List the Workshop catalogue — the deliverable-action cards, each of which launches a journey via its journeySlug. NOTE: backed by the SuperAdmin endpoint /api/admin/workshop-cards (no tenant-facing list route exists yet), so a non-superadmin session returns 403. Cards without a journeySlug are defined but not yet wired to a runnable journey.",
+      "List the Workshop catalogue for the signed-in user's tenant — the deliverable-action cards, each of which launches a journey via its journeySlug. Returns only the cards the tenant is entitled to (its enabled features), via the tenant-facing GET /api/journeys. Cards without a journeySlug are defined but not yet wired to a runnable journey.",
     inputSchema: {
       type: "object",
       properties: {
@@ -52,12 +51,10 @@ export const journeyTools = [
       },
     },
     async handler({ runnableOnly } = {}) {
-      const res = await apiClient()("/admin/workshop-cards");
+      const qs = runnableOnly ? "?runnable=1" : "";
+      const res = await apiClient()(`/journeys${qs}`);
       const data = await jsonOrThrow(res);
-      let cards = Array.isArray(data) ? data : data.cards ?? [];
-      if (runnableOnly) {
-        cards = cards.filter((c) => c.active && c.journeySlug);
-      }
+      const cards = Array.isArray(data) ? data : data.cards ?? [];
       return cards.map((c) => ({
         id: c.id,
         name: c.name,
