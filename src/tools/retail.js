@@ -66,4 +66,34 @@ export const retailTools = [
       return res.json();
     },
   },
+  {
+    name: "uiiq_retail_shops",
+    description: "List the tenant's connected WooCommerce stores (creds never returned).",
+    inputSchema: { type: "object", properties: {} },
+    async handler() {
+      const res = await apiClient()("/retail/shops");
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    },
+  },
+  {
+    name: "uiiq_retail_shop_sync",
+    description: "Push the retail catalogue (products flagged Online Shop) to the connected WooCommerce store(s) — name, price, photo, barcode, stock, category. Returns a per-shop summary.",
+    inputSchema: { type: "object", properties: {} },
+    async handler() {
+      const res = await apiClient()("/retail/shops/sync", { method: "POST" });
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    },
+  },
+  {
+    name: "uiiq_retail_orders_pull",
+    description: "Pull recent orders from the connected WooCommerce store(s) and decrement till stock for matched products (idempotent). Returns a per-shop summary.",
+    inputSchema: { type: "object", properties: {} },
+    async handler() {
+      const res = await apiClient()("/retail/shops/pull-orders", { method: "POST" });
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    },
+  },
 ];
