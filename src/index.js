@@ -29,6 +29,7 @@ import { orgTools }            from "./tools/org.js";
 import { legacyTools }         from "./tools/legacy.js";
 import { campaignTools }       from "./tools/campaign.js";
 import { retailTools }          from "./tools/retail.js";
+import { costsTools }           from "./tools/costs.js";
 import { creditsTools }         from "./tools/credits.js";
 import { channelsTools }        from "./tools/channels.js";
 import { brainsTools }          from "./tools/brains.js";
@@ -66,6 +67,7 @@ const ALL_TOOLS = [
   ...legacyTools,
   ...campaignTools,
   ...retailTools,
+  ...costsTools,
   ...creditsTools,
   ...channelsTools,
   ...brainsTools,
