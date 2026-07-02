@@ -113,20 +113,50 @@ export const sellTools = [
   },
   {
     name: "uiiq_sell_booking_create",
-    description: "Create a new UIIQ booking for an experience or session.",
+    description: "Create a new UIIQ booking. Ticket/appointment bookings post to the public v1 endpoint (session-based). For a VISIT-mode experience (job at the customer's address — pest control, plumber, mobile groomer) pass visitAddress + visitDate instead of date: the booking is staff-entered via the dashboard endpoint, confirmed instantly, and shows in the calendar's visit lane.",
     inputSchema: {
       type: "object",
-      required: ["experienceId", "customerEmail", "date"],
+      required: ["experienceId", "customerEmail"],
       properties: {
         experienceId: { type: "string", description: "Experience ID to book" },
         customerEmail: { type: "string" },
         customerName: { type: "string" },
-        date: { type: "string", description: "ISO date string for the booking slot" },
+        customerPhone: { type: "string", description: "Visit bookings only" },
+        date: { type: "string", description: "ISO date string for the booking slot (ticket/appointment bookings)" },
         notes: { type: "string" },
-        quantity: { type: "number", description: "Number of places (default 1)" }
+        quantity: { type: "number", description: "Number of places (default 1; ticket/appointment only)" },
+        visitAddress: {
+          type: "object",
+          description: "VISIT bookings — the customer's address (with visitDate, routes to the staff booking endpoint)",
+          required: ["line1", "postcode"],
+          properties: {
+            line1: { type: "string" },
+            line2: { type: "string" },
+            city: { type: "string" },
+            postcode: { type: "string" }
+          }
+        },
+        visitDate: { type: "string", description: "VISIT bookings — YYYY-MM-DD" },
+        visitWindowStart: { type: "string", description: "Preferred window start HH:MM" },
+        visitWindowEnd: { type: "string", description: "Preferred window end HH:MM" },
+        resourceId: { type: "string", description: "Assigned resource/technician (visit bookings)" },
+        source: { type: "string", enum: ["PHONE", "EMAIL", "WALK_IN"], description: "How the visit booking came in (default PHONE)" },
+        totalPence: { type: "number", description: "Agreed price in pence (visit bookings; default 0)" }
       }
     },
-    async handler({ experienceId, customerEmail, customerName, date, notes, quantity = 1 }) {
+    async handler({ experienceId, customerEmail, customerName, customerPhone, date, notes, quantity = 1, visitAddress, visitDate, visitWindowStart, visitWindowEnd, resourceId, source, totalPence }) {
+      if (visitAddress || visitDate) {
+        const res = await apiClient()("/admin/bookings", {
+          method: "POST",
+          body: JSON.stringify({
+            experienceId, customerName, customerEmail, customerPhone,
+            visitAddress, visitDate, visitWindowStart, visitWindowEnd,
+            resourceId, source, totalPence, notes,
+          }),
+        });
+        if (!res.ok) throw new Error(await res.text());
+        return res.json();
+      }
       const res = await apiClient()("/v1/bookings", {
         method: "POST",
         body: JSON.stringify({ experienceId, customerEmail, customerName, date, notes, quantity }),
@@ -157,7 +187,7 @@ export const sellTools = [
   },
   {
     name: "uiiq_sell_calendar_week",
-    description: "Get the UIIQ Sell week calendar — sessions grouped by day, active staff (performers), and per-staff availability blocks. Week is anchored to the Monday of whatever date is supplied (defaults to current week).",
+    description: "Get the UIIQ Sell week calendar — sessions grouped by day, visit-mode bookings (visits, keyed by date: reference, customer, postcode, window, resource), active staff (performers), and per-staff availability blocks. Week is anchored to the Monday of whatever date is supplied (defaults to current week).",
     inputSchema: {
       type: "object",
       properties: {

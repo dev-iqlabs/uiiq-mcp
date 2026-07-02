@@ -2,14 +2,15 @@ import { apiClient } from "../auth.js";
 
 /**
  * Costs & Expenses tools — bills, categories, cost centres, recurring costs,
- * spend summary + gross margin, and the monthly KPI roll. Mirrors the retail
- * tools; all money is integer pence. Requires the tenant to have the
- * `cost_tracking` feature enabled.
+ * spend summary + gross margin, the monthly KPI roll, period locks,
+ * cost-centre allocations and VAT settings. Mirrors the retail tools; all
+ * money is integer pence. Requires the tenant to have the `cost_tracking`
+ * feature enabled. Bill mutations inside a locked period return 423.
  */
 export const costsTools = [
   {
     name: "uiiq_costs_summary",
-    description: "Spend summary + gross margin for a period. Optional from/to (YYYY-MM-DD, default month-to-date), dateBasis=paid|issue. Returns totals, by-category, top payees, revenue/COGS/gross-margin.",
+    description: "Spend summary + gross margin for a period. Optional from/to (YYYY-MM-DD, default month-to-date), dateBasis=paid|issue. Returns totals, by-category, by-centre (allocation-aware), top payees, revenue/COGS/gross-margin, VAT treatment (vatScheme, vatReclaimPence, trueCostPence) and the accruals view.",
     inputSchema: {
       type: "object",
       properties: {
@@ -79,7 +80,7 @@ export const costsTools = [
   },
   {
     name: "uiiq_costs_bill_add",
-    description: "Record a cost bill. Amounts in integer pence. categoryId + netPence + issueDate (YYYY-MM-DD) required. Payee is either retailSupplierId or free-text payeeName. paid=true stamps paidDate=issueDate and status=PAID.",
+    description: "Record a cost bill. Amounts in integer pence. categoryId + netPence + issueDate (YYYY-MM-DD) required. Payee is either retailSupplierId or free-text payeeName. paid=true stamps paidDate=issueDate and status=PAID. For a prepayment spread across a service window pass isPrepayment + serviceStart/serviceEnd; link a capital purchase to the plan's asset register via assetEntryId. Fails 423 when the bill's period is locked.",
     inputSchema: {
       type: "object",
       required: ["categoryId", "netPence", "issueDate"],
@@ -93,9 +94,13 @@ export const costsTools = [
         reference: { type: "string" },
         issueDate: { type: "string" },
         paid: { type: "boolean" },
+        isPrepayment: { type: "boolean", description: "Spread the cost across the service window in the accruals view" },
+        serviceStart: { type: "string", description: "YYYY-MM-DD — service window start (prepayments)" },
+        serviceEnd: { type: "string", description: "YYYY-MM-DD — service window end (prepayments)" },
+        assetEntryId: { type: "string", description: "Plan asset register entry to link this capital bill to (see uiiq_plan_assets)" },
       },
     },
-    async handler({ categoryId, netPence, vatPence, payeeName, retailSupplierId, costCenterId, reference, issueDate, paid } = {}) {
+    async handler({ categoryId, netPence, vatPence, payeeName, retailSupplierId, costCenterId, reference, issueDate, paid, isPrepayment, serviceStart, serviceEnd, assetEntryId } = {}) {
       const body = {
         categoryId,
         netPence,
@@ -107,8 +112,143 @@ export const costsTools = [
         issueDate,
         paidDate: paid ? issueDate : undefined,
         status: paid ? "PAID" : "DUE",
+        isPrepayment: isPrepayment || undefined,
+        serviceStart: serviceStart || undefined,
+        serviceEnd: serviceEnd || undefined,
+        assetEntryId: assetEntryId || undefined,
       };
       const res = await apiClient()("/costs/bills", { method: "POST", body: JSON.stringify(body) });
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    },
+  },
+  {
+    name: "uiiq_costs_bill_allocations_get",
+    description: "A bill's cost-centre split. Returns { billNetPence, allocations[] } (each with costCenter.name).",
+    inputSchema: {
+      type: "object",
+      required: ["billId"],
+      properties: { billId: { type: "string" } },
+    },
+    async handler({ billId }) {
+      const res = await apiClient()(`/costs/bills/${encodeURIComponent(billId)}/allocations`);
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    },
+  },
+  {
+    name: "uiiq_costs_bill_allocations_set",
+    description: "Replace a bill's cost-centre split. Shares must sum to the bill's net EXACTLY (integer pence); an empty array clears the split so reports fall back to the bill's single costCenterId. Fails 423 when the bill's period is locked.",
+    inputSchema: {
+      type: "object",
+      required: ["billId", "allocations"],
+      properties: {
+        billId: { type: "string" },
+        allocations: {
+          type: "array",
+          items: {
+            type: "object",
+            required: ["costCenterId", "netPence"],
+            properties: {
+              costCenterId: { type: "string" },
+              netPence: { type: "number", description: "Integer pence share" },
+              note: { type: "string" },
+            },
+          },
+        },
+      },
+    },
+    async handler({ billId, allocations }) {
+      const res = await apiClient()(`/costs/bills/${encodeURIComponent(billId)}/allocations`, {
+        method: "PUT",
+        body: JSON.stringify({ allocations }),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    },
+  },
+  {
+    name: "uiiq_costs_period_lock_list",
+    description: "List every cost period lock (active and unlocked, newest first). Rows are never deleted — the history is the audit trail.",
+    inputSchema: { type: "object", properties: {} },
+    async handler() {
+      const res = await apiClient()("/costs/period-locks");
+      if (!res.ok) throw new Error(await res.text());
+      const d = await res.json();
+      return d.locks ?? d;
+    },
+  },
+  {
+    name: "uiiq_costs_period_lock_create",
+    description: "Lock a cost period so its bills can no longer be changed (mutations return 423). Pass month (YYYY-MM) or an explicit from/to date range. Owner/admin only.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        month: { type: "string", description: "YYYY-MM — locks that whole month" },
+        from: { type: "string", description: "YYYY-MM-DD (alternative to month)" },
+        to: { type: "string", description: "YYYY-MM-DD" },
+        reason: { type: "string" },
+      },
+    },
+    async handler({ month, from, to, reason } = {}) {
+      const body = {};
+      if (month) body.month = month;
+      if (from) body.from = from;
+      if (to) body.to = to;
+      if (reason) body.reason = reason;
+      const res = await apiClient()("/costs/period-locks", { method: "POST", body: JSON.stringify(body) });
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    },
+  },
+  {
+    name: "uiiq_costs_period_lock_toggle",
+    description: "Unlock (active=false) or re-lock (active=true) a period lock by id; optionally update the reason. Owner/admin only.",
+    inputSchema: {
+      type: "object",
+      required: ["id", "active"],
+      properties: {
+        id: { type: "string" },
+        active: { type: "boolean", description: "false = unlock, true = re-lock" },
+        reason: { type: "string" },
+      },
+    },
+    async handler({ id, active, reason } = {}) {
+      const body = { active };
+      if (reason != null) body.reason = reason;
+      const res = await apiClient()(`/costs/period-locks/${encodeURIComponent(id)}`, {
+        method: "PATCH",
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    },
+  },
+  {
+    name: "uiiq_costs_settings_get",
+    description: "The tenant's cost settings — VAT scheme (STANDARD | FLAT_RATE | NOT_REGISTERED), flatRatePct, vatRegistered. Self-seeds STANDARD on first read.",
+    inputSchema: { type: "object", properties: {} },
+    async handler() {
+      const res = await apiClient()("/costs/settings");
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    },
+  },
+  {
+    name: "uiiq_costs_settings_set",
+    description: "Set the tenant's VAT scheme and/or flat-rate percentage. NOT_REGISTERED implies vatRegistered=false. Owner/admin only — this changes how every cost report treats input VAT.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        vatScheme: { type: "string", enum: ["STANDARD", "FLAT_RATE", "NOT_REGISTERED"] },
+        flatRatePct: { type: "number", description: "0-100 (FLAT_RATE scheme); null to clear" },
+      },
+    },
+    async handler({ vatScheme, flatRatePct } = {}) {
+      const body = {};
+      if (vatScheme !== undefined) body.vatScheme = vatScheme;
+      if (flatRatePct !== undefined) body.flatRatePct = flatRatePct;
+      const res = await apiClient()("/costs/settings", { method: "PATCH", body: JSON.stringify(body) });
       if (!res.ok) throw new Error(await res.text());
       return res.json();
     },

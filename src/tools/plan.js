@@ -13,4 +13,5 @@ export const planTools = [
   { name: "uiiq_plan_milestones", description: "Business plan — milestones.", inputSchema: { type: "object", properties: {} }, handler: get("/plan/milestones") },
   { name: "uiiq_plan_personnel", description: "Business plan — team headcount and cost plan.", inputSchema: { type: "object", properties: {} }, handler: get("/plan/personnel") },
   { name: "uiiq_plan_statements", description: "Business plan — profit & loss statements.", inputSchema: { type: "object", properties: {} }, handler: get("/plan/statements") },
+  { name: "uiiq_plan_assets", description: "Business plan — asset register (capital items with purchase cost/month and useful life; the targets for capital-bill linking in cost tracking).", inputSchema: { type: "object", properties: {} }, handler: get("/plan/assets") },
 ];

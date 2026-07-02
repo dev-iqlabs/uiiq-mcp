@@ -39,6 +39,7 @@ import { systemTools }          from "./tools/system.js";
 import { merchSetTools }        from "./tools/merch.js";
 import { displayTools }         from "./tools/displays.js";
 import { journeyTools }         from "./tools/journey.js";
+import { menuTools }            from "./tools/menu.js";
 
 const ALL_TOOLS = [
   ...statusTools,
@@ -77,12 +78,13 @@ const ALL_TOOLS = [
   ...merchSetTools,
   ...displayTools,
   ...journeyTools,
+  ...menuTools,
 ];
 
 const TOOL_MAP = Object.fromEntries(ALL_TOOLS.map(t => [t.name, t]));
 
 const server = new Server(
-  { name: "uiiq-mcp", version: "2.3.0" },
+  { name: "uiiq-mcp", version: "2.7.0" },
   { capabilities: { tools: {} } }
 );
 
