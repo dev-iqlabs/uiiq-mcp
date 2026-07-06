@@ -125,4 +125,30 @@ export const menuTools = [
       return res.json();
     },
   },
+  {
+    name: "uiiq_menu_kit_generate",
+    description: "Generate the F&B print kit for the tenant's live menu — IQEX batch-renders the print family (allergen card + shelf label per item + one table QR) from the products flagged Show-in-menu and charges the org pool per piece. Returns { pieces:[{type,label,url}], count, itemCount } — the downloadable/printable image URLs. Optionally pass table_qr to personalise the table QR piece.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        table_qr: {
+          type: "object",
+          description: "Optional table-QR personalisation",
+          properties: {
+            venue:  { type: "string", description: "Venue name shown on the QR piece" },
+            prompt: { type: "string", description: "Call-to-action text" },
+            table:  { type: "string", description: "Table number/label" },
+            qr_url: { type: "string", description: "URL the QR encodes (e.g. the public menu board)" },
+          },
+        },
+      },
+    },
+    async handler({ table_qr } = {}) {
+      const body = {};
+      if (table_qr) body.table_qr = table_qr;
+      const res = await apiClient()("/menu/kit", { method: "POST", body: JSON.stringify(body) });
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    },
+  },
 ];
