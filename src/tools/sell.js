@@ -430,5 +430,165 @@ export const sellTools = [
       if (!res.ok) throw new Error(await res.text());
       return res.json();
     }
+  },
+
+  // ── Service areas / territories (visit-mode auto-assign) ────────────────────
+  {
+    name: "uiiq_sell_service_area_list",
+    description: "List the tenant's UIIQ Sell service-area territories (postcode-prefix zones with a default technician for visit-mode auto-assign) plus the technician picker. Returns { serviceAreas, technicians }.",
+    inputSchema: { type: "object", properties: {} },
+    async handler() {
+      const res = await apiClient()("/admin/service-areas");
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    }
+  },
+  {
+    name: "uiiq_sell_service_area_create",
+    description: "Create a UIIQ Sell service-area territory. postcodePrefixes are outward-code prefixes (e.g. ['BS1','BS2']); defaultResourceId is the technician auto-assigned to visits in the zone.",
+    inputSchema: {
+      type: "object",
+      required: ["name"],
+      properties: {
+        name:              { type: "string", description: "Territory name, e.g. 'Bristol Central'" },
+        postcodePrefixes:  { type: "array", items: { type: "string" }, description: "Outward-code prefixes covered, e.g. ['BS1','BS2']" },
+        defaultResourceId: { type: "string", description: "Technician (resource) auto-assigned to visits in this zone" },
+        color:             { type: "string", description: "Optional calendar colour (hex)" }
+      }
+    },
+    async handler({ name, postcodePrefixes, defaultResourceId, color }) {
+      const body = { name };
+      if (postcodePrefixes) body.postcodePrefixes = postcodePrefixes;
+      if (defaultResourceId) body.defaultResourceId = defaultResourceId;
+      if (color) body.color = color;
+      const res = await apiClient()("/admin/service-areas", {
+        method: "POST",
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    }
+  },
+  {
+    name: "uiiq_sell_service_area_update",
+    description: "Update a UIIQ Sell service-area territory. Only supplied fields change; pass isActive:false to retire a zone (visit FKs are SET NULL).",
+    inputSchema: {
+      type: "object",
+      required: ["id"],
+      properties: {
+        id:                { type: "string" },
+        name:              { type: "string" },
+        postcodePrefixes:  { type: "array", items: { type: "string" } },
+        defaultResourceId: { type: "string", description: "Technician (resource) to auto-assign; pass null to clear" },
+        color:             { type: "string" },
+        isActive:          { type: "boolean" }
+      }
+    },
+    async handler({ id, ...rest }) {
+      const body = {};
+      for (const k of ["name", "postcodePrefixes", "defaultResourceId", "color", "isActive"]) {
+        if (rest[k] !== undefined) body[k] = rest[k];
+      }
+      const res = await apiClient()(`/admin/service-areas/${encodeURIComponent(id)}`, {
+        method: "PATCH",
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    }
+  },
+  {
+    name: "uiiq_sell_service_area_delete",
+    description: "Delete a UIIQ Sell service-area territory by ID. Bookings/subscriptions in the zone have their serviceAreaId cleared (ON DELETE SET NULL).",
+    inputSchema: {
+      type: "object",
+      required: ["id"],
+      properties: { id: { type: "string" } }
+    },
+    async handler({ id }) {
+      const res = await apiClient()(`/admin/service-areas/${encodeURIComponent(id)}`, { method: "DELETE" });
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    }
+  },
+
+  // ── Field app — technician day-of visits ────────────────────────────────────
+  {
+    name: "uiiq_sell_field_visit_list",
+    description: "The technician field app's day view: every visit-mode booking for the tenant on a day, optionally filtered to one technician. Returns { date, visits, technicians }.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        date:       { type: "string", description: "Day YYYY-MM-DD (defaults to today)" },
+        resourceId: { type: "string", description: "Filter to one technician (assigned resource)" }
+      }
+    },
+    async handler({ date, resourceId } = {}) {
+      const params = new URLSearchParams();
+      if (date) params.set("date", date);
+      if (resourceId) params.set("resourceId", resourceId);
+      const qs = params.toString() ? `?${params}` : "";
+      const res = await apiClient()(`/field/visits${qs}`);
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    }
+  },
+  {
+    name: "uiiq_sell_field_visit_update",
+    description: "Technician field-app update to one visit-mode booking. action='stage' moves visitStage (SCHEDULED|EN_ROUTE|ON_SITE|COMPLETED|SKIPPED); action='complete' signs it off (notes, photos[], signatureKey, signedName); action='reschedule' moves it (visitDate + optional window, resets reminders).",
+    inputSchema: {
+      type: "object",
+      required: ["id", "action"],
+      properties: {
+        id:               { type: "string", description: "Booking (visit) ID" },
+        action:           { type: "string", enum: ["stage", "complete", "reschedule"] },
+        stage:            { type: "string", enum: ["SCHEDULED", "EN_ROUTE", "ON_SITE", "COMPLETED", "SKIPPED"], description: "action=stage" },
+        notes:            { type: "string", description: "action=complete — completion notes" },
+        photos:           { type: "array", items: { type: "string" }, description: "action=complete — S3 keys (max 20)" },
+        signatureKey:     { type: "string", description: "action=complete — customer signature S3 key" },
+        signedName:       { type: "string", description: "action=complete — name of the person who signed" },
+        visitDate:        { type: "string", description: "action=reschedule — new date YYYY-MM-DD" },
+        visitWindowStart: { type: "string", description: "action=reschedule — window start HH:MM" },
+        visitWindowEnd:   { type: "string", description: "action=reschedule — window end HH:MM" }
+      }
+    },
+    async handler({ id, action, ...rest }) {
+      const body = { action };
+      for (const k of ["stage", "notes", "photos", "signatureKey", "signedName", "visitDate", "visitWindowStart", "visitWindowEnd"]) {
+        if (rest[k] !== undefined) body[k] = rest[k];
+      }
+      const res = await apiClient()(`/field/visits/${encodeURIComponent(id)}`, {
+        method: "PATCH",
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    }
+  },
+  {
+    name: "uiiq_sell_resource_notify_set",
+    description: "Set a UIIQ Sell resource's technician flag and notify contact (used by visit reminders + day-of digests). Pass isTechnician to flag a resource as a field technician, notifyEmail/notifyPhone as the address the technician digest is sent to (pass empty string to clear).",
+    inputSchema: {
+      type: "object",
+      required: ["id"],
+      properties: {
+        id:           { type: "string", description: "Resource ID" },
+        isTechnician: { type: "boolean", description: "Flag this resource as a field technician" },
+        notifyEmail:  { type: "string", description: "Technician notify email (empty string clears)" },
+        notifyPhone:  { type: "string", description: "Technician notify phone (empty string clears)" }
+      }
+    },
+    async handler({ id, isTechnician, notifyEmail, notifyPhone }) {
+      const body = {};
+      if (isTechnician !== undefined) body.isTechnician = isTechnician;
+      if (notifyEmail !== undefined) body.notifyEmail = notifyEmail;
+      if (notifyPhone !== undefined) body.notifyPhone = notifyPhone;
+      const res = await apiClient()(`/admin/resources/${encodeURIComponent(id)}`, {
+        method: "PATCH",
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    }
   }
 ];
