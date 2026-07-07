@@ -590,5 +590,149 @@ export const sellTools = [
       if (!res.ok) throw new Error(await res.text());
       return res.json();
     }
+  },
+  {
+    name: "uiiq_sell_field_visit_get",
+    description: "Get one UIIQ Sell visit-mode booking by ID (tenant-scoped) — full field-app detail: customer, address, window, stage, completion notes/photos/signature, reschedule count. Returns { visit }.",
+    inputSchema: {
+      type: "object",
+      required: ["id"],
+      properties: { id: { type: "string", description: "Booking (visit) ID" } }
+    },
+    async handler({ id }) {
+      const res = await apiClient()(`/field/visits/${encodeURIComponent(id)}`);
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    }
+  },
+
+  // ── Visit subscriptions (recurring visit agreements) ────────────────────────
+  {
+    name: "uiiq_sell_visit_subscription_list",
+    description: "List the tenant's UIIQ Sell recurring visit agreements (with default technician + service-area names). Optionally filter by status. Returns { subscriptions }.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        status: { type: "string", enum: ["ACTIVE", "PAUSED", "CANCELLED"], description: "Filter by subscription status" }
+      }
+    },
+    async handler({ status } = {}) {
+      const qs = status ? `?status=${encodeURIComponent(status)}` : "";
+      const res = await apiClient()(`/admin/visit-subscriptions${qs}`);
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    }
+  },
+  {
+    name: "uiiq_sell_visit_subscription_create",
+    description: "Create a UIIQ Sell recurring visit agreement (auto-generates visit bookings every intervalDays). customerName, customerEmail and intervalDays are required; defaultResourceId/serviceAreaId/experienceId must belong to the tenant when given.",
+    inputSchema: {
+      type: "object",
+      required: ["customerName", "customerEmail", "intervalDays"],
+      properties: {
+        customerName:      { type: "string" },
+        customerEmail:     { type: "string" },
+        customerPhone:     { type: "string" },
+        intervalDays:      { type: "number", description: "Days between visits (positive integer)" },
+        nextVisitDate:     { type: "string", description: "Next scheduled visit date YYYY-MM-DD" },
+        windowStart:       { type: "string", description: "Preferred window start HH:MM" },
+        windowEnd:         { type: "string", description: "Preferred window end HH:MM" },
+        address:           { type: "object", description: "Customer address object" },
+        lat:               { type: "number" },
+        lng:               { type: "number" },
+        defaultResourceId: { type: "string", description: "Default technician (resource) for generated visits" },
+        serviceAreaId:     { type: "string", description: "Service-area territory" },
+        experienceId:      { type: "string", description: "Experience the visits book against" },
+        notes:             { type: "string" }
+      }
+    },
+    async handler(args) {
+      const body = {};
+      for (const k of ["customerName", "customerEmail", "customerPhone", "intervalDays", "nextVisitDate", "windowStart", "windowEnd", "address", "lat", "lng", "defaultResourceId", "serviceAreaId", "experienceId", "notes"]) {
+        if (args[k] !== undefined) body[k] = args[k];
+      }
+      const res = await apiClient()("/admin/visit-subscriptions", {
+        method: "POST",
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    }
+  },
+  {
+    name: "uiiq_sell_visit_subscription_update",
+    description: "Update a UIIQ Sell recurring visit agreement. Only supplied fields change. Pause/resume/cancel by setting status (ACTIVE|PAUSED|CANCELLED).",
+    inputSchema: {
+      type: "object",
+      required: ["id"],
+      properties: {
+        id:                { type: "string" },
+        status:            { type: "string", enum: ["ACTIVE", "PAUSED", "CANCELLED"], description: "Set to PAUSED/ACTIVE/CANCELLED to pause/resume/cancel" },
+        customerName:      { type: "string" },
+        customerEmail:     { type: "string" },
+        customerPhone:     { type: "string" },
+        intervalDays:      { type: "number", description: "Days between visits (positive integer)" },
+        nextVisitDate:     { type: "string", description: "Next scheduled visit date YYYY-MM-DD (null clears)" },
+        windowStart:       { type: "string", description: "Preferred window start HH:MM" },
+        windowEnd:         { type: "string", description: "Preferred window end HH:MM" },
+        address:           { type: "object" },
+        lat:               { type: "number" },
+        lng:               { type: "number" },
+        defaultResourceId: { type: "string", description: "Default technician (resource); null to clear" },
+        serviceAreaId:     { type: "string", description: "Service-area territory; null to clear" },
+        experienceId:      { type: "string", description: "Experience; null to clear" },
+        notes:             { type: "string" }
+      }
+    },
+    async handler({ id, ...rest }) {
+      const body = {};
+      for (const k of ["status", "customerName", "customerEmail", "customerPhone", "intervalDays", "nextVisitDate", "windowStart", "windowEnd", "address", "lat", "lng", "defaultResourceId", "serviceAreaId", "experienceId", "notes"]) {
+        if (rest[k] !== undefined) body[k] = rest[k];
+      }
+      const res = await apiClient()(`/admin/visit-subscriptions/${encodeURIComponent(id)}`, {
+        method: "PATCH",
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    }
+  },
+  {
+    name: "uiiq_sell_visit_subscription_delete",
+    description: "Delete a UIIQ Sell recurring visit agreement by ID. Already-generated visit bookings keep their history (visitSubscriptionId is SET NULL).",
+    inputSchema: {
+      type: "object",
+      required: ["id"],
+      properties: { id: { type: "string" } }
+    },
+    async handler({ id }) {
+      const res = await apiClient()(`/admin/visit-subscriptions/${encodeURIComponent(id)}`, { method: "DELETE" });
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    }
+  },
+
+  // ── Visit reminders (read-only ledger) ──────────────────────────────────────
+  {
+    name: "uiiq_sell_visit_reminder_status",
+    description: "Read the tenant's UIIQ Sell VisitReminder ledger (the day-before cron dispatches these; this is the read-only view). Optionally filter by bookingId, status (PENDING|SENT|FAILED), and limit (1–500, default 200). Each row carries the booking reference + customer name. Returns { reminders }.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        bookingId: { type: "string", description: "Filter to one visit booking" },
+        status:    { type: "string", enum: ["PENDING", "SENT", "FAILED"] },
+        limit:     { type: "number", description: "Max rows 1–500 (default 200)" }
+      }
+    },
+    async handler({ bookingId, status, limit } = {}) {
+      const params = new URLSearchParams();
+      if (bookingId) params.set("bookingId", bookingId);
+      if (status)    params.set("status", status);
+      if (limit != null) params.set("limit", String(limit));
+      const qs = params.toString() ? `?${params}` : "";
+      const res = await apiClient()(`/admin/visit-reminders${qs}`);
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    }
   }
 ];
