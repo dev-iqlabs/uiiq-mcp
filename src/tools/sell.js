@@ -63,21 +63,58 @@ export const sellTools = [
       return res.json();
     }
   },
+  // ---- Gift cards / vouchers -------------------------------------------------
+  // The old tools here POSTed to /admin/gift-cards, which does not exist in UIIQ
+  // — every call 404'd. The real surface is /gift-cards (+ the public /v1 API).
   {
     name: "uiiq_sell_gift_card_issue",
-    description: "Issue a UIIQ gift card to an email address.",
+    description: "Issue a UIIQ gift card / voucher. Emails the recipient (or the purchaser if no recipient).",
     inputSchema: {
       type: "object",
-      required: ["value", "email"],
+      required: ["purchaserEmail", "originalPence"],
       properties: {
-        value: { type: "number", description: "Gift card value in GBP" },
-        email: { type: "string" }
+        purchaserEmail: { type: "string", description: "Who bought it (required)" },
+        originalPence: { type: "number", description: "Face value in PENCE (e.g. 5000 = £50)" },
+        purchaserName: { type: "string" },
+        recipientEmail: { type: "string", description: "Who receives it; defaults to the purchaser" },
+        recipientName: { type: "string" },
+        message: { type: "string", description: "Gift message printed on the voucher" },
+        expiryMonths: { type: "number", description: "Months until expiry" }
       }
     },
-    async handler({ value, email }) {
-      const res = await apiClient()("/admin/gift-cards", {
+    async handler(args) {
+      const res = await apiClient()("/gift-cards", {
         method: "POST",
-        body: JSON.stringify({ value, email }),
+        body: JSON.stringify(args),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    }
+  },
+  {
+    name: "uiiq_sell_gift_card_bulk_issue",
+    description: "Bulk-issue vouchers (max 500). Either `count` identical vouchers, or an `items` array of per-recipient vouchers.",
+    inputSchema: {
+      type: "object",
+      required: ["originalPence"],
+      properties: {
+        originalPence: { type: "number", description: "Face value in PENCE, applied to every voucher" },
+        count: { type: "number", description: "How many identical vouchers to issue (ignored if `items` given)" },
+        items: {
+          type: "array",
+          description: "Per-recipient vouchers: [{ recipientEmail, recipientName?, message? }]",
+          items: { type: "object" }
+        },
+        type: { type: "string", description: "CASH (default) or MESSAGE_CARD" },
+        purchaserEmail: { type: "string" },
+        purchaserName: { type: "string" },
+        expiresAt: { type: "string", description: "ISO date" }
+      }
+    },
+    async handler(args) {
+      const res = await apiClient()("/gift-cards/bulk", {
+        method: "POST",
+        body: JSON.stringify(args),
       });
       if (!res.ok) throw new Error(await res.text());
       return res.json();
@@ -85,15 +122,95 @@ export const sellTools = [
   },
   {
     name: "uiiq_sell_gift_card_balance",
-    description: "Check the remaining balance on a UIIQ gift card by code.",
+    description: "Check a voucher's validity/balance by code. Vendor-scoped, so a leaked code can't be probed across tenants. Always 200 with { valid, reason }.",
     inputSchema: {
       type: "object",
-      required: ["code"],
-      properties: { code: { type: "string", description: "Gift card code" } }
+      required: ["vendor", "code"],
+      properties: {
+        vendor: { type: "string", description: "Vendor/tenant slug the voucher belongs to" },
+        code: { type: "string", description: "Voucher code" }
+      }
     },
-    async handler({ code }) {
-      const res = await apiClient()(`/admin/gift-cards/${encodeURIComponent(code)}`);
-      if (!res.ok) throw new Error(`Gift card not found: ${code}`);
+    async handler({ vendor, code }) {
+      const res = await apiClient()("/v1/gift-cards/check", {
+        method: "POST",
+        body: JSON.stringify({ vendor, code }),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    }
+  },
+  {
+    name: "uiiq_sell_voucher_download",
+    description: "Get the download URL for a voucher's printable artifact (PNG for vouchers rendered by UIIQ, legacy PDF for pre-migration cards).",
+    inputSchema: {
+      type: "object",
+      required: ["id"],
+      properties: { id: { type: "string", description: "Gift card id" } }
+    },
+    async handler({ id }) {
+      const res = await apiClient()(`/gift-cards/${encodeURIComponent(id)}/pdf`);
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    }
+  },
+  {
+    name: "uiiq_sell_voucher_resend",
+    description: "Re-send a voucher's email to its recipient.",
+    inputSchema: {
+      type: "object",
+      required: ["id"],
+      properties: { id: { type: "string", description: "Gift card id" } }
+    },
+    async handler({ id }) {
+      const res = await apiClient()(`/gift-cards/${encodeURIComponent(id)}/resend`, { method: "POST" });
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    }
+  },
+  {
+    name: "uiiq_sell_voucher_regenerate",
+    description: "Re-render a voucher's printable artifact (e.g. after changing the voucher branding template).",
+    inputSchema: {
+      type: "object",
+      required: ["id"],
+      properties: { id: { type: "string", description: "Gift card id" } }
+    },
+    async handler({ id }) {
+      const res = await apiClient()(`/gift-cards/${encodeURIComponent(id)}/regenerate-pdf`, { method: "POST" });
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    }
+  },
+  {
+    name: "uiiq_sell_voucher_template_get",
+    description: "Get the tenant's voucher branding template (vendor name, logo, accent colour, footer, background artwork).",
+    inputSchema: { type: "object", properties: {} },
+    async handler() {
+      const res = await apiClient()("/gift-cards/voucher-template");
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    }
+  },
+  {
+    name: "uiiq_sell_voucher_template_update",
+    description: "Update the tenant's voucher branding. Existing vouchers keep their rendered artifact until regenerated (uiiq_sell_voucher_regenerate).",
+    inputSchema: {
+      type: "object",
+      properties: {
+        vendorName: { type: "string" },
+        accentColor: { type: "string", description: "#rrggbb hex" },
+        logoUrl: { type: "string", description: "http(s) URL" },
+        backgroundArtworkUrl: { type: "string", description: "http(s) URL" },
+        footerText: { type: "string" }
+      }
+    },
+    async handler(args) {
+      const res = await apiClient()("/gift-cards/voucher-template", {
+        method: "PATCH",
+        body: JSON.stringify(args),
+      });
+      if (!res.ok) throw new Error(await res.text());
       return res.json();
     }
   },
