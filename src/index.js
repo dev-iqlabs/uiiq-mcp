@@ -40,6 +40,7 @@ import { merchSetTools }        from "./tools/merch.js";
 import { displayTools }         from "./tools/displays.js";
 import { journeyTools }         from "./tools/journey.js";
 import { menuTools }            from "./tools/menu.js";
+import { ticketsTools }         from "./tools/tickets.js";
 
 const ALL_TOOLS = [
   ...statusTools,
@@ -79,6 +80,7 @@ const ALL_TOOLS = [
   ...displayTools,
   ...journeyTools,
   ...menuTools,
+  ...ticketsTools,
 ];
 
 const TOOL_MAP = Object.fromEntries(ALL_TOOLS.map(t => [t.name, t]));
