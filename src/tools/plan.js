@@ -7,7 +7,10 @@ const get = (route) => async () => {
 };
 
 export const planTools = [
-  { name: "uiiq_plan_estimates", description: "Business plan — revenue estimates and projections.", inputSchema: { type: "object", properties: {} }, handler: get("/plan/estimates") },
+  // /plan/estimates never existed (404). The projections/estimates live in the
+  // P&L, so this is repointed to /plan/statements (same source as
+  // uiiq_plan_statements) rather than left dead.
+  { name: "uiiq_plan_estimates", description: "Business plan — revenue estimates & projections (from the P&L statements).", inputSchema: { type: "object", properties: {} }, handler: get("/plan/statements") },
   { name: "uiiq_plan_revenue", description: "Business plan — planned vs actual revenue breakdown.", inputSchema: { type: "object", properties: {} }, handler: get("/plan/revenue") },
   { name: "uiiq_plan_expenses", description: "Business plan — expense categories and totals.", inputSchema: { type: "object", properties: {} }, handler: get("/plan/expenses") },
   { name: "uiiq_plan_milestones", description: "Business plan — milestones.", inputSchema: { type: "object", properties: {} }, handler: get("/plan/milestones") },
