@@ -56,7 +56,8 @@ export const materialsTools = [
         id: { type: "string", description: "material id" },
         supplierName: { type: "string" },
         url: { type: "string" },
-        unitPricePence: { type: "number" },
+        currency: { type: "string", description: "ISO code the prices are in (GBP default); landed cost is converted to GBP" },
+        unitPricePence: { type: "number", description: "in the currency's minor units" },
         moq: { type: "number", description: "minimum order quantity" },
         leadTimeDays: { type: "number" },
         shippingPence: { type: "number", description: "order-level shipping in pence" },
@@ -95,6 +96,27 @@ export const materialsTools = [
       const res = await apiClient()(`/materials/${id}/candidates/${candidateId}`, {
         method: "PATCH",
         body: JSON.stringify({ status }),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    },
+  },
+  {
+    name: "uiiq_material_verify",
+    description: "Mark a candidate as human-checked (verified) or clear it. Distinguishes confirmed prices from raw AI estimates.",
+    inputSchema: {
+      type: "object",
+      required: ["id", "candidateId"],
+      properties: {
+        id: { type: "string", description: "material id" },
+        candidateId: { type: "string" },
+        verified: { type: "boolean", description: "default true" },
+      },
+    },
+    async handler({ id, candidateId, verified = true }) {
+      const res = await apiClient()(`/materials/${id}/candidates/${candidateId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ verified }),
       });
       if (!res.ok) throw new Error(await res.text());
       return res.json();
