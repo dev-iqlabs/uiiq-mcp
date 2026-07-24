@@ -138,13 +138,8 @@ async function beginImpersonation(call, tenantId, writeEnabled) {
   throw new Error("Tenant switch returned no impersonation cookie — is this login a SUPER_ADMIN?");
 }
 
-/**
- * @param {{ tenant?: string }|string} [options] tenant id, slug or exact name to
- *   act in. Omit to use the tenant the stored login belongs to.
- */
-export function apiClient(options = {}) {
-  const tenantRef = typeof options === "string" ? options : options.tenant ?? null;
-
+// The raw session-authenticated caller both apiClient() and withTenant() sit on.
+function baseCaller() {
   let creds = loadCreds();
   const base = creds.base ?? BASE;
   // The UIIQ JSON API lives under /api; callers pass bare paths like
@@ -166,7 +161,7 @@ export function apiClient(options = {}) {
       },
     });
 
-  const call = async (p, init = {}, extraCookies) => {
+  return async (p, init = {}, extraCookies) => {
     let res = await doFetch(creds, p, init, extraCookies);
     if (authExpired(res)) {
       creds = await relogin(creds);
@@ -174,9 +169,20 @@ export function apiClient(options = {}) {
     }
     return res;
   };
+}
+
+/**
+ * @param {{ tenant?: string }|string} [options] tenant id, slug or exact name to
+ *   act in. Omit to use the tenant the stored login belongs to.
+ */
+export function apiClient(options = {}) {
+  const tenantRef = typeof options === "string" ? options : options.tenant ?? null;
+  const call = baseCaller();
 
   if (!tenantRef) return (p, init = {}) => call(p, init);
 
+  // One impersonation session per call — right for a single tool invocation,
+  // wasteful for a batch. Batches use withTenant() instead.
   return async (p, init = {}) => {
     const tenantId = await resolveTenantId(call, tenantRef);
     const writeEnabled = (init.method ?? "GET").toUpperCase() !== "GET";
@@ -190,4 +196,30 @@ export function apiClient(options = {}) {
       await call("/admin/impersonate/exit", { method: "POST" }, [impCookie]).catch(() => {});
     }
   };
+}
+
+/**
+ * Run a batch of calls inside ONE tenant session: impersonate once, hand the
+ * body a client bound to it, exit once. Seeding 65 cards this way is 67
+ * requests and one audit-log row instead of 195 and 65.
+ *
+ * @param {string|null} tenantRef tenant id, slug or name — null for your own
+ * @param {(client: (path: string, init?: object) => Promise<Response>) => Promise<T>} fn
+ * @returns {Promise<T>}
+ * @template T
+ */
+export async function withTenant(tenantRef, fn) {
+  const call = baseCaller();
+  if (!tenantRef) return fn((p, init = {}) => call(p, init));
+
+  const tenantId = await resolveTenantId(call, tenantRef);
+  // Write-enabled: a batch exists to change things, and the session is the
+  // operator's own SUPER_ADMIN session either way.
+  const impCookie = await beginImpersonation(call, tenantId, true);
+  if (!impCookie) return fn((p, init = {}) => call(p, init));
+  try {
+    return await fn((p, init = {}) => call(p, init, [impCookie]));
+  } finally {
+    await call("/admin/impersonate/exit", { method: "POST" }, [impCookie]).catch(() => {});
+  }
 }

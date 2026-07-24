@@ -1,4 +1,4 @@
-import { apiClient } from "../auth.js";
+import { apiClient, withTenant } from "../auth.js";
 
 // Every tool takes an optional `tenant` (id, slug or exact name). Without it the
 // call lands in whatever tenant the stored login belongs to; with it the client
@@ -64,9 +64,17 @@ async function resolveBoardId(client, ref) {
   return hit.id;
 }
 
+// Seeding a board is dozens of cards against the same handful of people —
+// memoise the roster per client so it isn't re-fetched 65 times.
+const memberCache = new WeakMap();
+async function listMembers(client) {
+  if (!memberCache.has(client)) memberCache.set(client, await json(await client("/tasks/members")));
+  return memberCache.get(client);
+}
+
 async function resolveMemberId(client, person) {
   const wanted = String(person).trim().toLowerCase();
-  const members = await json(await client("/tasks/members"));
+  const members = await listMembers(client);
   const hit =
     members.find((m) => String(m.id).toLowerCase() === wanted) ??
     members.find((m) => String(m.email ?? "").toLowerCase() === wanted) ??
@@ -377,12 +385,29 @@ export const taskTools = [
   {
     name: "uiiq_task_create",
     description:
-      "Create a UIIQ task card. Address the board by name or id; the card lands in the column matching `status`, or the board's first column. Pass `tenants` to create the same card on the same-named board across many tenants.",
+      "Create UIIQ task cards. Address the board by name or id; a card lands in the column matching its `status`, or the board's first column. Pass `cards` to seed a whole board in one call, and `tenants` to repeat it across many tenants — both report per-item success/failure rather than stopping at the first error.",
     inputSchema: {
       type: "object",
-      required: ["title"],
       properties: {
-        title: { type: "string" },
+        title: { type: "string", description: "Single card title. Use `cards` instead to create many." },
+        cards: {
+          type: "array",
+          description:
+            "Create several cards on the board in one call. Each entry takes title (required) plus any of description, status, priority, assignee, dueDate, labels; anything omitted falls back to the top-level value.",
+          items: {
+            type: "object",
+            required: ["title"],
+            properties: {
+              title: { type: "string" },
+              description: { type: "string" },
+              status: { type: "string" },
+              priority: { type: "string" },
+              assignee: { type: "string" },
+              dueDate: { type: "string" },
+              labels: { type: "array", items: { type: "string" } },
+            },
+          },
+        },
         board: { type: "string", description: "Board id or name (required unless boardId is given)" },
         boardId: { type: "string", description: "Exact board id (single-tenant only)" },
         description: { type: "string" },
@@ -398,23 +423,57 @@ export const taskTools = [
       },
     },
     async handler({
-      title, board, boardId, description, assignee, assigneeId, dueDate, priority, status, columnId, labels,
+      title, cards, board, boardId, description, assignee, assigneeId, dueDate, priority, status, columnId, labels,
       tenant, tenants,
     }) {
-      const create = async (t, opts = {}) => {
-        const client = api(t);
-        const resolvedBoardId = opts.boardId ?? (await resolveBoardId(client, board));
-        let resolvedAssignee = opts.assigneeId;
-        if (!resolvedAssignee && assignee) resolvedAssignee = await resolveMemberId(client, assignee);
+      if (!title && !cards?.length) throw new Error("title or cards is required");
+
+      // Each card inherits anything it doesn't set from the top-level fields,
+      // so a 65-card seed can share one board, priority and set of labels.
+      const spec = cards?.length
+        ? cards.map((c) => ({
+            title: c.title, description: c.description ?? description,
+            assignee: c.assignee ?? assignee, dueDate: c.dueDate ?? dueDate,
+            priority: c.priority ?? priority, status: c.status ?? status,
+            labels: c.labels ?? labels,
+          }))
+        : [{ title, description, assignee, dueDate, priority, status, labels }];
+
+      const createOne = async (client, resolvedBoardId, card, opts) => {
+        const assigneeRef = card.assignee;
         const body = {
           boardId: resolvedBoardId,
           ...cardCreateBody({
-            title, description, assigneeId: resolvedAssignee, dueDate, priority, status,
-            columnId: opts.columnId, labels,
+            ...card,
+            assigneeId: opts.assigneeId ?? (assigneeRef ? await resolveMemberId(client, assigneeRef) : undefined),
+            columnId: opts.columnId,
           }),
         };
         return json(await client("/tasks/cards", { method: "POST", body: JSON.stringify(body) }));
       };
+
+      // One tenant session for the whole batch rather than one per card.
+      const runTenant = (t, opts = {}) =>
+        withTenant(t ?? null, async (client) => {
+          const resolvedBoardId = opts.boardId ?? (await resolveBoardId(client, board));
+          if (spec.length === 1) return createOne(client, resolvedBoardId, spec[0], opts);
+
+          const created = [];
+          for (const card of spec) {
+            try {
+              created.push({ title: card.title, ok: true, card: await createOne(client, resolvedBoardId, card, opts) });
+            } catch (e) {
+              created.push({ title: card.title, ok: false, error: e.message });
+            }
+          }
+          return {
+            boardId: resolvedBoardId,
+            total: created.length,
+            succeeded: created.filter((c) => c.ok).length,
+            failed: created.filter((c) => !c.ok).length,
+            cards: created,
+          };
+        });
 
       if (tenants?.length) {
         // Ids belong to one tenant — everything must be resolved per tenant.
@@ -422,10 +481,10 @@ export const taskTools = [
           throw new Error("boardId / assigneeId / columnId can't be used with `tenants` — use board / assignee / status");
         }
         if (!board) throw new Error("board (a name) is required when creating across tenants");
-        return acrossTenants(tenants, (t) => create(t));
+        return acrossTenants(tenants, (t) => runTenant(t));
       }
       if (!board && !boardId) throw new Error("board or boardId is required");
-      return create(tenant, { boardId, assigneeId, columnId });
+      return runTenant(tenant, { boardId, assigneeId, columnId });
     },
   },
   {
