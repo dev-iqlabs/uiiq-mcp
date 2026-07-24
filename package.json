@@ -1,7 +1,7 @@
 {
   "name": "uiiq-mcp",
-  "version": "2.10.0",
-  "description": "MCP server for the UIIQ platform — exposes tenant, contact, order, portfolio, task, Sell (bookings/calendar/staff) and automation tools to Claude",
+  "version": "2.11.0",
+  "description": "MCP server for the UIIQ platform — exposes tenant, contact, order, portfolio, tasks (projects/boards/columns/cards, cross-tenant), Sell (bookings/calendar/staff) and automation tools to Claude",
   "type": "module",
   "bin": {
     "uiiq-mcp": "./src/index.js"
