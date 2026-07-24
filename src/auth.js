@@ -161,13 +161,32 @@ function baseCaller() {
       },
     });
 
+  // A different token on disk means something else (a `uiiq login`, the CLI)
+  // has already re-authenticated since we loaded ours. Prefer it — a long-lived
+  // MCP process holding a dead in-memory session while a perfectly good one sits
+  // in credentials.json is exactly the "session expired" that isn't.
+  const freshFromDisk = () => {
+    try {
+      const onDisk = loadCreds();
+      return onDisk.sessionToken && onDisk.sessionToken !== creds.sessionToken ? onDisk : null;
+    } catch {
+      return null;
+    }
+  };
+
   return async (p, init = {}, extraCookies) => {
     let res = await doFetch(creds, p, init, extraCookies);
-    if (authExpired(res)) {
-      creds = await relogin(creds);
+    if (!authExpired(res)) return res;
+
+    const onDisk = freshFromDisk();
+    if (onDisk) {
+      creds = onDisk;
       res = await doFetch(creds, p, init, extraCookies);
+      if (!authExpired(res)) return res;
     }
-    return res;
+
+    creds = await relogin(creds);
+    return doFetch(creds, p, init, extraCookies);
   };
 }
 
