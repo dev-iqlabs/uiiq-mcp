@@ -1,20 +1,36 @@
 import { apiClient } from "../auth.js";
 
+// Summary fields only. The API now returns these anyway, but projecting here
+// too means a future API change can't silently blow the context again — this
+// list used to arrive with blockers, milestones and boards inlined per row.
+const PROJECT_SUMMARY = [
+  "id", "name", "slug", "status", "progress", "domain", "tenantId",
+  "colour", "sortOrder", "autoProgress",
+  "blockerCount", "milestoneCount", "taskBoardCount",
+];
+
+const project = (row, fields) =>
+  Object.fromEntries(fields.filter((f) => row[f] !== undefined).map((f) => [f, row[f]]));
+
 export const portfolioTools = [
   {
     name: "uiiq_portfolio_list",
-    description: "List UIIQ portfolio projects. Optionally filter by status.",
+    description:
+      "List UIIQ portfolio projects (summary rows). Optionally filter by status. Use uiiq_portfolio_get for a project's blockers and milestones.",
     inputSchema: {
       type: "object",
       properties: {
-        status: { type: "string", description: "live | soft-launch | in-dev | planned | concept" }
+        status: { type: "string", description: "live | soft-launch | in-dev | planned | concept" },
+        limit: { type: "number", description: "Max projects to return (default 50)" }
       }
     },
-    async handler({ status } = {}) {
-      const qs = status ? `?status=${encodeURIComponent(status)}` : "";
-      const res = await apiClient()(`/portfolio/projects${qs}`);
+    async handler({ status, limit } = {}) {
+      const params = new URLSearchParams({ limit: String(limit ?? 50) });
+      if (status) params.set("status", status);
+      const res = await apiClient()(`/portfolio/projects?${params}`);
       const data = await res.json();
-      return Array.isArray(data) ? data : data.projects ?? [];
+      const rows = Array.isArray(data) ? data : data.projects ?? [];
+      return rows.map((p) => project(p, PROJECT_SUMMARY));
     }
   },
   {
