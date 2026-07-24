@@ -1,18 +1,31 @@
 import { apiClient } from "../auth.js";
 
+const TENANT_SUMMARY = [
+  "id", "name", "slug", "status", "tier", "industry", "isInternal", "iqexOrgId", "createdAt",
+];
+
 export const tenantTools = [
   {
     name: "uiiq_tenant_list",
-    description: "List all UIIQ tenants. Optionally filter by search term.",
+    description:
+      "List UIIQ tenants (summary rows). Filter with search (name or slug). Use uiiq_tenant_get for a tenant's features and users.",
     inputSchema: {
       type: "object",
-      properties: { search: { type: "string", description: "Search by name or slug" } }
+      properties: {
+        search: { type: "string", description: "Search by name or slug" },
+        limit: { type: "number", description: "Max tenants to return (default 50)" }
+      }
     },
-    async handler({ search } = {}) {
-      const qs = search ? `?search=${encodeURIComponent(search)}` : "";
-      const res = await apiClient()(`/admin/tenants${qs}`);
+    async handler({ search, limit } = {}) {
+      const params = new URLSearchParams({ limit: String(limit ?? 50) });
+      if (search) params.set("search", search);
+      const res = await apiClient()(`/admin/tenants?${params}`);
       const data = await res.json();
-      return Array.isArray(data) ? data : data.tenants ?? [];
+      const rows = Array.isArray(data) ? data : data.tenants ?? [];
+      // Project defensively: this list arrived at 1.44 MB for 41 tenants because
+      // 96% of each row was feature-flag blobs. Even with the API fixed, the
+      // tool only ever hands back what a list is for.
+      return rows.map((t) => TENANT_SUMMARY.reduce((o, f) => (t[f] === undefined ? o : { ...o, [f]: t[f] }), {}));
     }
   },
   {
