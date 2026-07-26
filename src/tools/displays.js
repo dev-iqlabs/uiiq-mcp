@@ -199,4 +199,25 @@ export const displayTools = [
       return res.json();
     },
   },
+  {
+    name: "uiiq_display_videos",
+    description:
+      "List the tenant's Bunny Stream signage videos (the picker behind the channel editor), each with its `ready` flag and `embedUrl`. Add a ready video to a channel with uiiq_display_channel_item_add (content_type=URL, content_url=embedUrl). Defaults to the Displays collection; pass all=true to show the whole library (films included). Uploading new video bytes is a browser-only flow, so it isn't exposed here.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        all: { type: "boolean", description: "Show the whole library, not just the Displays collection" },
+        search: { type: "string", description: "Match video titles containing this text" },
+      },
+    },
+    async handler({ all, search } = {}) {
+      const params = new URLSearchParams();
+      if (all) params.set("collection", "all");
+      if (search) params.set("search", search);
+      const qs = params.toString() ? `?${params}` : "";
+      const res = await apiClient()(`/displays/videos${qs}`);
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    },
+  },
 ];
