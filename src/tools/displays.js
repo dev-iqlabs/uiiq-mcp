@@ -189,6 +189,110 @@ export const displayTools = [
       return res.json();
     },
   },
+  // ── Scheduler ───────────────────────────────────────────────────────────
+  // Groups bundle screens (a venue/zone); schedules swap the channel a group
+  // or a single display shows by the clock. A schedule has an optional
+  // default_channel and an ordered set of rules; the server resolves the live
+  // channel from the tenant's clock (Europe/London). Org is resolved from the
+  // session — callers never pass org_id.
+  {
+    name: "uiiq_display_group_list",
+    description: "List display groups (venue/zone bundles of screens), each with its display_count.",
+    inputSchema: { type: "object", properties: {} },
+    async handler() {
+      const res = await apiClient()("/displays/groups");
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    },
+  },
+  {
+    name: "uiiq_display_group_create",
+    description: "Create a display group (a named bundle of screens to schedule together).",
+    inputSchema: {
+      type: "object",
+      required: ["name"],
+      properties: { name: { type: "string" } },
+    },
+    async handler({ name } = {}) {
+      const res = await apiClient()("/displays/groups", {
+        method: "POST",
+        body: JSON.stringify({ name }),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    },
+  },
+  {
+    name: "uiiq_display_schedule_list",
+    description: "List schedules, each with its default_channel and ordered rules. A schedule targets a group or a single display and swaps its channel by the clock.",
+    inputSchema: { type: "object", properties: {} },
+    async handler() {
+      const res = await apiClient()("/displays/schedules");
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    },
+  },
+  {
+    name: "uiiq_display_schedule_create",
+    description: "Create a schedule. Attach it to a group (group id) XOR a single display (display id). default_channel is the channel id shown when no rule matches.",
+    inputSchema: {
+      type: "object",
+      required: ["name"],
+      properties: {
+        name: { type: "string" },
+        group: { type: "number", description: "Group id to schedule (mutually exclusive with display)" },
+        display: { type: "number", description: "Display id to schedule (mutually exclusive with group)" },
+        default_channel: { type: "number", description: "Channel id shown when no rule matches" },
+      },
+    },
+    async handler({ name, group, display, default_channel } = {}) {
+      const res = await apiClient()("/displays/schedules", {
+        method: "POST",
+        body: JSON.stringify({
+          name,
+          group: group ?? null,
+          display: display ?? null,
+          default_channel: default_channel ?? null,
+        }),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    },
+  },
+  {
+    name: "uiiq_display_schedule_rule_add",
+    description: "Add a rule to a schedule: show `channel` during a time window, optionally limited to days of the week and a date range. days_of_week is a comma list Mon=0…Sun=6 (\"\" = every day); start_time/end_time are \"HH:MM\"; date_start/date_end are \"YYYY-MM-DD\" or omitted; higher priority wins on overlap.",
+    inputSchema: {
+      type: "object",
+      required: ["scheduleId", "channel", "start_time", "end_time"],
+      properties: {
+        scheduleId: { type: "number", description: "Schedule id to add the rule to" },
+        channel: { type: "number", description: "Channel id to show while this rule is active" },
+        days_of_week: { type: "string", description: "Comma list, Mon=0…Sun=6, e.g. \"0,1,2\"; empty = every day" },
+        start_time: { type: "string", description: "Window start, \"HH:MM\"" },
+        end_time: { type: "string", description: "Window end, \"HH:MM\"" },
+        date_start: { type: "string", description: "Optional first active date, \"YYYY-MM-DD\"" },
+        date_end: { type: "string", description: "Optional last active date, \"YYYY-MM-DD\"" },
+        priority: { type: "number", description: "Higher wins when rules overlap (default 0)" },
+      },
+    },
+    async handler({ scheduleId, channel, days_of_week, start_time, end_time, date_start, date_end, priority } = {}) {
+      const res = await apiClient()(`/displays/schedules/${scheduleId}/rules`, {
+        method: "POST",
+        body: JSON.stringify({
+          channel,
+          days_of_week: days_of_week ?? "",
+          start_time,
+          end_time,
+          date_start: date_start ?? null,
+          date_end: date_end ?? null,
+          priority: priority ?? 0,
+        }),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    },
+  },
   {
     name: "uiiq_display_projects",
     description: "List the tenant's IQEX projects available to add to a channel (the PROJECT picker).",
