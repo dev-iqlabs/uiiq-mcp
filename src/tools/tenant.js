@@ -121,4 +121,61 @@ export const tenantTools = [
       return res.json();
     }
   },
+  {
+    name: "uiiq_tenant_rename",
+    description:
+      "Change a UIIQ tenant's slug. The slug is mirrored into the linked IQEX org (uiiq_tenant_slug) and drives display resolution, so the server re-syncs IQEX automatically — the response reports iqexSlugSynced. SUPER_ADMIN.",
+    inputSchema: {
+      type: "object",
+      required: ["id", "slug"],
+      properties: {
+        id: { type: "string", description: "Tenant ID" },
+        slug: { type: "string", description: "New slug (must be unique)" },
+      },
+    },
+    async handler({ id, slug }) {
+      const res = await apiClient()(`/admin/tenants/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ slug }),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    },
+  },
+  {
+    name: "uiiq_tenant_delete",
+    description:
+      "Delete or restore a UIIQ tenant. SUPER_ADMIN. Default is a SOFT delete (archive): status → CANCELLED — reversible, blocks the workspace, keeps all data. Pass restore:true to un-archive (status → ACTIVE). Pass hard:true to PERMANENTLY delete the tenant and every relation (products, bookings, orders, boards, users) — irreversible, and it requires confirmSlug to equal the tenant's current slug.",
+    inputSchema: {
+      type: "object",
+      required: ["id"],
+      properties: {
+        id: { type: "string", description: "Tenant ID" },
+        hard: { type: "boolean", description: "Permanently delete (irreversible). Requires confirmSlug." },
+        confirmSlug: { type: "string", description: "The tenant's current slug — required when hard is true." },
+        restore: { type: "boolean", description: "Un-archive a soft-deleted tenant (status → ACTIVE)." },
+      },
+    },
+    async handler({ id, hard, confirmSlug, restore }) {
+      const api = apiClient();
+      if (restore) {
+        const res = await api(`/admin/tenants/${id}`, {
+          method: "PATCH",
+          body: JSON.stringify({ status: "ACTIVE" }),
+        });
+        if (!res.ok) throw new Error(await res.text());
+        return res.json();
+      }
+      if (hard) {
+        if (!confirmSlug) throw new Error("confirmSlug (the tenant's current slug) is required for a hard delete");
+        const qs = new URLSearchParams({ hard: "true", confirmSlug });
+        const res = await api(`/admin/tenants/${id}?${qs}`, { method: "DELETE" });
+        if (!res.ok) throw new Error(await res.text());
+        return res.json();
+      }
+      const res = await api(`/admin/tenants/${id}`, { method: "DELETE" });
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    },
+  },
 ];
