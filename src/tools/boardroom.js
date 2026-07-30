@@ -1,5 +1,16 @@
 import { apiClient } from "../auth.js";
 
+// Every tool takes an optional `tenant` (id, slug or exact name). Without it the
+// call lands in whatever tenant the stored login belongs to; with it the client
+// impersonates that tenant for that one call (SUPER_ADMIN only — see auth.js),
+// riding the official impersonation audit trail.
+const TENANT_PROP = {
+  type: "string",
+  description: "Tenant id, slug or exact name to act in. Omit for your own tenant.",
+};
+const api = (tenant) => apiClient(tenant ? { tenant } : {});
+
+
 export const boardroomTools = [
   {
     name: "uiiq_boardroom_ask",
@@ -7,10 +18,12 @@ export const boardroomTools = [
     inputSchema: {
       type: "object",
       required: ["agentSlug", "message"],
-      properties: { agentSlug: { type: "string" }, message: { type: "string" } },
+      properties: { agentSlug: { type: "string" }, message: { type: "string" },
+        tenant: TENANT_PROP,
+      },
     },
-    async handler({ agentSlug, message }) {
-      const res = await apiClient()("/boardroom/run", {
+    async handler({ agentSlug, message, tenant }) {
+      const res = await api(tenant)("/boardroom/run", {
         method: "POST",
         body: JSON.stringify({ agentId: agentSlug, messages: [{ role: "user", content: message }] }),
       });
@@ -21,9 +34,9 @@ export const boardroomTools = [
   {
     name: "uiiq_boardroom_sessions",
     description: "List your recent boardroom meeting sessions.",
-    inputSchema: { type: "object", properties: {} },
-    async handler() {
-      const res = await apiClient()("/boardroom/meeting/sessions");
+    inputSchema: { type: "object", properties: { tenant: TENANT_PROP } },
+    async handler({ tenant } = {}) {
+      const res = await api(tenant)("/boardroom/meeting/sessions");
       if (!res.ok) throw new Error(await res.text());
       return res.json();
     },
@@ -31,9 +44,11 @@ export const boardroomTools = [
   {
     name: "uiiq_boardroom_start",
     description: "Start a new boardroom meeting session.",
-    inputSchema: { type: "object", properties: { title: { type: "string" } } },
-    async handler({ title } = {}) {
-      const res = await apiClient()("/boardroom/meeting/sessions", {
+    inputSchema: { type: "object", properties: { title: { type: "string" },
+        tenant: TENANT_PROP,
+      } },
+    async handler({ title, tenant } = {}) {
+      const res = await api(tenant)("/boardroom/meeting/sessions", {
         method: "POST",
         body: JSON.stringify({ title: title ?? null }),
       });
@@ -47,10 +62,12 @@ export const boardroomTools = [
     inputSchema: {
       type: "object",
       required: ["sessionId", "content"],
-      properties: { sessionId: { type: "string" }, content: { type: "string" } },
+      properties: { sessionId: { type: "string" }, content: { type: "string" },
+        tenant: TENANT_PROP,
+      },
     },
-    async handler({ sessionId, content }) {
-      const res = await apiClient()(`/boardroom/meeting/${sessionId}/message`, {
+    async handler({ sessionId, content, tenant }) {
+      const res = await api(tenant)(`/boardroom/meeting/${sessionId}/message`, {
         method: "POST",
         body: JSON.stringify({ content }),
       });

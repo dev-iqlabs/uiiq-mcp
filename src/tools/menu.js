@@ -1,5 +1,16 @@
 import { apiClient } from "../auth.js";
 
+// Every tool takes an optional `tenant` (id, slug or exact name). Without it the
+// call lands in whatever tenant the stored login belongs to; with it the client
+// impersonates that tenant for that one call (SUPER_ADMIN only — see auth.js),
+// riding the official impersonation audit trail.
+const TENANT_PROP = {
+  type: "string",
+  description: "Tenant id, slug or exact name to act in. Omit for your own tenant.",
+};
+const api = (tenant) => apiClient(tenant ? { tenant } : {});
+
+
 // IQMENU — saved menu documents (the .uiiqmenu designer format, stored per
 // org in IQEX) plus the live-menu bridge that turns a designed menu's
 // catalogue links into a Menu/Section/Placement set powering the menu boards
@@ -15,11 +26,12 @@ export const menuTools = [
       type: "object",
       properties: {
         kind: { type: "string", enum: ["overlay", "compose"], description: "overlay = price-artwork menus, compose = built-from-scratch menus" },
+        tenant: TENANT_PROP,
       },
     },
-    async handler({ kind } = {}) {
+    async handler({ kind, tenant } = {}) {
       const qs = kind ? `?kind=${encodeURIComponent(kind)}` : "";
-      const res = await apiClient()(`/menu/documents${qs}`);
+      const res = await api(tenant)(`/menu/documents${qs}`);
       if (!res.ok) throw new Error(await res.text());
       return res.json();
     },
@@ -30,10 +42,12 @@ export const menuTools = [
     inputSchema: {
       type: "object",
       required: ["id"],
-      properties: { id: { type: "number", description: "Menu document id" } },
+      properties: { id: { type: "number", description: "Menu document id" },
+        tenant: TENANT_PROP,
+      },
     },
-    async handler({ id }) {
-      const res = await apiClient()(`/menu/documents/${id}`);
+    async handler({ id, tenant }) {
+      const res = await api(tenant)(`/menu/documents/${id}`);
       if (!res.ok) throw new Error(await res.text());
       return res.json();
     },
@@ -48,13 +62,14 @@ export const menuTools = [
         id: { type: "number" },
         name: { type: "string" },
         doc: { type: "object", description: "Full replacement doc (format v2)" },
+        tenant: TENANT_PROP,
       },
     },
-    async handler({ id, name, doc } = {}) {
+    async handler({ id, name, doc, tenant } = {}) {
       const body = {};
       if (name != null) body.name = name;
       if (doc != null) body.doc = doc;
-      const res = await apiClient()(`/menu/documents/${id}`, { method: "PUT", body: JSON.stringify(body) });
+      const res = await api(tenant)(`/menu/documents/${id}`, { method: "PUT", body: JSON.stringify(body) });
       if (!res.ok) throw new Error(await res.text());
       return res.json();
     },
@@ -62,9 +77,11 @@ export const menuTools = [
   {
     name: "uiiq_menu_document_delete",
     description: "Delete a saved menu document by id.",
-    inputSchema: { type: "object", required: ["id"], properties: { id: { type: "number" } } },
-    async handler({ id }) {
-      const res = await apiClient()(`/menu/documents/${id}`, { method: "DELETE" });
+    inputSchema: { type: "object", required: ["id"], properties: { id: { type: "number" },
+        tenant: TENANT_PROP,
+      } },
+    async handler({ id, tenant }) {
+      const res = await api(tenant)(`/menu/documents/${id}`, { method: "DELETE" });
       if (!res.ok) throw new Error(await res.text());
       return res.json();
     },
@@ -91,14 +108,15 @@ export const menuTools = [
           },
         },
         menuId: { type: "string", description: "Existing live menu id to refresh (from a previous build — doc.linkedMenuId)" },
+        tenant: TENANT_PROP,
       },
     },
-    async handler({ name, productIds, sections, menuId } = {}) {
+    async handler({ name, productIds, sections, menuId, tenant } = {}) {
       const body = { name };
       if (productIds?.length) body.productIds = productIds;
       if (sections?.length) body.sections = sections;
       if (menuId) body.menuId = menuId;
-      const res = await apiClient()("/menu/build-live", { method: "POST", body: JSON.stringify(body) });
+      const res = await api(tenant)("/menu/build-live", { method: "POST", body: JSON.stringify(body) });
       if (!res.ok) throw new Error(await res.text());
       return res.json();
     },
@@ -112,15 +130,16 @@ export const menuTools = [
         q: { type: "string", description: "Name search" },
         ids: { type: "array", items: { type: "string" }, description: "Exact product ids to fetch (bypasses q)" },
         all: { type: "boolean", description: "Include products not yet flagged showInMenu" },
+        tenant: TENANT_PROP,
       },
     },
-    async handler({ q, ids, all } = {}) {
+    async handler({ q, ids, all, tenant } = {}) {
       const params = new URLSearchParams();
       if (ids?.length) params.set("ids", ids.join(","));
       else if (q) params.set("q", q);
       if (all) params.set("all", "1");
       const qs = params.toString() ? `?${params}` : "";
-      const res = await apiClient()(`/menu/products${qs}`);
+      const res = await api(tenant)(`/menu/products${qs}`);
       if (!res.ok) throw new Error(await res.text());
       return res.json();
     },
@@ -141,12 +160,13 @@ export const menuTools = [
             qr_url: { type: "string", description: "URL the QR encodes (e.g. the public menu board)" },
           },
         },
+        tenant: TENANT_PROP,
       },
     },
-    async handler({ table_qr } = {}) {
+    async handler({ table_qr, tenant } = {}) {
       const body = {};
       if (table_qr) body.table_qr = table_qr;
-      const res = await apiClient()("/menu/kit", { method: "POST", body: JSON.stringify(body) });
+      const res = await api(tenant)("/menu/kit", { method: "POST", body: JSON.stringify(body) });
       if (!res.ok) throw new Error(await res.text());
       return res.json();
     },

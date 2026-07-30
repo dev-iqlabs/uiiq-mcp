@@ -1,12 +1,23 @@
 import { apiClient } from "../auth.js";
 
+// Every tool takes an optional `tenant` (id, slug or exact name). Without it the
+// call lands in whatever tenant the stored login belongs to; with it the client
+// impersonates that tenant for that one call (SUPER_ADMIN only — see auth.js),
+// riding the official impersonation audit trail.
+const TENANT_PROP = {
+  type: "string",
+  description: "Tenant id, slug or exact name to act in. Omit for your own tenant.",
+};
+const api = (tenant) => apiClient(tenant ? { tenant } : {});
+
+
 export const billingTools = [
   {
     name: "uiiq_billing_info",
     description: "Get the tenant's billing information (plan, status, balance).",
-    inputSchema: { type: "object", properties: {} },
-    async handler() {
-      const res = await apiClient()("/billing");
+    inputSchema: { type: "object", properties: { tenant: TENANT_PROP } },
+    async handler({ tenant } = {}) {
+      const res = await api(tenant)("/billing");
       if (!res.ok) throw new Error(await res.text());
       return res.json();
     },
@@ -14,9 +25,9 @@ export const billingTools = [
   {
     name: "uiiq_billing_invoices",
     description: "List the tenant's invoices.",
-    inputSchema: { type: "object", properties: {} },
-    async handler() {
-      const res = await apiClient()("/billing/invoices");
+    inputSchema: { type: "object", properties: { tenant: TENANT_PROP } },
+    async handler({ tenant } = {}) {
+      const res = await api(tenant)("/billing/invoices");
       if (!res.ok) throw new Error(await res.text());
       return res.json();
     },
@@ -25,9 +36,9 @@ export const billingTools = [
     name: "uiiq_billing_usage",
     description:
       "The tenant's live 'My Plan & Usage' statement: this month's plan base, accruing credit overage (billed in arrears), and the platform fee already collected off sales (GMV) — plus the all-in cost this period and any active discount deal. The platform fee is shown for transparency but is netted off sales payouts, not on the UIIQ invoice.",
-    inputSchema: { type: "object", properties: {} },
-    async handler() {
-      const res = await apiClient()("/billing/usage");
+    inputSchema: { type: "object", properties: { tenant: TENANT_PROP } },
+    async handler({ tenant } = {}) {
+      const res = await api(tenant)("/billing/usage");
       if (!res.ok) throw new Error(await res.text());
       return res.json();
     },
@@ -37,8 +48,8 @@ export const billingTools = [
     description:
       "List a tenant's per-tenant billing overrides (discount deals, newest first) plus the cost floor and list credit rate for the UI. SUPER_ADMIN-only on the API (the tool just calls the endpoint; the API enforces the gate).",
     inputSchema: { type: "object", required: ["tenantId"], properties: { tenantId: { type: "string" } } },
-    async handler({ tenantId } = {}) {
-      const res = await apiClient()(`/admin/tenants/${tenantId}/billing-override`);
+    async handler({ tenantId, tenant } = {}) {
+      const res = await api(tenant)(`/admin/tenants/${tenantId}/billing-override`);
       if (!res.ok) throw new Error(await res.text());
       return res.json();
     },
@@ -64,7 +75,7 @@ export const billingTools = [
         endsAt: { type: "string", description: "ISO date/time the deal ends (optional; null = forever)." },
       },
     },
-    async handler({ tenantId, reason, label, basePctOff, creditRatePerCredit, platformFeePct, startsAt, endsAt } = {}) {
+    async handler({ tenantId, reason, label, basePctOff, creditRatePerCredit, platformFeePct, startsAt, endsAt, tenant } = {}) {
       const body = { reason };
       if (label !== undefined) body.label = label;
       if (basePctOff !== undefined) body.basePctOff = basePctOff;
@@ -72,7 +83,7 @@ export const billingTools = [
       if (platformFeePct !== undefined) body.platformFeePct = platformFeePct;
       if (startsAt !== undefined) body.startsAt = startsAt;
       if (endsAt !== undefined) body.endsAt = endsAt;
-      const res = await apiClient()(`/admin/tenants/${tenantId}/billing-override`, {
+      const res = await api(tenant)(`/admin/tenants/${tenantId}/billing-override`, {
         method: "POST",
         body: JSON.stringify(body),
       });
@@ -92,9 +103,9 @@ export const billingTools = [
         overrideId: { type: "string", description: "Optional — clear just this override; omit to clear all active." },
       },
     },
-    async handler({ tenantId, overrideId } = {}) {
+    async handler({ tenantId, overrideId, tenant } = {}) {
       const qs = overrideId ? `?overrideId=${encodeURIComponent(overrideId)}` : "";
-      const res = await apiClient()(`/admin/tenants/${tenantId}/billing-override${qs}`, { method: "DELETE" });
+      const res = await api(tenant)(`/admin/tenants/${tenantId}/billing-override${qs}`, { method: "DELETE" });
       if (!res.ok) throw new Error(await res.text());
       return res.json();
     },

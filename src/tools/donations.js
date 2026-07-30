@@ -1,6 +1,17 @@
 import fs from "fs";
 import { apiClient } from "../auth.js";
 
+// Every tool takes an optional `tenant` (id, slug or exact name). Without it the
+// call lands in whatever tenant the stored login belongs to; with it the client
+// impersonates that tenant for that one call (SUPER_ADMIN only — see auth.js),
+// riding the official impersonation audit trail.
+const TENANT_PROP = {
+  type: "string",
+  description: "Tenant id, slug or exact name to act in. Omit for your own tenant.",
+};
+const api = (tenant) => apiClient(tenant ? { tenant } : {});
+
+
 export const donationsTools = [
   {
     name: "uiiq_donations_causes_list",
@@ -8,10 +19,12 @@ export const donationsTools = [
       "List the tenant's donation causes (the charity's giving options). By default only active causes are returned; pass includeInactive to see all.",
     inputSchema: {
       type: "object",
-      properties: { includeInactive: { type: "boolean" } },
+      properties: { includeInactive: { type: "boolean" },
+        tenant: TENANT_PROP,
+      },
     },
-    async handler({ includeInactive } = {}) {
-      const res = await apiClient()(`/donations/causes${includeInactive ? "?includeInactive=1" : ""}`);
+    async handler({ includeInactive, tenant } = {}) {
+      const res = await api(tenant)(`/donations/causes${includeInactive ? "?includeInactive=1" : ""}`);
       if (!res.ok) throw new Error(await res.text());
       return res.json();
     },
@@ -20,9 +33,11 @@ export const donationsTools = [
     name: "uiiq_donations_cause_get",
     description:
       "Get a single donation cause by ID. There is no dedicated single-cause endpoint, so this reads the tenant's full cause list (including inactive) and returns the matching one.",
-    inputSchema: { type: "object", required: ["id"], properties: { id: { type: "string" } } },
-    async handler({ id }) {
-      const res = await apiClient()("/donations/causes?includeInactive=1");
+    inputSchema: { type: "object", required: ["id"], properties: { id: { type: "string" },
+        tenant: TENANT_PROP,
+      } },
+    async handler({ id, tenant }) {
+      const res = await api(tenant)("/donations/causes?includeInactive=1");
       if (!res.ok) throw new Error(await res.text());
       const data = await res.json();
       const cause = (data.causes ?? []).find((c) => c.id === id);
@@ -41,13 +56,14 @@ export const donationsTools = [
         name: { type: "string" },
         description: { type: "string" },
         imageUrl: { type: "string" },
+        tenant: TENANT_PROP,
       },
     },
-    async handler({ name, description, imageUrl } = {}) {
+    async handler({ name, description, imageUrl, tenant } = {}) {
       const body = { name };
       if (description !== undefined) body.description = description;
       if (imageUrl !== undefined) body.imageUrl = imageUrl;
-      const res = await apiClient()("/donations/causes", { method: "POST", body: JSON.stringify(body) });
+      const res = await api(tenant)("/donations/causes", { method: "POST", body: JSON.stringify(body) });
       if (!res.ok) throw new Error(await res.text());
       return res.json();
     },
@@ -66,10 +82,11 @@ export const donationsTools = [
         imageUrl: { type: "string" },
         active: { type: "boolean" },
         displayOrder: { type: "number" },
+        tenant: TENANT_PROP,
       },
     },
-    async handler({ id, ...patch } = {}) {
-      const res = await apiClient()(`/donations/causes/${id}`, {
+    async handler({ id, tenant, ...patch } = {}) {
+      const res = await api(tenant)(`/donations/causes/${id}`, {
         method: "PATCH",
         body: JSON.stringify(patch),
       });
@@ -81,9 +98,11 @@ export const donationsTools = [
     name: "uiiq_donations_cause_delete",
     description:
       "Delete a donation cause by ID. A cause that already has donations cannot be deleted (returns 409) — deactivate it instead to hide it from the widget while keeping its history.",
-    inputSchema: { type: "object", required: ["id"], properties: { id: { type: "string" } } },
-    async handler({ id } = {}) {
-      const res = await apiClient()(`/donations/causes/${id}`, { method: "DELETE" });
+    inputSchema: { type: "object", required: ["id"], properties: { id: { type: "string" },
+        tenant: TENANT_PROP,
+      } },
+    async handler({ id, tenant } = {}) {
+      const res = await api(tenant)(`/donations/causes/${id}`, { method: "DELETE" });
       if (!res.ok) throw new Error(await res.text());
       return res.json();
     },
@@ -92,9 +111,9 @@ export const donationsTools = [
     name: "uiiq_donations_report",
     description:
       "The charity's donation dashboard (tenant-scoped, owners/admins only): all-time and this-month totals, per-cause breakdown, recurring-donor count, Gift-Aid totals (incl. the +25% HMRC top-up) and the 50 most recent SUCCEEDED donations.",
-    inputSchema: { type: "object", properties: {} },
-    async handler() {
-      const res = await apiClient()("/donations/report");
+    inputSchema: { type: "object", properties: { tenant: TENANT_PROP } },
+    async handler({ tenant } = {}) {
+      const res = await api(tenant)("/donations/report");
       if (!res.ok) throw new Error(await res.text());
       return res.json();
     },
@@ -107,10 +126,11 @@ export const donationsTools = [
       type: "object",
       properties: {
         savePath: { type: "string", description: "Optional local file path to write the CSV to." },
+        tenant: TENANT_PROP,
       },
     },
-    async handler({ savePath } = {}) {
-      const res = await apiClient()("/donations/gift-aid-export");
+    async handler({ savePath, tenant } = {}) {
+      const res = await api(tenant)("/donations/gift-aid-export");
       if (!res.ok) throw new Error(await res.text());
       const csv = await res.text();
       const disp = res.headers.get("content-disposition") ?? "";
@@ -130,10 +150,12 @@ export const donationsTools = [
     inputSchema: {
       type: "object",
       required: ["subscriptionId"],
-      properties: { subscriptionId: { type: "string" } },
+      properties: { subscriptionId: { type: "string" },
+        tenant: TENANT_PROP,
+      },
     },
-    async handler({ subscriptionId } = {}) {
-      const res = await apiClient()("/donations/subscription/cancel", {
+    async handler({ subscriptionId, tenant } = {}) {
+      const res = await api(tenant)("/donations/subscription/cancel", {
         method: "POST",
         body: JSON.stringify({ subscriptionId }),
       });

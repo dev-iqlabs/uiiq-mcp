@@ -1,5 +1,16 @@
 import { apiClient } from "../auth.js";
 
+// Every tool takes an optional `tenant` (id, slug or exact name). Without it the
+// call lands in whatever tenant the stored login belongs to; with it the client
+// impersonates that tenant for that one call (SUPER_ADMIN only — see auth.js),
+// riding the official impersonation audit trail.
+const TENANT_PROP = {
+  type: "string",
+  description: "Tenant id, slug or exact name to act in. Omit for your own tenant.",
+};
+const api = (tenant) => apiClient(tenant ? { tenant } : {});
+
+
 export const orderTools = [
   {
     name: "uiiq_order_list",
@@ -16,7 +27,7 @@ export const orderTools = [
       const params = new URLSearchParams({ limit });
       if (status) params.set("status", status);
       if (tenant) params.set("tenant", tenant);
-      const res = await apiClient()(`/wf/orders?${params}`);
+      const res = await api(tenant)(`/wf/orders?${params}`);
       const data = await res.json();
       return Array.isArray(data) ? data : data.orders ?? [];
     }
@@ -27,10 +38,12 @@ export const orderTools = [
     inputSchema: {
       type: "object",
       required: ["ref"],
-      properties: { ref: { type: "string" } }
+      properties: { ref: { type: "string" },
+        tenant: TENANT_PROP,
+      }
     },
-    async handler({ ref }) {
-      const res = await apiClient()(`/wf/orders/${ref}`);
+    async handler({ ref, tenant }) {
+      const res = await api(tenant)(`/wf/orders/${ref}`);
       if (!res.ok) throw new Error(`Order not found: ${ref}`);
       return res.json();
     }
@@ -41,10 +54,12 @@ export const orderTools = [
     inputSchema: {
       type: "object",
       required: ["ref", "body"],
-      properties: { ref: { type: "string" }, body: { type: "string" } }
+      properties: { ref: { type: "string" }, body: { type: "string" },
+        tenant: TENANT_PROP,
+      }
     },
-    async handler({ ref, body }) {
-      const res = await apiClient()(`/wf/orders/${ref}/notes`, {
+    async handler({ ref, body, tenant }) {
+      const res = await api(tenant)(`/wf/orders/${ref}/notes`, {
         method: "POST",
         body: JSON.stringify({ body }),
       });
@@ -58,10 +73,12 @@ export const orderTools = [
     inputSchema: {
       type: "object",
       required: ["ref", "reason"],
-      properties: { ref: { type: "string" }, reason: { type: "string" } }
+      properties: { ref: { type: "string" }, reason: { type: "string" },
+        tenant: TENANT_PROP,
+      }
     },
-    async handler({ ref, reason }) {
-      const res = await apiClient()(`/wf/orders/${ref}/hold`, {
+    async handler({ ref, reason, tenant }) {
+      const res = await api(tenant)(`/wf/orders/${ref}/hold`, {
         method: "POST",
         body: JSON.stringify({ reason }),
       });

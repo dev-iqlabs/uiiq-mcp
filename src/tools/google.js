@@ -1,5 +1,16 @@
 import { apiClient } from "../auth.js";
 
+// Every tool takes an optional `tenant` (id, slug or exact name). Without it the
+// call lands in whatever tenant the stored login belongs to; with it the client
+// impersonates that tenant for that one call (SUPER_ADMIN only — see auth.js),
+// riding the official impersonation audit trail.
+const TENANT_PROP = {
+  type: "string",
+  description: "Tenant id, slug or exact name to act in. Omit for your own tenant.",
+};
+const api = (tenant) => apiClient(tenant ? { tenant } : {});
+
+
 function range(from, to) {
   const p = new URLSearchParams();
   if (from) p.set("from", from);
@@ -12,9 +23,11 @@ export const googleTools = [
   {
     name: "uiiq_google_analytics",
     description: "Google Analytics summary. Optional from/to (YYYY-MM-DD).",
-    inputSchema: { type: "object", properties: { from: { type: "string" }, to: { type: "string" } } },
-    async handler({ from, to } = {}) {
-      const res = await apiClient()(`/google/analytics${range(from, to)}`);
+    inputSchema: { type: "object", properties: { from: { type: "string" }, to: { type: "string" },
+        tenant: TENANT_PROP,
+      } },
+    async handler({ from, to, tenant } = {}) {
+      const res = await api(tenant)(`/google/analytics${range(from, to)}`);
       if (!res.ok) throw new Error(await res.text());
       return res.json();
     },
@@ -22,9 +35,11 @@ export const googleTools = [
   {
     name: "uiiq_google_search_console",
     description: "Google Search Console summary. Optional from/to (YYYY-MM-DD).",
-    inputSchema: { type: "object", properties: { from: { type: "string" }, to: { type: "string" } } },
-    async handler({ from, to } = {}) {
-      const res = await apiClient()(`/google/search-console${range(from, to)}`);
+    inputSchema: { type: "object", properties: { from: { type: "string" }, to: { type: "string" },
+        tenant: TENANT_PROP,
+      } },
+    async handler({ from, to, tenant } = {}) {
+      const res = await api(tenant)(`/google/search-console${range(from, to)}`);
       if (!res.ok) throw new Error(await res.text());
       return res.json();
     },
@@ -32,9 +47,11 @@ export const googleTools = [
   {
     name: "uiiq_google_ads",
     description: "Google Ads summary. Optional from/to (YYYY-MM-DD).",
-    inputSchema: { type: "object", properties: { from: { type: "string" }, to: { type: "string" } } },
-    async handler({ from, to } = {}) {
-      const res = await apiClient()(`/google/ads${range(from, to)}`);
+    inputSchema: { type: "object", properties: { from: { type: "string" }, to: { type: "string" },
+        tenant: TENANT_PROP,
+      } },
+    async handler({ from, to, tenant } = {}) {
+      const res = await api(tenant)(`/google/ads${range(from, to)}`);
       if (!res.ok) throw new Error(await res.text());
       return res.json();
     },
