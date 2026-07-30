@@ -1,16 +1,29 @@
 import { apiClient } from "../auth.js";
 
+// Every tool takes an optional `tenant` (id, slug or exact name). Without it the
+// call lands in whatever tenant the stored login belongs to; with it the client
+// impersonates that tenant for that one call (SUPER_ADMIN only — see auth.js),
+// riding the official impersonation audit trail.
+const TENANT_PROP = {
+  type: "string",
+  description: "Tenant id, slug or exact name to act in. Omit for your own tenant.",
+};
+const api = (tenant) => apiClient(tenant ? { tenant } : {});
+
+
 export const sellTools = [
   {
     name: "uiiq_sell_booking_list",
     description: "List UIIQ experience bookings. Filter by status.",
     inputSchema: {
       type: "object",
-      properties: { status: { type: "string", description: "confirmed | pending | cancelled | completed" } }
+      properties: { status: { type: "string", description: "confirmed | pending | cancelled | completed" },
+        tenant: TENANT_PROP,
+      }
     },
-    async handler({ status } = {}) {
+    async handler({ status, tenant } = {}) {
       const qs = status ? "?status=" + encodeURIComponent(status) : "";
-      const res = await apiClient()("/v1/bookings" + qs);
+      const res = await api(tenant)("/v1/bookings" + qs);
       const data = await res.json();
       return Array.isArray(data) ? data : data.bookings ?? [];
     }
@@ -18,9 +31,9 @@ export const sellTools = [
   {
     name: "uiiq_sell_experience_list",
     description: "List UIIQ experiences available for booking.",
-    inputSchema: { type: "object", properties: {} },
-    async handler() {
-      const res = await apiClient()("/admin/experiences");
+    inputSchema: { type: "object", properties: { tenant: TENANT_PROP } },
+    async handler({ tenant } = {}) {
+      const res = await api(tenant)("/admin/experiences");
       const data = await res.json();
       return Array.isArray(data) ? data : data.experiences ?? [];
     }
@@ -30,11 +43,13 @@ export const sellTools = [
     description: "List UIIQ membership subscribers. Filter by status.",
     inputSchema: {
       type: "object",
-      properties: { status: { type: "string", description: "active | cancelled | expired" } }
+      properties: { status: { type: "string", description: "active | cancelled | expired" },
+        tenant: TENANT_PROP,
+      }
     },
-    async handler({ status } = {}) {
+    async handler({ status, tenant } = {}) {
       const qs = status ? "?status=" + encodeURIComponent(status) : "";
-      const res = await apiClient()("/admin/memberships/subscribers" + qs);
+      const res = await api(tenant)("/admin/memberships/subscribers" + qs);
       const data = await res.json();
       return Array.isArray(data) ? data : data.subscribers ?? [];
     }
@@ -49,13 +64,14 @@ export const sellTools = [
         code: { type: "string" },
         discount: { type: "number" },
         type: { type: "string", description: "percent | fixed" },
-        expires: { type: "string", description: "Expiry date YYYY-MM-DD" }
+        expires: { type: "string", description: "Expiry date YYYY-MM-DD" },
+        tenant: TENANT_PROP,
       }
     },
-    async handler({ code, discount, type, expires }) {
+    async handler({ code, discount, type, expires, tenant }) {
       const body = { code, discount, type };
       if (expires) body.expiresAt = expires;
-      const res = await apiClient()("/admin/promo-codes", {
+      const res = await api(tenant)("/admin/promo-codes", {
         method: "POST",
         body: JSON.stringify(body),
       });
@@ -79,11 +95,12 @@ export const sellTools = [
         recipientEmail: { type: "string", description: "Who receives it; defaults to the purchaser" },
         recipientName: { type: "string" },
         message: { type: "string", description: "Gift message printed on the voucher" },
-        expiryMonths: { type: "number", description: "Months until expiry" }
+        expiryMonths: { type: "number", description: "Months until expiry" },
+        tenant: TENANT_PROP,
       }
     },
     async handler(args) {
-      const res = await apiClient()("/gift-cards", {
+      const res = await api(tenant)("/gift-cards", {
         method: "POST",
         body: JSON.stringify(args),
       });
@@ -108,11 +125,12 @@ export const sellTools = [
         type: { type: "string", description: "CASH (default) or MESSAGE_CARD" },
         purchaserEmail: { type: "string" },
         purchaserName: { type: "string" },
-        expiresAt: { type: "string", description: "ISO date" }
+        expiresAt: { type: "string", description: "ISO date" },
+        tenant: TENANT_PROP,
       }
     },
     async handler(args) {
-      const res = await apiClient()("/gift-cards/bulk", {
+      const res = await api(tenant)("/gift-cards/bulk", {
         method: "POST",
         body: JSON.stringify(args),
       });
@@ -128,11 +146,12 @@ export const sellTools = [
       required: ["vendor", "code"],
       properties: {
         vendor: { type: "string", description: "Vendor/tenant slug the voucher belongs to" },
-        code: { type: "string", description: "Voucher code" }
+        code: { type: "string", description: "Voucher code" },
+        tenant: TENANT_PROP,
       }
     },
-    async handler({ vendor, code }) {
-      const res = await apiClient()("/v1/gift-cards/check", {
+    async handler({ vendor, code, tenant }) {
+      const res = await api(tenant)("/v1/gift-cards/check", {
         method: "POST",
         body: JSON.stringify({ vendor, code }),
       });
@@ -146,10 +165,12 @@ export const sellTools = [
     inputSchema: {
       type: "object",
       required: ["id"],
-      properties: { id: { type: "string", description: "Gift card id" } }
+      properties: { id: { type: "string", description: "Gift card id" },
+        tenant: TENANT_PROP,
+      }
     },
-    async handler({ id }) {
-      const res = await apiClient()(`/gift-cards/${encodeURIComponent(id)}/pdf`);
+    async handler({ id, tenant }) {
+      const res = await api(tenant)(`/gift-cards/${encodeURIComponent(id)}/pdf`);
       if (!res.ok) throw new Error(await res.text());
       return res.json();
     }
@@ -160,10 +181,12 @@ export const sellTools = [
     inputSchema: {
       type: "object",
       required: ["id"],
-      properties: { id: { type: "string", description: "Gift card id" } }
+      properties: { id: { type: "string", description: "Gift card id" },
+        tenant: TENANT_PROP,
+      }
     },
-    async handler({ id }) {
-      const res = await apiClient()(`/gift-cards/${encodeURIComponent(id)}/resend`, { method: "POST" });
+    async handler({ id, tenant }) {
+      const res = await api(tenant)(`/gift-cards/${encodeURIComponent(id)}/resend`, { method: "POST" });
       if (!res.ok) throw new Error(await res.text());
       return res.json();
     }
@@ -174,10 +197,12 @@ export const sellTools = [
     inputSchema: {
       type: "object",
       required: ["id"],
-      properties: { id: { type: "string", description: "Gift card id" } }
+      properties: { id: { type: "string", description: "Gift card id" },
+        tenant: TENANT_PROP,
+      }
     },
-    async handler({ id }) {
-      const res = await apiClient()(`/gift-cards/${encodeURIComponent(id)}/regenerate-pdf`, { method: "POST" });
+    async handler({ id, tenant }) {
+      const res = await api(tenant)(`/gift-cards/${encodeURIComponent(id)}/regenerate-pdf`, { method: "POST" });
       if (!res.ok) throw new Error(await res.text());
       return res.json();
     }
@@ -185,9 +210,9 @@ export const sellTools = [
   {
     name: "uiiq_sell_voucher_template_get",
     description: "Get the tenant's voucher branding template (vendor name, logo, accent colour, footer, background artwork).",
-    inputSchema: { type: "object", properties: {} },
-    async handler() {
-      const res = await apiClient()("/gift-cards/voucher-template");
+    inputSchema: { type: "object", properties: { tenant: TENANT_PROP } },
+    async handler({ tenant } = {}) {
+      const res = await api(tenant)("/gift-cards/voucher-template");
       if (!res.ok) throw new Error(await res.text());
       return res.json();
     }
@@ -202,11 +227,12 @@ export const sellTools = [
         accentColor: { type: "string", description: "#rrggbb hex" },
         logoUrl: { type: "string", description: "http(s) URL" },
         backgroundArtworkUrl: { type: "string", description: "http(s) URL" },
-        footerText: { type: "string" }
+        footerText: { type: "string" },
+        tenant: TENANT_PROP,
       }
     },
     async handler(args) {
-      const res = await apiClient()("/gift-cards/voucher-template", {
+      const res = await api(tenant)("/gift-cards/voucher-template", {
         method: "PATCH",
         body: JSON.stringify(args),
       });
@@ -220,10 +246,12 @@ export const sellTools = [
     inputSchema: {
       type: "object",
       required: ["id"],
-      properties: { id: { type: "string" } }
+      properties: { id: { type: "string" },
+        tenant: TENANT_PROP,
+      }
     },
-    async handler({ id }) {
-      const res = await apiClient()(`/v1/bookings/${id}`);
+    async handler({ id, tenant }) {
+      const res = await api(tenant)(`/v1/bookings/${id}`);
       if (!res.ok) throw new Error(`Booking not found: ${id}`);
       return res.json();
     }
@@ -258,12 +286,13 @@ export const sellTools = [
         visitWindowEnd: { type: "string", description: "Preferred window end HH:MM" },
         resourceId: { type: "string", description: "Assigned resource/technician (visit bookings)" },
         source: { type: "string", enum: ["PHONE", "EMAIL", "WALK_IN"], description: "How the visit booking came in (default PHONE)" },
-        totalPence: { type: "number", description: "Agreed price in pence (visit bookings; default 0)" }
+        totalPence: { type: "number", description: "Agreed price in pence (visit bookings; default 0)" },
+        tenant: TENANT_PROP,
       }
     },
-    async handler({ experienceId, customerEmail, customerName, customerPhone, date, notes, quantity = 1, visitAddress, visitDate, visitWindowStart, visitWindowEnd, resourceId, source, totalPence }) {
+    async handler({ experienceId, customerEmail, customerName, customerPhone, date, notes, quantity = 1, visitAddress, visitDate, visitWindowStart, visitWindowEnd, resourceId, source, totalPence, tenant }) {
       if (visitAddress || visitDate) {
-        const res = await apiClient()("/admin/bookings", {
+        const res = await api(tenant)("/admin/bookings", {
           method: "POST",
           body: JSON.stringify({
             experienceId, customerName, customerEmail, customerPhone,
@@ -274,7 +303,7 @@ export const sellTools = [
         if (!res.ok) throw new Error(await res.text());
         return res.json();
       }
-      const res = await apiClient()("/v1/bookings", {
+      const res = await api(tenant)("/v1/bookings", {
         method: "POST",
         body: JSON.stringify({ experienceId, customerEmail, customerName, date, notes, quantity }),
       });
@@ -290,11 +319,12 @@ export const sellTools = [
       required: ["id"],
       properties: {
         id: { type: "string" },
-        reason: { type: "string" }
+        reason: { type: "string" },
+        tenant: TENANT_PROP,
       }
     },
-    async handler({ id, reason }) {
-      const res = await apiClient()(`/v1/bookings/${id}/cancel`, {
+    async handler({ id, reason, tenant }) {
+      const res = await api(tenant)(`/v1/bookings/${id}/cancel`, {
         method: "POST",
         body: JSON.stringify({ reason }),
       });
@@ -308,12 +338,13 @@ export const sellTools = [
     inputSchema: {
       type: "object",
       properties: {
-        date: { type: "string", description: "Any date YYYY-MM-DD inside the target week. Omit for current week." }
+        date: { type: "string", description: "Any date YYYY-MM-DD inside the target week. Omit for current week." },
+        tenant: TENANT_PROP,
       }
     },
-    async handler({ date } = {}) {
+    async handler({ date, tenant } = {}) {
       const qs = date ? `?date=${encodeURIComponent(date)}` : "";
-      const res = await apiClient()(`/admin/calendar/week${qs}`);
+      const res = await api(tenant)(`/admin/calendar/week${qs}`);
       if (!res.ok) throw new Error(await res.text());
       return res.json();
     }
@@ -327,15 +358,16 @@ export const sellTools = [
       properties: {
         staffId: { type: "string", description: "Staff member (Performer) ID" },
         from:    { type: "string", description: "Start date YYYY-MM-DD" },
-        to:      { type: "string", description: "End date YYYY-MM-DD" }
+        to:      { type: "string", description: "End date YYYY-MM-DD" },
+        tenant: TENANT_PROP,
       }
     },
-    async handler({ staffId, from, to }) {
+    async handler({ staffId, from, to, tenant }) {
       const params = new URLSearchParams();
       if (from) params.set("from", from);
       if (to)   params.set("to",   to);
       const qs = params.toString() ? `?${params}` : "";
-      const res = await apiClient()(`/admin/staff/${encodeURIComponent(staffId)}/availability${qs}`);
+      const res = await api(tenant)(`/admin/staff/${encodeURIComponent(staffId)}/availability${qs}`);
       if (!res.ok) throw new Error(await res.text());
       const data = await res.json();
       return Array.isArray(data) ? data : data.data ?? [];
@@ -352,15 +384,16 @@ export const sellTools = [
         date:      { type: "string", description: "Date YYYY-MM-DD" },
         startTime: { type: "string", description: "Block start HH:MM (omit for full day)" },
         endTime:   { type: "string", description: "Block end HH:MM" },
-        reason:    { type: "string", description: "Reason for the block" }
+        reason:    { type: "string", description: "Reason for the block" },
+        tenant: TENANT_PROP,
       }
     },
-    async handler({ staffId, date, startTime, endTime, reason }) {
+    async handler({ staffId, date, startTime, endTime, reason, tenant }) {
       const body = { date };
       if (startTime) body.startTime = startTime;
       if (endTime)   body.endTime   = endTime;
       if (reason)    body.reason    = reason;
-      const res = await apiClient()(`/admin/staff/${encodeURIComponent(staffId)}/availability`, {
+      const res = await api(tenant)(`/admin/staff/${encodeURIComponent(staffId)}/availability`, {
         method: "POST",
         body: JSON.stringify(body),
       });
@@ -377,15 +410,16 @@ export const sellTools = [
       properties: {
         staffId:  { type: "string", description: "Staff member (Performer) ID" },
         date:     { type: "string", description: "Date YYYY-MM-DD to fully unblock" },
-        recordId: { type: "string", description: "Specific availability record ID to delete" }
+        recordId: { type: "string", description: "Specific availability record ID to delete" },
+        tenant: TENANT_PROP,
       }
     },
-    async handler({ staffId, date, recordId }) {
+    async handler({ staffId, date, recordId, tenant }) {
       if (!date && !recordId) throw new Error("Provide date (full day) or recordId (specific block)");
       const params = new URLSearchParams();
       if (recordId) params.set("recordId", recordId);
       else          params.set("date",     date);
-      const res = await apiClient()(`/admin/staff/${encodeURIComponent(staffId)}/availability?${params}`, {
+      const res = await api(tenant)(`/admin/staff/${encodeURIComponent(staffId)}/availability?${params}`, {
         method: "DELETE",
       });
       if (!res.ok) throw new Error(await res.text());
@@ -399,11 +433,13 @@ export const sellTools = [
     description: "List UIIQ Sell bookable resources (rooms, equipment, vehicles). Optionally filter by venue.",
     inputSchema: {
       type: "object",
-      properties: { venueId: { type: "string" } }
+      properties: { venueId: { type: "string" },
+        tenant: TENANT_PROP,
+      }
     },
-    async handler({ venueId } = {}) {
+    async handler({ venueId, tenant } = {}) {
       const qs = venueId ? `?venueId=${encodeURIComponent(venueId)}` : "";
-      const res = await apiClient()(`/admin/resources${qs}`);
+      const res = await api(tenant)(`/admin/resources${qs}`);
       if (!res.ok) throw new Error(await res.text());
       const d = await res.json();
       return d.resources ?? [];
@@ -419,11 +455,12 @@ export const sellTools = [
         name:     { type: "string", description: "e.g. 'Treatment Room 1'" },
         type:     { type: "string", description: "e.g. 'Room', 'Chair', 'Equipment', 'Vehicle'" },
         quantity: { type: "number", description: "How many of this resource exist (default 1)" },
-        venueId:  { type: "string", description: "Optional venue to attach to" }
+        venueId:  { type: "string", description: "Optional venue to attach to" },
+        tenant: TENANT_PROP,
       }
     },
-    async handler({ name, type, quantity, venueId }) {
-      const res = await apiClient()("/admin/resources", {
+    async handler({ name, type, quantity, venueId, tenant }) {
+      const res = await api(tenant)("/admin/resources", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name, type, quantity: quantity ?? 1, venueId }),
@@ -438,10 +475,12 @@ export const sellTools = [
     inputSchema: {
       type: "object",
       required: ["id"],
-      properties: { id: { type: "string" } }
+      properties: { id: { type: "string" },
+        tenant: TENANT_PROP,
+      }
     },
-    async handler({ id }) {
-      const res = await apiClient()(`/admin/resources/${encodeURIComponent(id)}`, { method: "DELETE" });
+    async handler({ id, tenant }) {
+      const res = await api(tenant)(`/admin/resources/${encodeURIComponent(id)}`, { method: "DELETE" });
       if (!res.ok) throw new Error(await res.text());
       return res.json();
     }
@@ -454,12 +493,13 @@ export const sellTools = [
     inputSchema: {
       type: "object",
       properties: {
-        experienceId: { type: "string", description: "Filter to one experience (use 'all' for global rules only)" }
+        experienceId: { type: "string", description: "Filter to one experience (use 'all' for global rules only)" },
+        tenant: TENANT_PROP,
       }
     },
-    async handler({ experienceId } = {}) {
+    async handler({ experienceId, tenant } = {}) {
       const qs = experienceId ? `?experienceId=${encodeURIComponent(experienceId)}` : "";
-      const res = await apiClient()(`/admin/pricing-rules${qs}`);
+      const res = await api(tenant)(`/admin/pricing-rules${qs}`);
       if (!res.ok) throw new Error(await res.text());
       const d = await res.json();
       return d.rules ?? [];
@@ -479,11 +519,12 @@ export const sellTools = [
         dateFrom:     { type: "string", description: "YYYY-MM-DD earliest applicable date" },
         dateTo:       { type: "string", description: "YYYY-MM-DD latest applicable date" },
         experienceId: { type: "string", description: "Scope to one experience (default: all)" },
-        priority:     { type: "number", description: "Higher wins when rules overlap (default 0)" }
+        priority:     { type: "number", description: "Higher wins when rules overlap (default 0)" },
+        tenant: TENANT_PROP,
       }
     },
     async handler(body) {
-      const res = await apiClient()("/admin/pricing-rules", {
+      const res = await api(tenant)("/admin/pricing-rules", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
@@ -498,10 +539,12 @@ export const sellTools = [
     inputSchema: {
       type: "object",
       required: ["id"],
-      properties: { id: { type: "string" } }
+      properties: { id: { type: "string" },
+        tenant: TENANT_PROP,
+      }
     },
-    async handler({ id }) {
-      const res = await apiClient()(`/admin/pricing-rules/${encodeURIComponent(id)}`, { method: "DELETE" });
+    async handler({ id, tenant }) {
+      const res = await api(tenant)(`/admin/pricing-rules/${encodeURIComponent(id)}`, { method: "DELETE" });
       if (!res.ok) throw new Error(await res.text());
       return res.json();
     }
@@ -515,13 +558,14 @@ export const sellTools = [
       properties: {
         experienceId:    { type: "string" },
         date:            { type: "string", description: "YYYY-MM-DD" },
-        basePricePence:  { type: "number", description: "Optional override of experience.priceFromPence" }
+        basePricePence:  { type: "number", description: "Optional override of experience.priceFromPence" },
+        tenant: TENANT_PROP,
       }
     },
-    async handler({ experienceId, date, basePricePence }) {
+    async handler({ experienceId, date, basePricePence, tenant }) {
       const params = new URLSearchParams({ experienceId, date });
       if (basePricePence != null) params.set("basePricePence", String(basePricePence));
-      const res = await apiClient()(`/admin/pricing-rules/quote?${params}`);
+      const res = await api(tenant)(`/admin/pricing-rules/quote?${params}`);
       if (!res.ok) throw new Error(await res.text());
       return res.json();
     }
@@ -535,15 +579,16 @@ export const sellTools = [
       type: "object",
       properties: {
         lookaheadDays: { type: "number", description: "Look ahead this many days (default 30)" },
-        historyDays:   { type: "number", description: "Days of history for baseline (default 90)" }
+        historyDays:   { type: "number", description: "Days of history for baseline (default 90)" },
+        tenant: TENANT_PROP,
       }
     },
-    async handler({ lookaheadDays, historyDays } = {}) {
+    async handler({ lookaheadDays, historyDays, tenant } = {}) {
       const params = new URLSearchParams();
       if (lookaheadDays != null) params.set("lookaheadDays", String(lookaheadDays));
       if (historyDays != null)   params.set("historyDays",   String(historyDays));
       const path = `/admin/pricing-intelligence/recommend${params.toString() ? "?" + params : ""}`;
-      const res = await apiClient()(path);
+      const res = await api(tenant)(path);
       if (!res.ok) throw new Error(await res.text());
       return res.json();
     }
@@ -553,9 +598,9 @@ export const sellTools = [
   {
     name: "uiiq_sell_service_area_list",
     description: "List the tenant's UIIQ Sell service-area territories (postcode-prefix zones with a default technician for visit-mode auto-assign) plus the technician picker. Returns { serviceAreas, technicians }.",
-    inputSchema: { type: "object", properties: {} },
-    async handler() {
-      const res = await apiClient()("/admin/service-areas");
+    inputSchema: { type: "object", properties: { tenant: TENANT_PROP } },
+    async handler({ tenant } = {}) {
+      const res = await api(tenant)("/admin/service-areas");
       if (!res.ok) throw new Error(await res.text());
       return res.json();
     }
@@ -570,15 +615,16 @@ export const sellTools = [
         name:              { type: "string", description: "Territory name, e.g. 'Bristol Central'" },
         postcodePrefixes:  { type: "array", items: { type: "string" }, description: "Outward-code prefixes covered, e.g. ['BS1','BS2']" },
         defaultResourceId: { type: "string", description: "Technician (resource) auto-assigned to visits in this zone" },
-        color:             { type: "string", description: "Optional calendar colour (hex)" }
+        color:             { type: "string", description: "Optional calendar colour (hex)" },
+        tenant: TENANT_PROP,
       }
     },
-    async handler({ name, postcodePrefixes, defaultResourceId, color }) {
+    async handler({ name, postcodePrefixes, defaultResourceId, color, tenant }) {
       const body = { name };
       if (postcodePrefixes) body.postcodePrefixes = postcodePrefixes;
       if (defaultResourceId) body.defaultResourceId = defaultResourceId;
       if (color) body.color = color;
-      const res = await apiClient()("/admin/service-areas", {
+      const res = await api(tenant)("/admin/service-areas", {
         method: "POST",
         body: JSON.stringify(body),
       });
@@ -598,15 +644,16 @@ export const sellTools = [
         postcodePrefixes:  { type: "array", items: { type: "string" } },
         defaultResourceId: { type: "string", description: "Technician (resource) to auto-assign; pass null to clear" },
         color:             { type: "string" },
-        isActive:          { type: "boolean" }
+        isActive:          { type: "boolean" },
+        tenant: TENANT_PROP,
       }
     },
-    async handler({ id, ...rest }) {
+    async handler({ id, tenant, ...rest }) {
       const body = {};
       for (const k of ["name", "postcodePrefixes", "defaultResourceId", "color", "isActive"]) {
         if (rest[k] !== undefined) body[k] = rest[k];
       }
-      const res = await apiClient()(`/admin/service-areas/${encodeURIComponent(id)}`, {
+      const res = await api(tenant)(`/admin/service-areas/${encodeURIComponent(id)}`, {
         method: "PATCH",
         body: JSON.stringify(body),
       });
@@ -620,10 +667,12 @@ export const sellTools = [
     inputSchema: {
       type: "object",
       required: ["id"],
-      properties: { id: { type: "string" } }
+      properties: { id: { type: "string" },
+        tenant: TENANT_PROP,
+      }
     },
-    async handler({ id }) {
-      const res = await apiClient()(`/admin/service-areas/${encodeURIComponent(id)}`, { method: "DELETE" });
+    async handler({ id, tenant }) {
+      const res = await api(tenant)(`/admin/service-areas/${encodeURIComponent(id)}`, { method: "DELETE" });
       if (!res.ok) throw new Error(await res.text());
       return res.json();
     }
@@ -637,15 +686,16 @@ export const sellTools = [
       type: "object",
       properties: {
         date:       { type: "string", description: "Day YYYY-MM-DD (defaults to today)" },
-        resourceId: { type: "string", description: "Filter to one technician (assigned resource)" }
+        resourceId: { type: "string", description: "Filter to one technician (assigned resource)" },
+        tenant: TENANT_PROP,
       }
     },
-    async handler({ date, resourceId } = {}) {
+    async handler({ date, resourceId, tenant } = {}) {
       const params = new URLSearchParams();
       if (date) params.set("date", date);
       if (resourceId) params.set("resourceId", resourceId);
       const qs = params.toString() ? `?${params}` : "";
-      const res = await apiClient()(`/field/visits${qs}`);
+      const res = await api(tenant)(`/field/visits${qs}`);
       if (!res.ok) throw new Error(await res.text());
       return res.json();
     }
@@ -666,15 +716,16 @@ export const sellTools = [
         signedName:       { type: "string", description: "action=complete — name of the person who signed" },
         visitDate:        { type: "string", description: "action=reschedule — new date YYYY-MM-DD" },
         visitWindowStart: { type: "string", description: "action=reschedule — window start HH:MM" },
-        visitWindowEnd:   { type: "string", description: "action=reschedule — window end HH:MM" }
+        visitWindowEnd:   { type: "string", description: "action=reschedule — window end HH:MM" },
+        tenant: TENANT_PROP,
       }
     },
-    async handler({ id, action, ...rest }) {
+    async handler({ id, action, tenant, ...rest }) {
       const body = { action };
       for (const k of ["stage", "notes", "photos", "signatureKey", "signedName", "visitDate", "visitWindowStart", "visitWindowEnd"]) {
         if (rest[k] !== undefined) body[k] = rest[k];
       }
-      const res = await apiClient()(`/field/visits/${encodeURIComponent(id)}`, {
+      const res = await api(tenant)(`/field/visits/${encodeURIComponent(id)}`, {
         method: "PATCH",
         body: JSON.stringify(body),
       });
@@ -692,15 +743,16 @@ export const sellTools = [
         id:           { type: "string", description: "Resource ID" },
         isTechnician: { type: "boolean", description: "Flag this resource as a field technician" },
         notifyEmail:  { type: "string", description: "Technician notify email (empty string clears)" },
-        notifyPhone:  { type: "string", description: "Technician notify phone (empty string clears)" }
+        notifyPhone:  { type: "string", description: "Technician notify phone (empty string clears)" },
+        tenant: TENANT_PROP,
       }
     },
-    async handler({ id, isTechnician, notifyEmail, notifyPhone }) {
+    async handler({ id, isTechnician, notifyEmail, notifyPhone, tenant }) {
       const body = {};
       if (isTechnician !== undefined) body.isTechnician = isTechnician;
       if (notifyEmail !== undefined) body.notifyEmail = notifyEmail;
       if (notifyPhone !== undefined) body.notifyPhone = notifyPhone;
-      const res = await apiClient()(`/admin/resources/${encodeURIComponent(id)}`, {
+      const res = await api(tenant)(`/admin/resources/${encodeURIComponent(id)}`, {
         method: "PATCH",
         body: JSON.stringify(body),
       });
@@ -714,10 +766,12 @@ export const sellTools = [
     inputSchema: {
       type: "object",
       required: ["id"],
-      properties: { id: { type: "string", description: "Booking (visit) ID" } }
+      properties: { id: { type: "string", description: "Booking (visit) ID" },
+        tenant: TENANT_PROP,
+      }
     },
-    async handler({ id }) {
-      const res = await apiClient()(`/field/visits/${encodeURIComponent(id)}`);
+    async handler({ id, tenant }) {
+      const res = await api(tenant)(`/field/visits/${encodeURIComponent(id)}`);
       if (!res.ok) throw new Error(await res.text());
       return res.json();
     }
@@ -730,12 +784,13 @@ export const sellTools = [
     inputSchema: {
       type: "object",
       properties: {
-        status: { type: "string", enum: ["ACTIVE", "PAUSED", "CANCELLED"], description: "Filter by subscription status" }
+        status: { type: "string", enum: ["ACTIVE", "PAUSED", "CANCELLED"], description: "Filter by subscription status" },
+        tenant: TENANT_PROP,
       }
     },
-    async handler({ status } = {}) {
+    async handler({ status, tenant } = {}) {
       const qs = status ? `?status=${encodeURIComponent(status)}` : "";
-      const res = await apiClient()(`/admin/visit-subscriptions${qs}`);
+      const res = await api(tenant)(`/admin/visit-subscriptions${qs}`);
       if (!res.ok) throw new Error(await res.text());
       return res.json();
     }
@@ -760,7 +815,8 @@ export const sellTools = [
         defaultResourceId: { type: "string", description: "Default technician (resource) for generated visits" },
         serviceAreaId:     { type: "string", description: "Service-area territory" },
         experienceId:      { type: "string", description: "Experience the visits book against" },
-        notes:             { type: "string" }
+        notes:             { type: "string" },
+        tenant: TENANT_PROP,
       }
     },
     async handler(args) {
@@ -768,7 +824,7 @@ export const sellTools = [
       for (const k of ["customerName", "customerEmail", "customerPhone", "intervalDays", "nextVisitDate", "windowStart", "windowEnd", "address", "lat", "lng", "defaultResourceId", "serviceAreaId", "experienceId", "notes"]) {
         if (args[k] !== undefined) body[k] = args[k];
       }
-      const res = await apiClient()("/admin/visit-subscriptions", {
+      const res = await api(tenant)("/admin/visit-subscriptions", {
         method: "POST",
         body: JSON.stringify(body),
       });
@@ -798,15 +854,16 @@ export const sellTools = [
         defaultResourceId: { type: "string", description: "Default technician (resource); null to clear" },
         serviceAreaId:     { type: "string", description: "Service-area territory; null to clear" },
         experienceId:      { type: "string", description: "Experience; null to clear" },
-        notes:             { type: "string" }
+        notes:             { type: "string" },
+        tenant: TENANT_PROP,
       }
     },
-    async handler({ id, ...rest }) {
+    async handler({ id, tenant, ...rest }) {
       const body = {};
       for (const k of ["status", "customerName", "customerEmail", "customerPhone", "intervalDays", "nextVisitDate", "windowStart", "windowEnd", "address", "lat", "lng", "defaultResourceId", "serviceAreaId", "experienceId", "notes"]) {
         if (rest[k] !== undefined) body[k] = rest[k];
       }
-      const res = await apiClient()(`/admin/visit-subscriptions/${encodeURIComponent(id)}`, {
+      const res = await api(tenant)(`/admin/visit-subscriptions/${encodeURIComponent(id)}`, {
         method: "PATCH",
         body: JSON.stringify(body),
       });
@@ -820,10 +877,12 @@ export const sellTools = [
     inputSchema: {
       type: "object",
       required: ["id"],
-      properties: { id: { type: "string" } }
+      properties: { id: { type: "string" },
+        tenant: TENANT_PROP,
+      }
     },
-    async handler({ id }) {
-      const res = await apiClient()(`/admin/visit-subscriptions/${encodeURIComponent(id)}`, { method: "DELETE" });
+    async handler({ id, tenant }) {
+      const res = await api(tenant)(`/admin/visit-subscriptions/${encodeURIComponent(id)}`, { method: "DELETE" });
       if (!res.ok) throw new Error(await res.text());
       return res.json();
     }
@@ -838,16 +897,17 @@ export const sellTools = [
       properties: {
         bookingId: { type: "string", description: "Filter to one visit booking" },
         status:    { type: "string", enum: ["PENDING", "SENT", "FAILED"] },
-        limit:     { type: "number", description: "Max rows 1–500 (default 200)" }
+        limit:     { type: "number", description: "Max rows 1–500 (default 200)" },
+        tenant: TENANT_PROP,
       }
     },
-    async handler({ bookingId, status, limit } = {}) {
+    async handler({ bookingId, status, limit, tenant } = {}) {
       const params = new URLSearchParams();
       if (bookingId) params.set("bookingId", bookingId);
       if (status)    params.set("status", status);
       if (limit != null) params.set("limit", String(limit));
       const qs = params.toString() ? `?${params}` : "";
-      const res = await apiClient()(`/admin/visit-reminders${qs}`);
+      const res = await api(tenant)(`/admin/visit-reminders${qs}`);
       if (!res.ok) throw new Error(await res.text());
       return res.json();
     }

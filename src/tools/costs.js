@@ -1,5 +1,16 @@
 import { apiClient } from "../auth.js";
 
+// Every tool takes an optional `tenant` (id, slug or exact name). Without it the
+// call lands in whatever tenant the stored login belongs to; with it the client
+// impersonates that tenant for that one call (SUPER_ADMIN only — see auth.js),
+// riding the official impersonation audit trail.
+const TENANT_PROP = {
+  type: "string",
+  description: "Tenant id, slug or exact name to act in. Omit for your own tenant.",
+};
+const api = (tenant) => apiClient(tenant ? { tenant } : {});
+
+
 /**
  * Costs & Expenses tools — bills, categories, cost centres, recurring costs,
  * spend summary + gross margin, the monthly KPI roll, period locks,
@@ -17,14 +28,15 @@ export const costsTools = [
         from: { type: "string" },
         to: { type: "string" },
         dateBasis: { type: "string", enum: ["paid", "issue"] },
+        tenant: TENANT_PROP,
       },
     },
-    async handler({ from, to, dateBasis } = {}) {
+    async handler({ from, to, dateBasis, tenant } = {}) {
       const p = new URLSearchParams();
       if (from) p.set("from", from);
       if (to) p.set("to", to);
       if (dateBasis) p.set("dateBasis", dateBasis);
-      const res = await apiClient()(`/costs/summary?${p}`);
+      const res = await api(tenant)(`/costs/summary?${p}`);
       if (!res.ok) throw new Error(await res.text());
       return res.json();
     },
@@ -32,9 +44,9 @@ export const costsTools = [
   {
     name: "uiiq_costs_categories",
     description: "List the tenant's cost categories (HMRC-aligned managed list). Self-seeds defaults on first call.",
-    inputSchema: { type: "object", properties: {} },
-    async handler() {
-      const res = await apiClient()("/costs/categories");
+    inputSchema: { type: "object", properties: { tenant: TENANT_PROP } },
+    async handler({ tenant } = {}) {
+      const res = await api(tenant)("/costs/categories");
       if (!res.ok) throw new Error(await res.text());
       return res.json();
     },
@@ -42,9 +54,9 @@ export const costsTools = [
   {
     name: "uiiq_costs_centers",
     description: "List the tenant's cost centres (departments/sites).",
-    inputSchema: { type: "object", properties: {} },
-    async handler() {
-      const res = await apiClient()("/costs/centers");
+    inputSchema: { type: "object", properties: { tenant: TENANT_PROP } },
+    async handler({ tenant } = {}) {
+      const res = await api(tenant)("/costs/centers");
       if (!res.ok) throw new Error(await res.text());
       return res.json();
     },
@@ -62,9 +74,10 @@ export const costsTools = [
         q: { type: "string" },
         page: { type: "number" },
         pageSize: { type: "number" },
+        tenant: TENANT_PROP,
       },
     },
-    async handler({ from, to, categoryId, status, q, page, pageSize } = {}) {
+    async handler({ from, to, categoryId, status, q, page, pageSize, tenant } = {}) {
       const p = new URLSearchParams();
       if (from) p.set("from", from);
       if (to) p.set("to", to);
@@ -73,7 +86,7 @@ export const costsTools = [
       if (q) p.set("q", q);
       if (page) p.set("page", String(page));
       if (pageSize) p.set("pageSize", String(pageSize));
-      const res = await apiClient()(`/costs/bills?${p}`);
+      const res = await api(tenant)(`/costs/bills?${p}`);
       if (!res.ok) throw new Error(await res.text());
       return res.json();
     },
@@ -98,9 +111,10 @@ export const costsTools = [
         serviceStart: { type: "string", description: "YYYY-MM-DD — service window start (prepayments)" },
         serviceEnd: { type: "string", description: "YYYY-MM-DD — service window end (prepayments)" },
         assetEntryId: { type: "string", description: "Plan asset register entry to link this capital bill to (see uiiq_plan_assets)" },
+        tenant: TENANT_PROP,
       },
     },
-    async handler({ categoryId, netPence, vatPence, payeeName, retailSupplierId, costCenterId, reference, issueDate, paid, isPrepayment, serviceStart, serviceEnd, assetEntryId } = {}) {
+    async handler({ categoryId, netPence, vatPence, payeeName, retailSupplierId, costCenterId, reference, issueDate, paid, isPrepayment, serviceStart, serviceEnd, assetEntryId, tenant } = {}) {
       const body = {
         categoryId,
         netPence,
@@ -117,7 +131,7 @@ export const costsTools = [
         serviceEnd: serviceEnd || undefined,
         assetEntryId: assetEntryId || undefined,
       };
-      const res = await apiClient()("/costs/bills", { method: "POST", body: JSON.stringify(body) });
+      const res = await api(tenant)("/costs/bills", { method: "POST", body: JSON.stringify(body) });
       if (!res.ok) throw new Error(await res.text());
       return res.json();
     },
@@ -128,10 +142,12 @@ export const costsTools = [
     inputSchema: {
       type: "object",
       required: ["billId"],
-      properties: { billId: { type: "string" } },
+      properties: { billId: { type: "string" },
+        tenant: TENANT_PROP,
+      },
     },
-    async handler({ billId }) {
-      const res = await apiClient()(`/costs/bills/${encodeURIComponent(billId)}/allocations`);
+    async handler({ billId, tenant }) {
+      const res = await api(tenant)(`/costs/bills/${encodeURIComponent(billId)}/allocations`);
       if (!res.ok) throw new Error(await res.text());
       return res.json();
     },
@@ -156,10 +172,11 @@ export const costsTools = [
             },
           },
         },
+        tenant: TENANT_PROP,
       },
     },
-    async handler({ billId, allocations }) {
-      const res = await apiClient()(`/costs/bills/${encodeURIComponent(billId)}/allocations`, {
+    async handler({ billId, allocations, tenant }) {
+      const res = await api(tenant)(`/costs/bills/${encodeURIComponent(billId)}/allocations`, {
         method: "PUT",
         body: JSON.stringify({ allocations }),
       });
@@ -170,9 +187,9 @@ export const costsTools = [
   {
     name: "uiiq_costs_period_lock_list",
     description: "List every cost period lock (active and unlocked, newest first). Rows are never deleted — the history is the audit trail.",
-    inputSchema: { type: "object", properties: {} },
-    async handler() {
-      const res = await apiClient()("/costs/period-locks");
+    inputSchema: { type: "object", properties: { tenant: TENANT_PROP } },
+    async handler({ tenant } = {}) {
+      const res = await api(tenant)("/costs/period-locks");
       if (!res.ok) throw new Error(await res.text());
       const d = await res.json();
       return d.locks ?? d;
@@ -188,15 +205,16 @@ export const costsTools = [
         from: { type: "string", description: "YYYY-MM-DD (alternative to month)" },
         to: { type: "string", description: "YYYY-MM-DD" },
         reason: { type: "string" },
+        tenant: TENANT_PROP,
       },
     },
-    async handler({ month, from, to, reason } = {}) {
+    async handler({ month, from, to, reason, tenant } = {}) {
       const body = {};
       if (month) body.month = month;
       if (from) body.from = from;
       if (to) body.to = to;
       if (reason) body.reason = reason;
-      const res = await apiClient()("/costs/period-locks", { method: "POST", body: JSON.stringify(body) });
+      const res = await api(tenant)("/costs/period-locks", { method: "POST", body: JSON.stringify(body) });
       if (!res.ok) throw new Error(await res.text());
       return res.json();
     },
@@ -211,12 +229,13 @@ export const costsTools = [
         id: { type: "string" },
         active: { type: "boolean", description: "false = unlock, true = re-lock" },
         reason: { type: "string" },
+        tenant: TENANT_PROP,
       },
     },
-    async handler({ id, active, reason } = {}) {
+    async handler({ id, active, reason, tenant } = {}) {
       const body = { active };
       if (reason != null) body.reason = reason;
-      const res = await apiClient()(`/costs/period-locks/${encodeURIComponent(id)}`, {
+      const res = await api(tenant)(`/costs/period-locks/${encodeURIComponent(id)}`, {
         method: "PATCH",
         body: JSON.stringify(body),
       });
@@ -227,9 +246,9 @@ export const costsTools = [
   {
     name: "uiiq_costs_settings_get",
     description: "The tenant's cost settings — VAT scheme (STANDARD | FLAT_RATE | NOT_REGISTERED), flatRatePct, vatRegistered. Self-seeds STANDARD on first read.",
-    inputSchema: { type: "object", properties: {} },
-    async handler() {
-      const res = await apiClient()("/costs/settings");
+    inputSchema: { type: "object", properties: { tenant: TENANT_PROP } },
+    async handler({ tenant } = {}) {
+      const res = await api(tenant)("/costs/settings");
       if (!res.ok) throw new Error(await res.text());
       return res.json();
     },
@@ -242,13 +261,14 @@ export const costsTools = [
       properties: {
         vatScheme: { type: "string", enum: ["STANDARD", "FLAT_RATE", "NOT_REGISTERED"] },
         flatRatePct: { type: "number", description: "0-100 (FLAT_RATE scheme); null to clear" },
+        tenant: TENANT_PROP,
       },
     },
-    async handler({ vatScheme, flatRatePct } = {}) {
+    async handler({ vatScheme, flatRatePct, tenant } = {}) {
       const body = {};
       if (vatScheme !== undefined) body.vatScheme = vatScheme;
       if (flatRatePct !== undefined) body.flatRatePct = flatRatePct;
-      const res = await apiClient()("/costs/settings", { method: "PATCH", body: JSON.stringify(body) });
+      const res = await api(tenant)("/costs/settings", { method: "PATCH", body: JSON.stringify(body) });
       if (!res.ok) throw new Error(await res.text());
       return res.json();
     },
@@ -256,9 +276,11 @@ export const costsTools = [
   {
     name: "uiiq_costs_recurring",
     description: "List recurring cost templates (rent, broadband, electricity…). Optional includeInactive.",
-    inputSchema: { type: "object", properties: { includeInactive: { type: "boolean" } } },
-    async handler({ includeInactive } = {}) {
-      const res = await apiClient()(`/costs/recurring${includeInactive ? "?includeInactive=1" : ""}`);
+    inputSchema: { type: "object", properties: { includeInactive: { type: "boolean" },
+        tenant: TENANT_PROP,
+      } },
+    async handler({ includeInactive, tenant } = {}) {
+      const res = await api(tenant)(`/costs/recurring${includeInactive ? "?includeInactive=1" : ""}`);
       if (!res.ok) throw new Error(await res.text());
       return res.json();
     },
@@ -266,9 +288,9 @@ export const costsTools = [
   {
     name: "uiiq_costs_recurring_generate",
     description: "Generate any due bills from the recurring cost templates (idempotent). Admin-only. Returns { generated, templates }.",
-    inputSchema: { type: "object", properties: {} },
-    async handler() {
-      const res = await apiClient()("/costs/recurring/generate", { method: "POST" });
+    inputSchema: { type: "object", properties: { tenant: TENANT_PROP } },
+    async handler({ tenant } = {}) {
+      const res = await api(tenant)("/costs/recurring/generate", { method: "POST" });
       if (!res.ok) throw new Error(await res.text());
       return res.json();
     },
@@ -276,9 +298,11 @@ export const costsTools = [
   {
     name: "uiiq_costs_kpi_roll",
     description: "Roll a month's cost/margin actuals into the plan's KpiActual (idempotent). Admin-only. Optional month (YYYY-MM, default current). Returns the computed metrics.",
-    inputSchema: { type: "object", properties: { month: { type: "string" } } },
-    async handler({ month } = {}) {
-      const res = await apiClient()("/costs/kpi-roll", { method: "POST", body: JSON.stringify({ month: month || undefined }) });
+    inputSchema: { type: "object", properties: { month: { type: "string" },
+        tenant: TENANT_PROP,
+      } },
+    async handler({ month, tenant } = {}) {
+      const res = await api(tenant)("/costs/kpi-roll", { method: "POST", body: JSON.stringify({ month: month || undefined }) });
       if (!res.ok) throw new Error(await res.text());
       return res.json();
     },

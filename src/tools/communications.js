@@ -1,5 +1,16 @@
 import { apiClient } from "../auth.js";
 
+// Every tool takes an optional `tenant` (id, slug or exact name). Without it the
+// call lands in whatever tenant the stored login belongs to; with it the client
+// impersonates that tenant for that one call (SUPER_ADMIN only — see auth.js),
+// riding the official impersonation audit trail.
+const TENANT_PROP = {
+  type: "string",
+  description: "Tenant id, slug or exact name to act in. Omit for your own tenant.",
+};
+const api = (tenant) => apiClient(tenant ? { tenant } : {});
+
+
 export const communicationsTools = [
   // ── Press Releases ──────────────────────────────────────────────────────
 
@@ -15,11 +26,12 @@ export const communicationsTools = [
           type: "string",
           description: "Filter by status: GENERATING | DRAFT | APPROVED | SENT | ARCHIVED",
         },
+        tenant: TENANT_PROP,
       },
     },
-    async handler({ status } = {}) {
+    async handler({ status, tenant } = {}) {
       const qs = status ? `?status=${status}` : "";
-      const res = await apiClient()(`/communications/press-releases${qs}`);
+      const res = await api(tenant)(`/communications/press-releases${qs}`);
       if (!res.ok) throw new Error(await res.text());
       return res.json();
     },
@@ -34,10 +46,11 @@ export const communicationsTools = [
       required: ["id"],
       properties: {
         id: { type: "string", description: "Press release ID" },
+        tenant: TENANT_PROP,
       },
     },
-    async handler({ id }) {
-      const res = await apiClient()(`/communications/press-releases/${id}`);
+    async handler({ id, tenant }) {
+      const res = await api(tenant)(`/communications/press-releases/${id}`);
       if (!res.ok) throw new Error(await res.text());
       return res.json();
     },
@@ -66,10 +79,11 @@ export const communicationsTools = [
           type: "object",
           description: "Raw brief — key_facts, quote1_from, quote1_text, press_enquiries_contact required; all other fields optional",
         },
+        tenant: TENANT_PROP,
       },
     },
     async handler(body) {
-      const res = await apiClient()("/communications/press-releases", {
+      const res = await api(tenant)("/communications/press-releases", {
         method: "POST",
         body: JSON.stringify(body),
       });
@@ -90,10 +104,11 @@ export const communicationsTools = [
         headline:       { type: "string" },
         body:           { type: "string" },
         notesToEditors: { type: "string" },
+        tenant: TENANT_PROP,
       },
     },
-    async handler({ id, ...rest }) {
-      const res = await apiClient()(`/communications/press-releases/${id}`, {
+    async handler({ id, tenant, ...rest }) {
+      const res = await api(tenant)(`/communications/press-releases/${id}`, {
         method: "PATCH",
         body: JSON.stringify(rest),
       });
@@ -111,10 +126,11 @@ export const communicationsTools = [
       required: ["id"],
       properties: {
         id: { type: "string" },
+        tenant: TENANT_PROP,
       },
     },
-    async handler({ id }) {
-      const res = await apiClient()(`/communications/press-releases/${id}/approve`, { method: "POST" });
+    async handler({ id, tenant }) {
+      const res = await api(tenant)(`/communications/press-releases/${id}/approve`, { method: "POST" });
       if (!res.ok) throw new Error(await res.text());
       return res.json();
     },
@@ -131,10 +147,11 @@ export const communicationsTools = [
       properties: {
         id:           { type: "string" },
         extraContext: { type: "string", description: "Additional direction for this draft" },
+        tenant: TENANT_PROP,
       },
     },
-    async handler({ id, extraContext }) {
-      const res = await apiClient()(`/communications/press-releases/${id}/redraft`, {
+    async handler({ id, extraContext, tenant }) {
+      const res = await api(tenant)(`/communications/press-releases/${id}/redraft`, {
         method: "POST",
         body: JSON.stringify({ extraContext }),
       });
@@ -164,10 +181,11 @@ export const communicationsTools = [
           description: "Journalist contact IDs to email (required when 'email' is in targets)",
           items: { type: "string" },
         },
+        tenant: TENANT_PROP,
       },
     },
-    async handler({ id, targets, contactIds = [] }) {
-      const res = await apiClient()(`/communications/press-releases/${id}/distribute`, {
+    async handler({ id, targets, contactIds = [], tenant }) {
+      const res = await api(tenant)(`/communications/press-releases/${id}/distribute`, {
         method: "POST",
         body: JSON.stringify({ targets, contactIds }),
       });
@@ -183,9 +201,9 @@ export const communicationsTools = [
     description:
       "List journalist contacts available to this tenant — includes global platform contacts (Grimsby Live, BBC Humberside, TechCrunch, etc.) plus any contacts the tenant has added. " +
       "Use contact IDs from this list when calling uiiq_press_release_distribute.",
-    inputSchema: { type: "object", properties: {} },
-    async handler() {
-      const res = await apiClient()("/communications/journalist-contacts");
+    inputSchema: { type: "object", properties: { tenant: TENANT_PROP } },
+    async handler({ tenant } = {}) {
+      const res = await api(tenant)("/communications/journalist-contacts");
       if (!res.ok) throw new Error(await res.text());
       return res.json();
     },
@@ -204,10 +222,11 @@ export const communicationsTools = [
         beat:        { type: "string", description: "e.g. local, tech, events" },
         region:      { type: "string", description: "e.g. Lincolnshire" },
         notes:       { type: "string" },
+        tenant: TENANT_PROP,
       },
     },
     async handler(body) {
-      const res = await apiClient()("/communications/journalist-contacts", {
+      const res = await api(tenant)("/communications/journalist-contacts", {
         method: "POST",
         body: JSON.stringify(body),
       });

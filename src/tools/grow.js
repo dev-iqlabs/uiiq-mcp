@@ -1,5 +1,16 @@
 import { apiClient } from "../auth.js";
 
+// Every tool takes an optional `tenant` (id, slug or exact name). Without it the
+// call lands in whatever tenant the stored login belongs to; with it the client
+// impersonates that tenant for that one call (SUPER_ADMIN only — see auth.js),
+// riding the official impersonation audit trail.
+const TENANT_PROP = {
+  type: "string",
+  description: "Tenant id, slug or exact name to act in. Omit for your own tenant.",
+};
+const api = (tenant) => apiClient(tenant ? { tenant } : {});
+
+
 const CHANNELS = ["google", "meta", "tiktok", "pinterest", "bing", "linkedin"];
 
 export const growTools = [
@@ -28,11 +39,12 @@ export const growTools = [
         },
         generateVideo:    { type: "boolean", description: "Also kick off a video asset", default: false },
         videoStyle:       { type: "string", description: "talking_head | product | cinematic", default: "talking_head" },
-        videoDuration:    { type: "number", description: "Video length in seconds", default: 15 }
+        videoDuration:    { type: "number", description: "Video length in seconds", default: 15 },
+        tenant: TENANT_PROP,
       }
     },
     async handler(body) {
-      const res = await apiClient()("/ads/campaign-brief", {
+      const res = await api(tenant)("/ads/campaign-brief", {
         method: "POST",
         body: JSON.stringify(body),
       });
@@ -44,11 +56,11 @@ export const growTools = [
     name: "uiiq_grow_brief_morning",
     description:
       "Fetch the latest UIIQ Grow Morning Brief — a daily AI-generated performance summary across all connected ad channels. Returns { briefDate, content: { summary, highlights[] }, emailSent }.",
-    inputSchema: { type: "object", properties: {} },
-    async handler() {
-      const res = await apiClient()("/admin/ads/brief").catch(() => null);
+    inputSchema: { type: "object", properties: { tenant: TENANT_PROP } },
+    async handler({ tenant } = {}) {
+      const res = await api(tenant)("/admin/ads/brief").catch(() => null);
       if (!res || !res.ok) {
-        const fallback = await apiClient()("/ads/brief");
+        const fallback = await api(tenant)("/ads/brief");
         if (!fallback.ok) throw new Error(await fallback.text());
         return fallback.json();
       }
@@ -62,11 +74,12 @@ export const growTools = [
     inputSchema: {
       type: "object",
       properties: {
-        sendEmail: { type: "boolean", description: "Email the brief to the calling user", default: false }
+        sendEmail: { type: "boolean", description: "Email the brief to the calling user", default: false },
+        tenant: TENANT_PROP,
       }
     },
-    async handler({ sendEmail } = {}) {
-      const res = await apiClient()("/ads/brief/generate", {
+    async handler({ sendEmail, tenant } = {}) {
+      const res = await api(tenant)("/ads/brief/generate", {
         method: "POST",
         body: JSON.stringify({ sendEmail: !!sendEmail }),
       });

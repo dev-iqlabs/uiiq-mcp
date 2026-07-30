@@ -1,5 +1,16 @@
 import { apiClient } from "../auth.js";
 
+// Every tool takes an optional `tenant` (id, slug or exact name). Without it the
+// call lands in whatever tenant the stored login belongs to; with it the client
+// impersonates that tenant for that one call (SUPER_ADMIN only — see auth.js),
+// riding the official impersonation audit trail.
+const TENANT_PROP = {
+  type: "string",
+  description: "Tenant id, slug or exact name to act in. Omit for your own tenant.",
+};
+const api = (tenant) => apiClient(tenant ? { tenant } : {});
+
+
 // ── Workshop / Journeys ───────────────────────────────────────────────────
 //
 // The WORKSHOP is UIIQ's "get things done" surface: each Workshop card launches
@@ -48,11 +59,12 @@ export const journeyTools = [
           type: "boolean",
           description: "Only return active cards that have a journeySlug (i.e. actually launchable).",
         },
+        tenant: TENANT_PROP,
       },
     },
-    async handler({ runnableOnly } = {}) {
+    async handler({ runnableOnly, tenant } = {}) {
       const qs = runnableOnly ? "?runnable=1" : "";
-      const res = await apiClient()(`/journeys${qs}`);
+      const res = await api(tenant)(`/journeys${qs}`);
       const data = await jsonOrThrow(res);
       const cards = Array.isArray(data) ? data : data.cards ?? [];
       return cards.map((c) => ({
@@ -80,12 +92,13 @@ export const journeyTools = [
           type: "number",
           description: "Optional per-run credit ceiling; the run stops before exceeding it.",
         },
+        tenant: TENANT_PROP,
       },
     },
-    async handler({ slug, creditCap } = {}) {
+    async handler({ slug, creditCap, tenant } = {}) {
       const body = {};
       if (typeof creditCap === "number" && creditCap > 0) body.creditCap = creditCap;
-      const res = await apiClient()(`/journeys/${encodeURIComponent(slug)}/start`, {
+      const res = await api(tenant)(`/journeys/${encodeURIComponent(slug)}/start`, {
         method: "POST",
         body: JSON.stringify(body),
       });
@@ -102,10 +115,11 @@ export const journeyTools = [
       properties: {
         runId: { type: "number", description: "Run id from uiiq_journey_start." },
         runToken: { type: "string", description: "Signed run token from uiiq_journey_start." },
+        tenant: TENANT_PROP,
       },
     },
-    async handler({ runId, runToken } = {}) {
-      const res = await apiClient()(
+    async handler({ runId, runToken, tenant } = {}) {
+      const res = await api(tenant)(
         `/journeys/runs/${runId}/status?runToken=${encodeURIComponent(runToken)}`,
       );
       return jsonOrThrow(res);
@@ -121,10 +135,11 @@ export const journeyTools = [
       properties: {
         runId: { type: "number" },
         runToken: { type: "string" },
+        tenant: TENANT_PROP,
       },
     },
-    async handler({ runId, runToken } = {}) {
-      const res = await apiClient()(
+    async handler({ runId, runToken, tenant } = {}) {
+      const res = await api(tenant)(
         `/journeys/runs/${runId}/ready?runToken=${encodeURIComponent(runToken)}`,
       );
       return jsonOrThrow(res);
@@ -144,10 +159,11 @@ export const journeyTools = [
           type: "object",
           description: "The completed step's field/value outputs (object). Defaults to {} for a native review confirm.",
         },
+        tenant: TENANT_PROP,
       },
     },
-    async handler({ runId, runToken, output } = {}) {
-      const res = await apiClient()(`/journeys/runs/${runId}/advance`, {
+    async handler({ runId, runToken, output, tenant } = {}) {
+      const res = await api(tenant)(`/journeys/runs/${runId}/advance`, {
         method: "POST",
         body: JSON.stringify({ runToken, output: output ?? {} }),
       });
@@ -165,10 +181,11 @@ export const journeyTools = [
         slug: { type: "string", description: "Journey slug the run belongs to." },
         runId: { type: "number" },
         progressToken: { type: "string", description: "IQEX FormProgress token from the saved step." },
+        tenant: TENANT_PROP,
       },
     },
-    async handler({ slug, runId, progressToken } = {}) {
-      const res = await apiClient()(`/journeys/${encodeURIComponent(slug)}/resume`, {
+    async handler({ slug, runId, progressToken, tenant } = {}) {
+      const res = await api(tenant)(`/journeys/${encodeURIComponent(slug)}/resume`, {
         method: "POST",
         body: JSON.stringify({ runId, progressToken }),
       });

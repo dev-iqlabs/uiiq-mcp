@@ -1,5 +1,16 @@
 import { apiClient } from "../auth.js";
 
+// Every tool takes an optional `tenant` (id, slug or exact name). Without it the
+// call lands in whatever tenant the stored login belongs to; with it the client
+// impersonates that tenant for that one call (SUPER_ADMIN only — see auth.js),
+// riding the official impersonation audit trail.
+const TENANT_PROP = {
+  type: "string",
+  description: "Tenant id, slug or exact name to act in. Omit for your own tenant.",
+};
+const api = (tenant) => apiClient(tenant ? { tenant } : {});
+
+
 // Summary fields only. The API now returns these anyway, but projecting here
 // too means a future API change can't silently blow the context again — this
 // list used to arrive with blockers, milestones and boards inlined per row.
@@ -21,13 +32,14 @@ export const portfolioTools = [
       type: "object",
       properties: {
         status: { type: "string", description: "live | soft-launch | in-dev | planned | concept" },
-        limit: { type: "number", description: "Max projects to return (default 50)" }
+        limit: { type: "number", description: "Max projects to return (default 50)" },
+        tenant: TENANT_PROP,
       }
     },
-    async handler({ status, limit } = {}) {
+    async handler({ status, limit, tenant } = {}) {
       const params = new URLSearchParams({ limit: String(limit ?? 50) });
       if (status) params.set("status", status);
-      const res = await apiClient()(`/portfolio/projects?${params}`);
+      const res = await api(tenant)(`/portfolio/projects?${params}`);
       const data = await res.json();
       const rows = Array.isArray(data) ? data : data.projects ?? [];
       return rows.map((p) => project(p, PROJECT_SUMMARY));
@@ -39,10 +51,12 @@ export const portfolioTools = [
     inputSchema: {
       type: "object",
       required: ["id"],
-      properties: { id: { type: "string" } }
+      properties: { id: { type: "string" },
+        tenant: TENANT_PROP,
+      }
     },
-    async handler({ id }) {
-      const api = apiClient();
+    async handler({ id, tenant }) {
+      const api = api(tenant);
       const [proj, blockers, milestones] = await Promise.all([
         api(`/portfolio/projects/${id}`).then(r => r.json()),
         api(`/portfolio/projects/${id}/blockers`).then(r => r.json()).catch(() => []),
@@ -64,14 +78,15 @@ export const portfolioTools = [
       properties: {
         id: { type: "string" },
         status: { type: "string", description: "live | soft-launch | in-dev | planned | concept" },
-        progress: { type: "number", description: "0–100" }
+        progress: { type: "number", description: "0–100" },
+        tenant: TENANT_PROP,
       }
     },
-    async handler({ id, status, progress }) {
+    async handler({ id, status, progress, tenant }) {
       const body = {};
       if (status) body.status = status;
       if (progress != null) body.progress = progress;
-      const res = await apiClient()(`/portfolio/projects/${id}`, {
+      const res = await api(tenant)(`/portfolio/projects/${id}`, {
         method: "PATCH",
         body: JSON.stringify(body),
       });
@@ -85,10 +100,12 @@ export const portfolioTools = [
     inputSchema: {
       type: "object",
       required: ["id", "title"],
-      properties: { id: { type: "string" }, title: { type: "string" } }
+      properties: { id: { type: "string" }, title: { type: "string" },
+        tenant: TENANT_PROP,
+      }
     },
-    async handler({ id, title }) {
-      const res = await apiClient()(`/portfolio/projects/${id}/blockers`, {
+    async handler({ id, title, tenant }) {
+      const res = await api(tenant)(`/portfolio/projects/${id}/blockers`, {
         method: "POST",
         body: JSON.stringify({ title }),
       });
@@ -104,11 +121,12 @@ export const portfolioTools = [
       required: ["projectId", "blockerId"],
       properties: {
         projectId: { type: "string" },
-        blockerId: { type: "string" }
+        blockerId: { type: "string" },
+        tenant: TENANT_PROP,
       }
     },
-    async handler({ projectId, blockerId }) {
-      const res = await apiClient()(`/portfolio/projects/${projectId}/blockers/${blockerId}`, {
+    async handler({ projectId, blockerId, tenant }) {
+      const res = await api(tenant)(`/portfolio/projects/${projectId}/blockers/${blockerId}`, {
         method: "PATCH",
         body: JSON.stringify({ resolved: true }),
       });

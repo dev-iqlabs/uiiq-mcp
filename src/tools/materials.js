@@ -1,14 +1,25 @@
 import { apiClient } from "../auth.js";
 
+// Every tool takes an optional `tenant` (id, slug or exact name). Without it the
+// call lands in whatever tenant the stored login belongs to; with it the client
+// impersonates that tenant for that one call (SUPER_ADMIN only — see auth.js),
+// riding the official impersonation audit trail.
+const TENANT_PROP = {
+  type: "string",
+  description: "Tenant id, slug or exact name to act in. Omit for your own tenant.",
+};
+const api = (tenant) => apiClient(tenant ? { tenant } : {});
+
+
 // Materials Sourcing — discover, compare & adopt suppliers for materials a
 // business buys; plus scheduled price watches. Mirrors the UIIQ /materials API.
 export const materialsTools = [
   {
     name: "uiiq_materials_list",
     description: "List sourcing materials with candidate count, best landed cost, and watch status.",
-    inputSchema: { type: "object", properties: {} },
-    async handler() {
-      const res = await apiClient()("/materials");
+    inputSchema: { type: "object", properties: { tenant: TENANT_PROP } },
+    async handler({ tenant } = {}) {
+      const res = await api(tenant)("/materials");
       if (!res.ok) throw new Error(await res.text());
       return res.json();
     },
@@ -16,9 +27,11 @@ export const materialsTools = [
   {
     name: "uiiq_material_get",
     description: "Get a sourcing material with its candidates (compare table), price history, runs and watch.",
-    inputSchema: { type: "object", required: ["id"], properties: { id: { type: "string" } } },
-    async handler({ id }) {
-      const res = await apiClient()(`/materials/${id}`);
+    inputSchema: { type: "object", required: ["id"], properties: { id: { type: "string" },
+        tenant: TENANT_PROP,
+      } },
+    async handler({ id, tenant }) {
+      const res = await api(tenant)(`/materials/${id}`);
       if (!res.ok) throw new Error(`Material not found: ${id}`);
       return res.json();
     },
@@ -38,10 +51,11 @@ export const materialsTools = [
         currentSourceUrl: { type: "string" },
         spec: { type: "object", description: "free-form attributes, e.g. { metal: brass, diameter: 38mm }" },
         notes: { type: "string" },
+        tenant: TENANT_PROP,
       },
     },
     async handler(body) {
-      const res = await apiClient()("/materials", { method: "POST", body: JSON.stringify(body) });
+      const res = await api(tenant)("/materials", { method: "POST", body: JSON.stringify(body) });
       if (!res.ok) throw new Error(await res.text());
       return res.json();
     },
@@ -62,10 +76,11 @@ export const materialsTools = [
         leadTimeDays: { type: "number" },
         shippingPence: { type: "number", description: "order-level shipping in pence" },
         qualityNotes: { type: "string" },
+        tenant: TENANT_PROP,
       },
     },
-    async handler({ id, ...body }) {
-      const res = await apiClient()(`/materials/${id}/candidates`, { method: "POST", body: JSON.stringify(body) });
+    async handler({ id, tenant, ...body }) {
+      const res = await api(tenant)(`/materials/${id}/candidates`, { method: "POST", body: JSON.stringify(body) });
       if (!res.ok) throw new Error(await res.text());
       return res.json();
     },
@@ -73,9 +88,11 @@ export const materialsTools = [
   {
     name: "uiiq_material_discover",
     description: "Run AI supplier discovery for a material — returns candidate LEADS (not quotes) to verify. Deducts credits (charged only when leads are found).",
-    inputSchema: { type: "object", required: ["id"], properties: { id: { type: "string", description: "material id" } } },
-    async handler({ id }) {
-      const res = await apiClient()(`/materials/${id}/discover`, { method: "POST" });
+    inputSchema: { type: "object", required: ["id"], properties: { id: { type: "string", description: "material id" },
+        tenant: TENANT_PROP,
+      } },
+    async handler({ id, tenant }) {
+      const res = await api(tenant)(`/materials/${id}/discover`, { method: "POST" });
       if (!res.ok) throw new Error(await res.text());
       return res.json();
     },
@@ -90,10 +107,11 @@ export const materialsTools = [
         id: { type: "string", description: "material id" },
         candidateId: { type: "string" },
         status: { type: "string", enum: ["NEW", "SHORTLIST", "REJECTED"] },
+        tenant: TENANT_PROP,
       },
     },
-    async handler({ id, candidateId, status }) {
-      const res = await apiClient()(`/materials/${id}/candidates/${candidateId}`, {
+    async handler({ id, candidateId, status, tenant }) {
+      const res = await api(tenant)(`/materials/${id}/candidates/${candidateId}`, {
         method: "PATCH",
         body: JSON.stringify({ status }),
       });
@@ -111,10 +129,11 @@ export const materialsTools = [
         id: { type: "string", description: "material id" },
         candidateId: { type: "string" },
         verified: { type: "boolean", description: "default true" },
+        tenant: TENANT_PROP,
       },
     },
-    async handler({ id, candidateId, verified = true }) {
-      const res = await apiClient()(`/materials/${id}/candidates/${candidateId}`, {
+    async handler({ id, candidateId, verified = true, tenant }) {
+      const res = await api(tenant)(`/materials/${id}/candidates/${candidateId}`, {
         method: "PATCH",
         body: JSON.stringify({ verified }),
       });
@@ -131,10 +150,11 @@ export const materialsTools = [
       properties: {
         id: { type: "string", description: "material id" },
         candidateId: { type: "string" },
+        tenant: TENANT_PROP,
       },
     },
-    async handler({ id, candidateId }) {
-      const res = await apiClient()(`/materials/${id}/candidates/${candidateId}/adopt`, { method: "POST" });
+    async handler({ id, candidateId, tenant }) {
+      const res = await api(tenant)(`/materials/${id}/candidates/${candidateId}/adopt`, { method: "POST" });
       if (!res.ok) throw new Error(await res.text());
       return res.json();
     },
@@ -150,10 +170,11 @@ export const materialsTools = [
         cadence: { type: "string", enum: ["WEEKLY", "MONTHLY"] },
         beatThresholdPct: { type: "number", description: "alert when cheapest beats current by more than this %" },
         active: { type: "boolean" },
+        tenant: TENANT_PROP,
       },
     },
-    async handler({ id, ...body }) {
-      const res = await apiClient()(`/materials/${id}/watch`, { method: "PUT", body: JSON.stringify(body) });
+    async handler({ id, tenant, ...body }) {
+      const res = await api(tenant)(`/materials/${id}/watch`, { method: "PUT", body: JSON.stringify(body) });
       if (!res.ok) throw new Error(await res.text());
       return res.json();
     },
@@ -161,9 +182,11 @@ export const materialsTools = [
   {
     name: "uiiq_material_watch_remove",
     description: "Stop and remove the price watch on a material.",
-    inputSchema: { type: "object", required: ["id"], properties: { id: { type: "string", description: "material id" } } },
-    async handler({ id }) {
-      const res = await apiClient()(`/materials/${id}/watch`, { method: "DELETE" });
+    inputSchema: { type: "object", required: ["id"], properties: { id: { type: "string", description: "material id" },
+        tenant: TENANT_PROP,
+      } },
+    async handler({ id, tenant }) {
+      const res = await api(tenant)(`/materials/${id}/watch`, { method: "DELETE" });
       if (!res.ok) throw new Error(await res.text());
       return res.json();
     },
