@@ -1,23 +1,41 @@
 import { BASE } from "../config.js";
-import { ambientImpersonation } from "../auth.js";
+import { impersonationState } from "../auth.js";
 
-// Report any impersonation session the CLI has established, because every tool
-// here inherits it. Without this the operator has no way to tell, from the MCP
-// side, that calls are landing in a client's tenant rather than their own.
+// Report which tenant calls act as — including sessions that exist but are NOT
+// being honoured. Reporting only honoured ones would mean a lapsed or opted-out
+// session reads as a clean "your own tenant", which is the exact blind spot
+// this is here to remove.
+const NOTES = {
+  expired:
+    "This session has EXPIRED. Tool calls raise rather than silently running as your own tenant. Run `uiiq tenant impersonate-exit`, or re-impersonate.",
+  "not-opted-in":
+    "NOT being honoured — this MCP server did not opt in. Calls run as your own tenant. Set UIIQ_MCP_INHERIT_IMPERSONATION=1 to follow the CLI session, or pass an explicit `tenant` to a tool.",
+  "write-not-opted-in":
+    "Honoured for reads only. Writes raise rather than land in this tenant unattended — set UIIQ_MCP_INHERIT_WRITE=1 to allow them, or pass an explicit `tenant`.",
+  honoured:
+    "Honoured. Tool calls with no explicit `tenant` act as this tenant until it expires or `uiiq tenant impersonate-exit` is run.",
+};
+
 function actingAs() {
-  const imp = ambientImpersonation();
-  if (!imp) return { actingAs: "your own tenant" };
-  const minutesLeft = Math.max(1, Math.round((Date.parse(imp.expiresAt) - Date.now()) / 60000));
+  const s = impersonationState();
+  if (!s.present) return { actingAs: "your own tenant" };
+
+  const imp = s.imp;
+  const who = imp.tenantName ?? imp.tenantSlug ?? imp.tenantId;
+  const msLeft = Date.parse(imp.expiresAt) - Date.now();
   return {
-    actingAs: imp.tenantName ?? imp.tenantSlug ?? imp.tenantId,
+    // Only claim to be acting as the tenant when calls actually will.
+    actingAs: s.honoured ? who : "your own tenant",
     impersonation: {
+      tenant: who,
       tenantId: imp.tenantId,
       tenantSlug: imp.tenantSlug ?? null,
+      honoured: s.honoured,
       writeEnabled: Boolean(imp.writeEnabled),
-      minutesLeft,
-      note: imp.writeEnabled
-        ? "Started by `uiiq tenant impersonate --write`. Every tool call WRITES to this tenant until it expires or `uiiq tenant impersonate-exit` is run."
-        : "Read-only session started by `uiiq tenant impersonate`. Reads land in this tenant; writes will be refused by the server.",
+      writesAllowed: Boolean(s.honoured && imp.writeEnabled && !s.writeBlocked),
+      expired: Boolean(s.expired),
+      minutesLeft: s.expired ? 0 : Math.max(1, Math.round(msLeft / 60000)),
+      note: NOTES[s.reason] ?? s.reason,
     },
   };
 }

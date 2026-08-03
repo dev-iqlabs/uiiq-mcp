@@ -85,27 +85,65 @@ async function relogin(creds) {
 
 const IMP_COOKIE_RE = /((?:__Host-)?ubms_impersonate(?:_dev)?=[^;]+)/;
 
+// ---------------------------------------------------------------------------
+// Ambient impersonation — OPT-IN, and fail-closed at every edge.
+//
+// `uiiq tenant impersonate` (CLI ≥1.22.0) parks a signed session in the shared
+// credentials file. Inheriting it here closes a real gap (the CLI saying
+// "acting as Epworth" while MCP calls ran as the operator), but an MCP server
+// is not a terminal: it serves unattended agent sessions that never typed the
+// impersonate command and cannot see that it happened. Inheriting a
+// human's 30-minute write session into an agent run, by default, is
+// action-at-a-distance on someone else's tenant.
+//
+// So the default is OFF and every edge fails closed:
+//   - opt in per MCP server with UIIQ_MCP_INHERIT_IMPERSONATION=1
+//   - inherited WRITES additionally need UIIQ_MCP_INHERIT_WRITE=1
+//   - operator-scope routes never inherit (see OPERATOR_SCOPE)
+//   - an expired session raises, and never silently falls back to the
+//     operator's own tenant mid-run
+//
+// An explicit `tenant` argument always wins over all of this — that path
+// impersonates per call and is unaffected.
+// ---------------------------------------------------------------------------
+
+const INHERIT = process.env.UIIQ_MCP_INHERIT_IMPERSONATION === "1";
+const INHERIT_WRITE = process.env.UIIQ_MCP_INHERIT_WRITE === "1";
+
+// Routes that are the operator's own control plane, not tenant data. These must
+// never carry an inherited cookie: /admin/impersonate would be refused outright
+// ("Already impersonating"), and the rest are SUPER_ADMIN actions whose target
+// is named in the path — attaching a tenant context there is a confused deputy,
+// not a convenience. Matched by prefix so a new /admin tool is safe by default.
+const OPERATOR_SCOPE = [/^\/admin\//, /^\/api\/admin\//, /^\/organisations(\/|$|\?)/];
+
+function isOperatorScope(path) {
+  return OPERATOR_SCOPE.some((re) => re.test(path));
+}
+
 /**
- * The impersonation session `uiiq tenant impersonate` (CLI ≥1.22.0) parks in the
- * shared credentials file, or null when there is none / it has lapsed.
- *
- * Honouring it here is what stops the two tools disagreeing about who you are:
- * before this, a CLI session said "acting as Epworth" while every MCP call still
- * ran as the operator's own tenant, so work aimed at a client landed in
- * Ultimate Image. An explicit `tenant` argument still wins — per-call
- * impersonation passes its own cookie and suppresses this one.
+ * The stored session and whether it is being honoured — always safe to call,
+ * and deliberately reports sessions it is NOT honouring. `uiiq_status` shows
+ * this verbatim: a lapsed or ignored session that reads as "your own tenant"
+ * is precisely the blind spot this is meant to remove.
  */
-export function ambientImpersonation() {
+export function impersonationState() {
   let creds;
   try {
     creds = loadCreds();
   } catch {
-    return null; // not logged in — the caller reports that far better than we can
+    return { present: false, honoured: false, reason: "not-logged-in" };
   }
   const imp = creds?.impersonation;
-  if (!imp?.cookie) return null;
-  if (!imp.expiresAt || Date.parse(imp.expiresAt) <= Date.now()) return null;
-  return imp;
+  if (!imp?.cookie) return { present: false, honoured: false, reason: "none" };
+
+  const expired = !imp.expiresAt || Date.parse(imp.expiresAt) <= Date.now();
+  if (expired) return { present: true, honoured: false, expired: true, reason: "expired", imp };
+  if (!INHERIT) return { present: true, honoured: false, reason: "not-opted-in", imp };
+  if (imp.writeEnabled && !INHERIT_WRITE) {
+    return { present: true, honoured: true, writeBlocked: true, reason: "write-not-opted-in", imp };
+  }
+  return { present: true, honoured: true, reason: "honoured", imp };
 }
 
 let tenantIndex = null;
@@ -181,10 +219,40 @@ function baseCaller() {
   // calls below MUST do that, since presenting an impersonation cookie to
   // /admin/impersonate is exactly what makes the server refuse with
   // "Already impersonating".
-  const cookiesFor = (extraCookies) => {
+  const cookiesFor = (extraCookies, p, init) => {
     if (extraCookies) return extraCookies;
-    const amb = ambientImpersonation();
-    return amb ? [amb.cookie] : [];
+    if (isOperatorScope(p)) return [];
+
+    const state = impersonationState();
+    if (!state.present) return [];
+
+    const who = state.imp.tenantName ?? state.imp.tenantSlug ?? state.imp.tenantId;
+
+    // Expired: raise rather than quietly continue as the operator. Falling
+    // through is how one agent run ends up half in tenant B and half in the
+    // operator's own tenant, with nothing in the transcript marking the moment
+    // it switched.
+    if (state.expired) {
+      if (!INHERIT) return []; // not following the session anyway — stale record, ignore
+      throw new Error(
+        `The impersonation session for ${who} has expired, so this call would silently run as your own tenant instead. ` +
+          `Run \`uiiq tenant impersonate-exit\` (or re-impersonate), or pass an explicit \`tenant\` to this tool.`,
+      );
+    }
+
+    if (!state.honoured) return []; // opted out — uiiq_status reports that it exists
+
+    // A write-enabled session inherited into an unattended agent run is the
+    // highest-consequence case, so it needs its own opt-in. Refuse the write;
+    // do NOT drop the cookie, which would land it in the operator's own tenant.
+    if (state.writeBlocked && (init.method ?? "GET").toUpperCase() !== "GET") {
+      throw new Error(
+        `Refusing to write to ${who} via an inherited impersonation session. ` +
+          `Set UIIQ_MCP_INHERIT_WRITE=1 to allow it, or pass an explicit \`tenant\` to this tool.`,
+      );
+    }
+
+    return [state.imp.cookie];
   };
 
   const doFetch = (c, p, init, extraCookies) =>
@@ -196,7 +264,7 @@ function baseCaller() {
         ...(init.headers ?? {}),
         Cookie: [
           `${c.cookieName ?? "__Secure-authjs.session-token"}=${c.sessionToken}`,
-          ...cookiesFor(extraCookies),
+          ...cookiesFor(extraCookies, p, init),
         ].join("; "),
       },
     });
