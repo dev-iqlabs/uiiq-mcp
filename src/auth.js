@@ -85,6 +85,29 @@ async function relogin(creds) {
 
 const IMP_COOKIE_RE = /((?:__Host-)?ubms_impersonate(?:_dev)?=[^;]+)/;
 
+/**
+ * The impersonation session `uiiq tenant impersonate` (CLI ≥1.22.0) parks in the
+ * shared credentials file, or null when there is none / it has lapsed.
+ *
+ * Honouring it here is what stops the two tools disagreeing about who you are:
+ * before this, a CLI session said "acting as Epworth" while every MCP call still
+ * ran as the operator's own tenant, so work aimed at a client landed in
+ * Ultimate Image. An explicit `tenant` argument still wins — per-call
+ * impersonation passes its own cookie and suppresses this one.
+ */
+export function ambientImpersonation() {
+  let creds;
+  try {
+    creds = loadCreds();
+  } catch {
+    return null; // not logged in — the caller reports that far better than we can
+  }
+  const imp = creds?.impersonation;
+  if (!imp?.cookie) return null;
+  if (!imp.expiresAt || Date.parse(imp.expiresAt) <= Date.now()) return null;
+  return imp;
+}
+
 let tenantIndex = null;
 let tenantIndexAt = 0;
 const TENANT_INDEX_TTL_MS = 5 * 60 * 1000;
@@ -98,7 +121,9 @@ function setCookies(res) {
 async function resolveTenantId(call, ref) {
   const wanted = String(ref).trim().toLowerCase();
   if (!tenantIndex || Date.now() - tenantIndexAt > TENANT_INDEX_TTL_MS) {
-    const res = await call("/admin/tenants");
+    // `[]` — a control-plane lookup, made as the operator, not as whatever
+    // tenant a CLI session happens to be pointed at.
+    const res = await call("/admin/tenants", {}, []);
     if (!res.ok) {
       throw new Error(
         "Could not list tenants — cross-tenant work needs a SUPER_ADMIN login. " + (await res.text()),
@@ -122,10 +147,13 @@ async function resolveTenantId(call, ref) {
 // IS the login's own tenant (the platform refuses self-impersonation, and the
 // call already lands in the right place without it).
 async function beginImpersonation(call, tenantId, writeEnabled) {
-  const res = await call("/admin/impersonate", {
-    method: "POST",
-    body: JSON.stringify({ tenantId, writeEnabled }),
-  });
+  // `[]` — never present an existing impersonation here; the server refuses to
+  // start a second session while one is in scope.
+  const res = await call(
+    "/admin/impersonate",
+    { method: "POST", body: JSON.stringify({ tenantId, writeEnabled }) },
+    [],
+  );
   if (!res.ok) {
     const msg = await res.text();
     if (/own tenant/i.test(msg)) return null;
@@ -147,6 +175,18 @@ function baseCaller() {
   // left as-is.)
   const toUrl = (p) => `${base}${p.startsWith("/api") ? p : "/api" + p}`;
 
+  // `extraCookies` undefined means "no opinion" — fall back to whatever session
+  // the CLI has established. Passing an array (including an empty one) is an
+  // explicit statement and suppresses the ambient session: the control-plane
+  // calls below MUST do that, since presenting an impersonation cookie to
+  // /admin/impersonate is exactly what makes the server refuse with
+  // "Already impersonating".
+  const cookiesFor = (extraCookies) => {
+    if (extraCookies) return extraCookies;
+    const amb = ambientImpersonation();
+    return amb ? [amb.cookie] : [];
+  };
+
   const doFetch = (c, p, init, extraCookies) =>
     fetch(toUrl(p), {
       ...init,
@@ -156,7 +196,7 @@ function baseCaller() {
         ...(init.headers ?? {}),
         Cookie: [
           `${c.cookieName ?? "__Secure-authjs.session-token"}=${c.sessionToken}`,
-          ...(extraCookies ?? []),
+          ...cookiesFor(extraCookies),
         ].join("; "),
       },
     });
@@ -206,7 +246,10 @@ export function apiClient(options = {}) {
     const tenantId = await resolveTenantId(call, tenantRef);
     const writeEnabled = (init.method ?? "GET").toUpperCase() !== "GET";
     const impCookie = await beginImpersonation(call, tenantId, writeEnabled);
-    if (!impCookie) return call(p, init);
+    // null = the target IS the operator's own tenant, so no impersonation is
+    // needed. `[]` not the default: an ambient CLI session would otherwise
+    // divert a call that explicitly asked for this tenant to a different one.
+    if (!impCookie) return call(p, init, []);
     try {
       return await call(p, init, [impCookie]);
     } finally {
@@ -235,7 +278,9 @@ export async function withTenant(tenantRef, fn) {
   // Write-enabled: a batch exists to change things, and the session is the
   // operator's own SUPER_ADMIN session either way.
   const impCookie = await beginImpersonation(call, tenantId, true);
-  if (!impCookie) return fn((p, init = {}) => call(p, init));
+  // As in apiClient(): the explicitly-named tenant is the operator's own, so
+  // pin to it rather than inheriting an ambient CLI session.
+  if (!impCookie) return fn((p, init = {}) => call(p, init, []));
   try {
     return await fn((p, init = {}) => call(p, init, [impCookie]));
   } finally {
