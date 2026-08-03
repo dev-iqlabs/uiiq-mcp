@@ -85,6 +85,67 @@ async function relogin(creds) {
 
 const IMP_COOKIE_RE = /((?:__Host-)?ubms_impersonate(?:_dev)?=[^;]+)/;
 
+// ---------------------------------------------------------------------------
+// Ambient impersonation — OPT-IN, and fail-closed at every edge.
+//
+// `uiiq tenant impersonate` (CLI ≥1.22.0) parks a signed session in the shared
+// credentials file. Inheriting it here closes a real gap (the CLI saying
+// "acting as Epworth" while MCP calls ran as the operator), but an MCP server
+// is not a terminal: it serves unattended agent sessions that never typed the
+// impersonate command and cannot see that it happened. Inheriting a
+// human's 30-minute write session into an agent run, by default, is
+// action-at-a-distance on someone else's tenant.
+//
+// So the default is OFF and every edge fails closed:
+//   - opt in per MCP server with UIIQ_MCP_INHERIT_IMPERSONATION=1
+//   - inherited WRITES additionally need UIIQ_MCP_INHERIT_WRITE=1
+//   - operator-scope routes never inherit (see OPERATOR_SCOPE)
+//   - an expired session raises, and never silently falls back to the
+//     operator's own tenant mid-run
+//
+// An explicit `tenant` argument always wins over all of this — that path
+// impersonates per call and is unaffected.
+// ---------------------------------------------------------------------------
+
+const INHERIT = process.env.UIIQ_MCP_INHERIT_IMPERSONATION === "1";
+const INHERIT_WRITE = process.env.UIIQ_MCP_INHERIT_WRITE === "1";
+
+// Routes that are the operator's own control plane, not tenant data. These must
+// never carry an inherited cookie: /admin/impersonate would be refused outright
+// ("Already impersonating"), and the rest are SUPER_ADMIN actions whose target
+// is named in the path — attaching a tenant context there is a confused deputy,
+// not a convenience. Matched by prefix so a new /admin tool is safe by default.
+const OPERATOR_SCOPE = [/^\/admin\//, /^\/api\/admin\//, /^\/organisations(\/|$|\?)/];
+
+function isOperatorScope(path) {
+  return OPERATOR_SCOPE.some((re) => re.test(path));
+}
+
+/**
+ * The stored session and whether it is being honoured — always safe to call,
+ * and deliberately reports sessions it is NOT honouring. `uiiq_status` shows
+ * this verbatim: a lapsed or ignored session that reads as "your own tenant"
+ * is precisely the blind spot this is meant to remove.
+ */
+export function impersonationState() {
+  let creds;
+  try {
+    creds = loadCreds();
+  } catch {
+    return { present: false, honoured: false, reason: "not-logged-in" };
+  }
+  const imp = creds?.impersonation;
+  if (!imp?.cookie) return { present: false, honoured: false, reason: "none" };
+
+  const expired = !imp.expiresAt || Date.parse(imp.expiresAt) <= Date.now();
+  if (expired) return { present: true, honoured: false, expired: true, reason: "expired", imp };
+  if (!INHERIT) return { present: true, honoured: false, reason: "not-opted-in", imp };
+  if (imp.writeEnabled && !INHERIT_WRITE) {
+    return { present: true, honoured: true, writeBlocked: true, reason: "write-not-opted-in", imp };
+  }
+  return { present: true, honoured: true, reason: "honoured", imp };
+}
+
 let tenantIndex = null;
 let tenantIndexAt = 0;
 const TENANT_INDEX_TTL_MS = 5 * 60 * 1000;
@@ -98,7 +159,9 @@ function setCookies(res) {
 async function resolveTenantId(call, ref) {
   const wanted = String(ref).trim().toLowerCase();
   if (!tenantIndex || Date.now() - tenantIndexAt > TENANT_INDEX_TTL_MS) {
-    const res = await call("/admin/tenants");
+    // `[]` — a control-plane lookup, made as the operator, not as whatever
+    // tenant a CLI session happens to be pointed at.
+    const res = await call("/admin/tenants", {}, []);
     if (!res.ok) {
       throw new Error(
         "Could not list tenants — cross-tenant work needs a SUPER_ADMIN login. " + (await res.text()),
@@ -122,10 +185,13 @@ async function resolveTenantId(call, ref) {
 // IS the login's own tenant (the platform refuses self-impersonation, and the
 // call already lands in the right place without it).
 async function beginImpersonation(call, tenantId, writeEnabled) {
-  const res = await call("/admin/impersonate", {
-    method: "POST",
-    body: JSON.stringify({ tenantId, writeEnabled }),
-  });
+  // `[]` — never present an existing impersonation here; the server refuses to
+  // start a second session while one is in scope.
+  const res = await call(
+    "/admin/impersonate",
+    { method: "POST", body: JSON.stringify({ tenantId, writeEnabled }) },
+    [],
+  );
   if (!res.ok) {
     const msg = await res.text();
     if (/own tenant/i.test(msg)) return null;
@@ -147,6 +213,48 @@ function baseCaller() {
   // left as-is.)
   const toUrl = (p) => `${base}${p.startsWith("/api") ? p : "/api" + p}`;
 
+  // `extraCookies` undefined means "no opinion" — fall back to whatever session
+  // the CLI has established. Passing an array (including an empty one) is an
+  // explicit statement and suppresses the ambient session: the control-plane
+  // calls below MUST do that, since presenting an impersonation cookie to
+  // /admin/impersonate is exactly what makes the server refuse with
+  // "Already impersonating".
+  const cookiesFor = (extraCookies, p, init) => {
+    if (extraCookies) return extraCookies;
+    if (isOperatorScope(p)) return [];
+
+    const state = impersonationState();
+    if (!state.present) return [];
+
+    const who = state.imp.tenantName ?? state.imp.tenantSlug ?? state.imp.tenantId;
+
+    // Expired: raise rather than quietly continue as the operator. Falling
+    // through is how one agent run ends up half in tenant B and half in the
+    // operator's own tenant, with nothing in the transcript marking the moment
+    // it switched.
+    if (state.expired) {
+      if (!INHERIT) return []; // not following the session anyway — stale record, ignore
+      throw new Error(
+        `The impersonation session for ${who} has expired, so this call would silently run as your own tenant instead. ` +
+          `Run \`uiiq tenant impersonate-exit\` (or re-impersonate), or pass an explicit \`tenant\` to this tool.`,
+      );
+    }
+
+    if (!state.honoured) return []; // opted out — uiiq_status reports that it exists
+
+    // A write-enabled session inherited into an unattended agent run is the
+    // highest-consequence case, so it needs its own opt-in. Refuse the write;
+    // do NOT drop the cookie, which would land it in the operator's own tenant.
+    if (state.writeBlocked && (init.method ?? "GET").toUpperCase() !== "GET") {
+      throw new Error(
+        `Refusing to write to ${who} via an inherited impersonation session. ` +
+          `Set UIIQ_MCP_INHERIT_WRITE=1 to allow it, or pass an explicit \`tenant\` to this tool.`,
+      );
+    }
+
+    return [state.imp.cookie];
+  };
+
   const doFetch = (c, p, init, extraCookies) =>
     fetch(toUrl(p), {
       ...init,
@@ -156,7 +264,7 @@ function baseCaller() {
         ...(init.headers ?? {}),
         Cookie: [
           `${c.cookieName ?? "__Secure-authjs.session-token"}=${c.sessionToken}`,
-          ...(extraCookies ?? []),
+          ...cookiesFor(extraCookies, p, init),
         ].join("; "),
       },
     });
@@ -206,7 +314,10 @@ export function apiClient(options = {}) {
     const tenantId = await resolveTenantId(call, tenantRef);
     const writeEnabled = (init.method ?? "GET").toUpperCase() !== "GET";
     const impCookie = await beginImpersonation(call, tenantId, writeEnabled);
-    if (!impCookie) return call(p, init);
+    // null = the target IS the operator's own tenant, so no impersonation is
+    // needed. `[]` not the default: an ambient CLI session would otherwise
+    // divert a call that explicitly asked for this tenant to a different one.
+    if (!impCookie) return call(p, init, []);
     try {
       return await call(p, init, [impCookie]);
     } finally {
@@ -235,7 +346,9 @@ export async function withTenant(tenantRef, fn) {
   // Write-enabled: a batch exists to change things, and the session is the
   // operator's own SUPER_ADMIN session either way.
   const impCookie = await beginImpersonation(call, tenantId, true);
-  if (!impCookie) return fn((p, init = {}) => call(p, init));
+  // As in apiClient(): the explicitly-named tenant is the operator's own, so
+  // pin to it rather than inheriting an ambient CLI session.
+  if (!impCookie) return fn((p, init = {}) => call(p, init, []));
   try {
     return await fn((p, init = {}) => call(p, init, [impCookie]));
   } finally {

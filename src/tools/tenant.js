@@ -1,4 +1,4 @@
-import { apiClient } from "../auth.js";
+import { apiClient, withTenant } from "../auth.js";
 
 const TENANT_SUMMARY = [
   "id", "name", "slug", "status", "tier", "industry", "isInternal", "iqexOrgId", "createdAt",
@@ -72,14 +72,16 @@ export const tenantTools = [
       properties: { id: { type: "string", description: "Tenant ID" } }
     },
     async handler({ id }) {
-      const impRes = await apiClient()("/admin/impersonate", {
-        method: "POST",
-        body: JSON.stringify({ tenantId: id }),
+      // Was: POST /admin/impersonate, throw the Set-Cookie away, then call
+      // /api/seo/api-key with a fresh client — so the key came back for the
+      // OPERATOR'S tenant, not `id`, while reporting success. Same
+      // discard-the-cookie bug the CLI had. withTenant holds the session for
+      // the duration and closes the audit-log row on the way out.
+      return withTenant(id, async (client) => {
+        const res = await client("/api/seo/api-key", { method: "POST" });
+        if (!res.ok) throw new Error(await res.text());
+        return res.json();
       });
-      if (!impRes.ok) throw new Error(await impRes.text());
-      const res = await apiClient()("/api/seo/api-key", { method: "POST" });
-      if (!res.ok) throw new Error(await res.text());
-      return res.json();
     }
   },
   {
