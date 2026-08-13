@@ -911,5 +911,221 @@ export const sellTools = [
       if (!res.ok) throw new Error(await res.text());
       return res.json();
     }
+  },
+
+  // ── Experiences ────────────────────────────────────────────────────────────
+
+  {
+    name: "uiiq_sell_experience_create",
+    description:
+      "Create a UiiQ experience (the sellable thing: an event, a timed entry, a class). " +
+      "Creation accepts only these fields — the API hardcodes the rest — so set description, " +
+      "images, capacity, duration and status afterwards with uiiq_sell_experience_update. " +
+      "Always created as DRAFT; publish via the update tool. " +
+      "For repeating dates use uiiq_sell_session_generate: recurrence is stored as real sessions, " +
+      "not as a rule on the experience.",
+    inputSchema: {
+      type: "object",
+      required: ["name", "slug"],
+      properties: {
+        name: { type: "string", description: "e.g. 'Thursday Quiz Night'" },
+        slug: { type: "string", description: "URL slug, unique per tenant, e.g. 'thursday-quiz'" },
+        type: {
+          type: "string",
+          enum: ["TIMED_ENTRY", "GENERAL_ADMISSION", "EVENT", "MULTI_DAY_EVENT", "RECURRING_EVENT", "SERVICE", "TOUR", "CLASS", "APPOINTMENT"],
+          description: "Defaults to whatever booking mode the tenant is set up for. Rejected if the tenant doesn't sell that mode.",
+        },
+        priceFromPence: { type: "number", description: "Headline 'from' price in PENCE (£12.50 is 1250)" },
+        groupIds: { type: "array", items: { type: "string" }, description: "Experience group ids to file it under" },
+        tenant: TENANT_PROP,
+      }
+    },
+    async handler({ name, slug, type, priceFromPence, groupIds, tenant }) {
+      const res = await api(tenant)("/admin/experiences", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, slug, type, priceFromPence, groupIds }),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    }
+  },
+
+  {
+    name: "uiiq_sell_experience_update",
+    description:
+      "Update a UiiQ experience — price, status, images, capacity, duration, description. " +
+      "This is how you publish one (status PUBLISHED) and how you change a price. " +
+      "Only the fields you send are changed.",
+    inputSchema: {
+      type: "object",
+      required: ["experienceId"],
+      properties: {
+        experienceId: { type: "string", description: "Experience id" },
+        name:             { type: "string" },
+        slug:             { type: "string", description: "Must stay unique within the tenant" },
+        description:      { type: "string" },
+        shortDescription: { type: "string" },
+        status: { type: "string", enum: ["DRAFT", "PUBLISHED", "ARCHIVED"] },
+        priceFromPence:   { type: "number", description: "PENCE. £30 is 3000." },
+        imageUrls:        { type: "array", items: { type: "string" }, description: "Replaces the whole list — include existing images you want to keep" },
+        venueId:          { type: "string" },
+        groupIds:         { type: "array", items: { type: "string" }, description: "Replaces group membership" },
+        maxCapacity:      { type: "number" },
+        durationMinutes:  { type: "number" },
+        tenant: TENANT_PROP,
+      }
+    },
+    async handler({ experienceId, tenant, ...fields }) {
+      const body = Object.fromEntries(Object.entries(fields).filter(([, v]) => v !== undefined));
+      if (Object.keys(body).length === 0) throw new Error("Send at least one field to change");
+      const res = await api(tenant)(`/admin/experiences/${encodeURIComponent(experienceId)}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    }
+  },
+
+  {
+    name: "uiiq_sell_session_generate",
+    description:
+      "Create the actual bookable dates for an experience by expanding a weekly pattern over a date range. " +
+      "This — not any field on the experience — is how recurring events are built in UiiQ. " +
+      "Weekly by default; interval 2 gives fortnightly; weekOfMonth gives monthly. " +
+      "Re-running is safe: dates that already exist are skipped, not duplicated.",
+    inputSchema: {
+      type: "object",
+      required: ["experienceId", "dateFrom", "dateTo", "schedule"],
+      properties: {
+        experienceId: { type: "string" },
+        dateFrom: { type: "string", description: "YYYY-MM-DD, inclusive" },
+        dateTo:   { type: "string", description: "YYYY-MM-DD, inclusive" },
+        schedule: {
+          type: "array",
+          description: 'Days and times, e.g. [{ "day": "thursday", "slots": [{ "startTime": "19:30", "endTime": "22:00" }] }]',
+          items: {
+            type: "object",
+            required: ["day", "slots"],
+            properties: {
+              day: { type: "string", enum: ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"] },
+              slots: {
+                type: "array",
+                items: {
+                  type: "object",
+                  required: ["startTime", "endTime"],
+                  properties: {
+                    startTime: { type: "string", description: "24h HH:MM" },
+                    endTime:   { type: "string", description: "24h HH:MM" },
+                  }
+                }
+              }
+            }
+          }
+        },
+        capacity: { type: "number", description: "Places per session (default 50)" },
+        interval: { type: "number", description: "Weeks between occurrences. 1 = weekly (default), 2 = fortnightly. Counted per weekday from the first match in the range." },
+        weekOfMonth: { description: '1–5 for the nth matching weekday each month, or "last". Makes it monthly and overrides interval.' },
+        tenant: TENANT_PROP,
+      }
+    },
+    async handler({ experienceId, dateFrom, dateTo, schedule, capacity, interval, weekOfMonth, tenant }) {
+      const res = await api(tenant)("/admin/sessions/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ experienceId, dateFrom, dateTo, schedule, capacity, interval, weekOfMonth }),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    }
+  },
+
+  // ── Membership plans / passes ──────────────────────────────────────────────
+
+  {
+    name: "uiiq_sell_membership_plan_list",
+    description: "List the tenant's membership plans and passes, with prices in pence.",
+    inputSchema: {
+      type: "object",
+      properties: { tenant: TENANT_PROP }
+    },
+    async handler({ tenant } = {}) {
+      const res = await api(tenant)("/admin/memberships/plans");
+      if (!res.ok) throw new Error(await res.text());
+      const data = await res.json();
+      return Array.isArray(data) ? data : data.plans ?? data;
+    }
+  },
+
+  {
+    name: "uiiq_sell_membership_plan_create",
+    description:
+      "Create a membership plan or a fixed-term pass. " +
+      "autoRenew false makes it a PASS: charged once, runs for intervalMonths, then stops — " +
+      "that is what a seasonal pass needs, so a summer pass doesn't quietly rebill in September. " +
+      "Leave autoRenew true for an ongoing membership.",
+    inputSchema: {
+      type: "object",
+      required: ["name", "priceInPence", "intervalMonths"],
+      properties: {
+        name:           { type: "string", description: "e.g. 'Summer Pass'" },
+        priceInPence:   { type: "number", description: "PENCE, whole number. £30 is 3000." },
+        intervalMonths: { type: "number", description: "Months the plan runs for / rebills on" },
+        description:    { type: "string" },
+        autoRenew:      { type: "boolean", description: "Default true (ongoing). false = fixed-term pass." },
+        maxMembers:     { type: "number", description: "People covered by one purchase (default 1)" },
+        benefits:       { type: "object", description: "Free-form benefits JSON" },
+        tenant: TENANT_PROP,
+      }
+    },
+    async handler({ tenant, ...body }) {
+      const res = await api(tenant)("/admin/memberships/plans", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    }
+  },
+
+  {
+    name: "uiiq_sell_membership_plan_update",
+    description:
+      "Change a membership plan or pass — price, name, term, auto-renew, active state. " +
+      "Only the fields you send change. " +
+      "A new price applies to NEW purchases only: anyone already subscribed keeps billing at their " +
+      "Stripe price, and a fixed-term pass has no subscription at all. " +
+      "Requires UiiQ-platform #435 to be deployed — before that the endpoint only accepted classCover.",
+    inputSchema: {
+      type: "object",
+      required: ["planId"],
+      properties: {
+        planId:         { type: "string", description: "Membership plan id" },
+        name:           { type: "string" },
+        description:    { type: "string" },
+        priceInPence:   { type: "number", description: "PENCE, whole number. £30 is 3000 — sending 30 sets it to 30p." },
+        intervalMonths: { type: "number" },
+        maxMembers:     { type: "number" },
+        autoRenew:      { type: "boolean", description: "false = fixed-term pass that stops instead of rebilling" },
+        isActive:       { type: "boolean", description: "false hides it from sale without deleting it" },
+        position:       { type: "number", description: "Display order" },
+        classCover:     { description: '"unlimited", { perWeek: 1–14 } or null' },
+        tenant: TENANT_PROP,
+      }
+    },
+    async handler({ planId, tenant, ...fields }) {
+      const body = Object.fromEntries(Object.entries(fields).filter(([, v]) => v !== undefined));
+      if (Object.keys(body).length === 0) throw new Error("Send at least one field to change");
+      const res = await api(tenant)(`/admin/memberships/plans/${encodeURIComponent(planId)}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    }
   }
 ];
