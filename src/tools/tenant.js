@@ -180,4 +180,41 @@ export const tenantTools = [
       return res.json();
     },
   },
+  {
+    name: "uiiq_tenant_settings_update",
+    description:
+      "Update a tenant's own settings — patch semantics, only the fields you send change. " +
+      "Covers the email identity a campaign sends as (emailFrom, emailFromName, emailReplyTo), " +
+      "plus name, description, industry, website, phone, address, logo, brand colours, VAT / company " +
+      "number and social handles. Same fields the tenant can edit in Settings. " +
+      "Note: emailFrom must be on a domain SendGrid is authenticated for, or sends will fail SPF/DKIM.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        emailFrom:     { type: "string", description: "Sending address, e.g. hello@iqplant.co.uk" },
+        emailFromName: { type: "string", description: "Display name, e.g. 'IQPlant'" },
+        emailReplyTo:  { type: "string" },
+        name: { type: "string" }, description: { type: "string" }, industry: { type: "string" },
+        website: { type: "string" }, phone: { type: "string" },
+        addressLine1: { type: "string" }, addressLine2: { type: "string" }, city: { type: "string" }, postcode: { type: "string" },
+        logoUrl: { type: "string" }, brandColor: { type: "string" }, brandColorAlt: { type: "string" },
+        appBgColor: { type: "string" }, brandThumbnailUrl: { type: "string" },
+        vatNumber: { type: "string" }, companyRegNumber: { type: "string" },
+        socialFacebook: { type: "string" }, socialInstagram: { type: "string" }, socialTwitter: { type: "string" },
+        socialLinkedin: { type: "string" }, socialTiktok: { type: "string" }, socialYoutube: { type: "string" },
+        tenant: { type: "string", description: "Tenant id, slug or exact name to act in. Omit for your own tenant." },
+      },
+    },
+    async handler({ tenant, ...fields }) {
+      const body = Object.fromEntries(Object.entries(fields).filter(([, v]) => v !== undefined));
+      if (Object.keys(body).length === 0) throw new Error("Send at least one setting to change");
+      return withTenant(tenant, async (client) => {
+        const res = await client("/tenant", {
+          method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
+        });
+        if (!res.ok) throw new Error(await res.text());
+        return res.json();
+      });
+    },
+  },
 ];
