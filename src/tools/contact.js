@@ -25,7 +25,11 @@ export const contactTools = [
     },
     async handler({ search, limit = 50, tenant } = {}) {
       const params = new URLSearchParams({ limit });
-      if (search) params.set("search", search);
+      // The API reads `q`, not `search`. This sent `search`, which the API
+      // ignored — so a filtered call returned page one alphabetically with a
+      // clean 200, and looked like the contact simply wasn't there. Silently
+      // wrong is the dangerous kind of broken; send the name the API reads.
+      if (search) params.set("q", search);
       const res = await api(tenant)(`/contacts?${params}`);
       const data = await res.json();
       return Array.isArray(data) ? data : data.contacts ?? [];
