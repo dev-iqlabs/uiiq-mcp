@@ -45,6 +45,7 @@ import { materialsTools }       from "./tools/materials.js";
 import { donationsTools }       from "./tools/donations.js";
 import { pricingTools }         from "./tools/pricing.js";
 import { crmTools }             from "./tools/crm.js";
+import { mediaTools }           from "./tools/media.js";
 
 const ALL_TOOLS = [
   ...statusTools,
@@ -89,12 +90,13 @@ const ALL_TOOLS = [
   ...donationsTools,
   ...pricingTools,
   ...crmTools,
+  ...mediaTools,
 ];
 
 const TOOL_MAP = Object.fromEntries(ALL_TOOLS.map(t => [t.name, t]));
 
 const server = new Server(
-  { name: "uiiq-mcp", version: "2.15.0" },
+  { name: "uiiq-mcp", version: "2.16.0" },
   { capabilities: { tools: {} } }
 );
 
