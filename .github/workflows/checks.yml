@@ -60,18 +60,25 @@ jobs:
           if (bad) process.exit(1);
           "
 
-      # Two PRs claiming the same version is how a published tool ends up
-      # ambiguous about what is installed.
-      - name: Version bumped against the base branch
+      # Only when shipped code changed. A CI or docs-only PR has nothing to
+      # release, and demanding a bump for one is how a check trains people to
+      # ignore it. Two PRs claiming one version is the real thing being stopped:
+      # that is how a published tool becomes ambiguous about what is installed.
+      - name: Version bumped when src/ or bin/ changed
         if: github.event_name == 'pull_request'
         run: |
           set -e
           base="${{ github.event.pull_request.base.ref }}"
-          git fetch origin "$base" --depth=1 --quiet
+          git fetch origin "$base" --quiet
+          changed=$(git diff --name-only "origin/$base"...HEAD -- src bin | wc -l)
+          if [ "$changed" -eq 0 ]; then
+            echo "no src/ or bin/ changes - version bump not required"
+            exit 0
+          fi
           old=$(git show "origin/$base:package.json" | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>console.log(JSON.parse(s).version))")
           new=$(node -p "require('./package.json').version")
-          echo "base $old -> head $new"
+          echo "$changed shipped file(s) changed; base $old -> head $new"
           if [ "$old" = "$new" ]; then
-            echo "::error::package.json version is still $new — bump it, or this release is indistinguishable from the last."
+            echo "::error::src/ or bin/ changed but package.json is still $new - bump it, or this release is indistinguishable from the last."
             exit 1
           fi
