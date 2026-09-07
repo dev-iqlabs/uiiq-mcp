@@ -1,0 +1,77 @@
+name: checks
+
+# These repos had NO CI at all. That is how four commits pushed after their PRs
+# were squash-merged sat orphaned on closed branches on 7 Sep 2026 — two of them
+# real route fixes in iqex-cli, already installed globally and calling endpoints
+# that did not exist. A required check is what lets branch protection's `strict`
+# rule bite: a branch that moves after a merge starts goes OUT OF DATE instead of
+# being silently lost.
+#
+# Deliberately cheap. It proves the code loads, not that it behaves.
+
+on:
+  pull_request:
+  push:
+    branches: [main, master]
+
+jobs:
+  checks:
+    name: checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      # npm install, not npm ci: package-lock.json is tracked in some of these
+      # repos and not others, and a missing lock makes `npm ci` fail outright.
+      - name: Install
+        run: npm install --no-audit --no-fund
+
+      - name: Every .js parses
+        run: |
+          set -e
+          n=0
+          for f in $(git ls-files '*.js'); do
+            node --check "$f"
+            n=$((n + 1))
+          done
+          echo "parsed $n file(s)"
+
+      # The real check. `node --check` parses a file in isolation and says
+      # nothing about whether its imports RESOLVE — a typo'd or deleted module
+      # passes the parse and fails at run time, which for an MCP server means
+      # the tool is simply missing from the list with no error anyone sees.
+      - name: Every tool module imports
+        run: |
+          node --input-type=module -e "
+          import { readdirSync } from 'node:fs';
+          const files = readdirSync('src/tools').filter((f) => f.endsWith('.js'));
+          let bad = 0;
+          for (const f of files) {
+            try { await import('./src/tools/' + f); }
+            catch (e) { bad++; console.error('FAIL', f, '-', e.message); }
+          }
+          console.log('imported', files.length - bad, 'of', files.length, 'tool modules');
+          if (bad) process.exit(1);
+          "
+
+      # Two PRs claiming the same version is how a published tool ends up
+      # ambiguous about what is installed.
+      - name: Version bumped against the base branch
+        if: github.event_name == 'pull_request'
+        run: |
+          set -e
+          base="${{ github.event.pull_request.base.ref }}"
+          git fetch origin "$base" --depth=1 --quiet
+          old=$(git show "origin/$base:package.json" | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>console.log(JSON.parse(s).version))")
+          new=$(node -p "require('./package.json').version")
+          echo "base $old -> head $new"
+          if [ "$old" = "$new" ]; then
+            echo "::error::package.json version is still $new — bump it, or this release is indistinguishable from the last."
+            exit 1
+          fi
