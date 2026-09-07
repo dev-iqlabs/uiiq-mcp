@@ -26,8 +26,12 @@ function tillClient(staffToken) {
   const cookie =
     `${DEVICE_COOKIE}=${encodeURIComponent(deviceToken())}` +
     (staffToken ? `; ${STAFF_COOKIE}=${encodeURIComponent(staffToken)}` : "");
+  // The till JSON API lives under /api like everything else; callers pass bare
+  // paths ("/till/catalog") as the session tools do. Was `${BASE}${path}`,
+  // which hit the /till/* PAGE routes and came back as an HTML 404.
+  const toUrl = (p) => `${BASE}${p.startsWith("/api") ? p : "/api" + p}`;
   return (path, init = {}) =>
-    fetch(`${BASE}${path}`, {
+    fetch(toUrl(path), {
       ...init,
       headers: { "Content-Type": "application/json", Cookie: cookie, ...(init.headers ?? {}) },
     });
@@ -114,6 +118,27 @@ export const tillTools = [
       const res = await tillClient(staffSessionToken)("/till/sales/checkout", {
         method: "POST",
         body: JSON.stringify({ items, payments, customer: email ? { email } : undefined }),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    },
+  },
+  {
+    name: "uiiq_till_iqplant_plan_code",
+    description:
+      "The till scanned an IQPlant garden-plan code (the QR in the customer's email / on their phone). Answers with the pick list to print (pickUrl), line count, total, whether the plan is older than 30 days, and — when the plan was sized to a Garden Plan Gift — the voucher to apply to the sale (or voucherReason when it can't be). { found: false } when no plan matches this centre. Requires staffSessionToken from uiiq_till_verify_pin.",
+    inputSchema: {
+      type: "object",
+      required: ["code", "staffSessionToken"],
+      properties: {
+        code: { type: "string", description: "The plan code as scanned" },
+        staffSessionToken: { type: "string" },
+      },
+    },
+    async handler({ code, staffSessionToken }) {
+      const res = await tillClient(staffSessionToken)("/till/iqplant/plan-code", {
+        method: "POST",
+        body: JSON.stringify({ code }),
       });
       if (!res.ok) throw new Error(await res.text());
       return res.json();

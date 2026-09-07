@@ -47,6 +47,9 @@ import { pricingTools }         from "./tools/pricing.js";
 import { crmTools }             from "./tools/crm.js";
 import { mediaTools }           from "./tools/media.js";
 import { crmJourneyTools }      from "./tools/crm-journey.js";
+import { prospectTools }        from "./tools/prospects.js";
+import { connectTools }         from "./tools/connect.js";
+import { iqplantTools }         from "./tools/iqplant.js";
 
 const ALL_TOOLS = [
   ...statusTools,
@@ -93,12 +96,15 @@ const ALL_TOOLS = [
   ...crmTools,
   ...mediaTools,
   ...crmJourneyTools,
+  ...prospectTools,
+  ...connectTools,
+  ...iqplantTools,
 ];
 
 const TOOL_MAP = Object.fromEntries(ALL_TOOLS.map(t => [t.name, t]));
 
 const server = new Server(
-  { name: "uiiq-mcp", version: "2.16.0" },
+  { name: "uiiq-mcp", version: "2.20.0" },
   { capabilities: { tools: {} } }
 );
 

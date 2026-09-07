@@ -25,28 +25,31 @@ export const crmTools = [
     name: "uiiq_prospect_list",
     description:
       "List a tenant's prospects (or suppliers / partners / business customers) with pipeline stage counts. " +
-      "Filter by type, stage, or a search across name, town, postcode and category. " +
+      "Filter by type, stage, an exact category, or a search across name, town, postcode and category. " +
+      "The response's `categories` lists every category in use (unfiltered) for the picker. " +
       "This is the relationship list — for stock suppliers use uiiq_retail_suppliers.",
     inputSchema: {
       type: "object",
       properties: {
         type:  { type: "string", enum: TYPES, description: "Defaults to PROSPECT" },
         stage: { type: "string", enum: STAGES, description: "Only businesses at this pipeline stage" },
-        q:     { type: "string", description: "Search name / town / postcode / category" },
+        q:     { type: "string", description: "Search name / town / postcode / category (contains-match)" },
+        category: { type: "string", description: "Exact category, case-insensitive — the dropdown filter, as opposed to q's contains-match" },
         archived: { type: "boolean", description: "Show archived instead of live (default false)" },
         limit: { type: "number", description: "Max rows, up to 1000 (default 200)" },
         tenant: TENANT_PROP,
       },
     },
-    async handler({ type = "PROSPECT", stage, q, archived, limit, tenant } = {}) {
+    async handler({ type = "PROSPECT", stage, q, category, archived, limit, tenant } = {}) {
       const params = new URLSearchParams({ type });
       if (stage) params.set("stage", stage);
       if (q) params.set("q", q);
+      if (category) params.set("category", category);
       if (archived) params.set("archived", "1");
       if (limit != null) params.set("limit", String(limit));
       const res = await api(tenant)(`/businesses?${params}`);
       if (!res.ok) throw new Error(await res.text());
-      return res.json(); // { businesses, stageCounts }
+      return res.json(); // { businesses, stageCounts, categories }
     },
   },
 
@@ -100,7 +103,8 @@ export const crmTools = [
     name: "uiiq_prospect_update",
     description:
       "Update a business — most often to move it along the pipeline: { stage: 'CONTACTED' }. " +
-      "Only the fields you send change. Set archived true to soft-delete.",
+      "Only the fields you send change; a stage/type change stamps lastActivityAt. " +
+      "Set archived true to soft-delete (false restores). primaryPerson edits the one isPrimary contact in the same call.",
     inputSchema: {
       type: "object",
       required: ["businessId"],
@@ -108,14 +112,27 @@ export const crmTools = [
         businessId: { type: "string" },
         stage:    { type: "string", enum: STAGES },
         type:     { type: "string", enum: TYPES },
-        name:     { type: "string" }, category: { type: "string" }, website: { type: "string" },
+        name:     { type: "string" },
+        category: { type: "string", description: "e.g. 'Local Garden Centre (LGC)'; null clears it" },
+        website:  { type: "string" },
         phone:    { type: "string" }, email: { type: "string" },
         address1: { type: "string" }, address2: { type: "string" }, town: { type: "string" },
         county:   { type: "string" }, postcode: { type: "string" }, country: { type: "string" },
         notes:    { type: "string" },
         tags:     { type: "array", items: { type: "string" }, description: "Replaces the whole tag list" },
         customFields: { type: "object", description: "Replaces the whole custom-fields object" },
-        archived: { type: "boolean" },
+        archived: { type: "boolean", description: "true = soft-delete (drops out of every list, keeps history); false = restore" },
+        ownerUserId: { type: "string", description: "User id who owns the relationship; empty string clears it" },
+        primaryPerson: {
+          type: "object",
+          description: "Upserts the isPrimary contact — { name (required), role?, email?, phone? }. Never touches other people on the business",
+          properties: {
+            name:  { type: "string" },
+            role:  { type: "string" },
+            email: { type: "string" },
+            phone: { type: "string" },
+          },
+        },
         tenant: TENANT_PROP,
       },
     },
