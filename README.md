@@ -2,6 +2,74 @@
 
 MCP server for the UIIQ platform (app.uiiq.co.uk). Every tool proxies one of UIIQ's own `/api` routes, so tenant scoping, feature gates and write rules stay server-side.
 
+## What it can do
+
+UIIQ is one subscription whose modules are grouped as **Sell**, **Grow** and **Run**, with platform add-ons on top. The tools follow the same shape. Each area below names the tool prefix to look for; the full inventory with one line per tool is under [Tools](#tools).
+
+### Sell — bookings, tickets, payments and point of sale
+
+| Feature | Tool prefix | You can |
+| --- | --- | --- |
+| Bookings and experiences | `uiiq_sell_experience_*`, `uiiq_sell_booking_*`, `uiiq_sell_calendar_week`, `uiiq_sell_session_generate` | Define bookable experiences, generate sessions, list a week's calendar, create and cancel bookings |
+| Staff, resources, service areas | `uiiq_sell_staff_availability_*`, `uiiq_sell_resource_*`, `uiiq_sell_service_area_*` | Block and unblock staff, manage rooms and equipment, set the areas a field service covers |
+| Field visits and visit subscriptions | `uiiq_sell_field_visit_*`, `uiiq_sell_visit_subscription_*`, `uiiq_sell_visit_reminder_status` | Track recurring visits and their reminders |
+| Pricing and promotions | `uiiq_sell_pricing_rule_*`, `uiiq_sell_pricing_intelligence_recommend`, `uiiq_sell_promo_create` | Quote a price under the rules, ask for a recommended price, issue promo codes |
+| Gift cards, vouchers, memberships | `uiiq_sell_gift_card_*`, `uiiq_sell_voucher_*`, `uiiq_sell_membership_plan_*`, `uiiq_sell_subscription_list` | Issue and bulk-issue gift cards, resend or regenerate vouchers, manage membership plans |
+| Tickets | `uiiq_ticket_*` | Issue tickets, scan them at the door, see scan stats, forward tickets |
+| Donations | `uiiq_donations_*` | Run causes, report on giving, export Gift Aid |
+| Orders and commerce | `uiiq_order_*`, `uiiq_commerce_*`, `uiiq_channels_*`, `uiiq_merch_set_*` | Hold and annotate orders, provision hosted shops, set fee rates, settle payouts, sync marketplace channels |
+| Retail | `uiiq_retail_*` | Products, categories, suppliers, low-stock alerts, shop sync, stock reasons and reports |
+| Till and kitchen | `uiiq_till_*` | Ping a paired till, verify a staff PIN, take a sale or payment intent, redeem an IQPlant plan code |
+| Menus (food and drink) | `uiiq_menu_*` | Generate a menu kit, build the live menu, manage menu documents |
+
+### Grow — marketing, CRM and prospecting
+
+| Feature | Tool prefix | You can |
+| --- | --- | --- |
+| Contacts and segments | `uiiq_contact_*`, `uiiq_segment_*` | List, edit, archive or convert contacts into businesses; preview segments |
+| CRM pipeline | `uiiq_prospect_list/get/create/update`, `uiiq_interaction_*`, `uiiq_followups_due` | Move prospects, suppliers and partners along the pipeline, log and edit interactions, see what follow-ups are due |
+| Find Prospects | `uiiq_prospect_search_*`, `uiiq_prospect_preset_*`, `uiiq_prospect_sweep_start`, `uiiq_prospect_source_*` | Start a search in businesses, acts, tenders or funding mode, save briefs as presets, sweep town by town, review candidates, read the funnel, manage the source registry |
+| Bids and outreach | `uiiq_prospect_job_*`, `uiiq_prospect_video_invite_*`, `uiiq_prospect_ingest` | Adopt tenders and funding calls as bids, send a personalised video hello, bulk-ingest enquiries |
+| Email and SMS campaigns | `uiiq_campaign_*`, `uiiq_sms_*` | Create, duplicate and test-send campaigns, read SMS history |
+| Social and press | `uiiq_social_*`, `uiiq_press_release_*`, `uiiq_journalist_contact_*` | Schedule posts from templates, draft, redraft, approve and distribute press releases |
+| Briefs | `uiiq_grow_brief_morning*`, `uiiq_grow_campaign_brief_generate` | Read or generate the morning brief, turn one campaign brief into channel copy |
+| SEO and Google | `uiiq_seo_*`, `uiiq_google_*` | Run audits, apply fixes, check PageSpeed, read Ads, Analytics and Search Console |
+| Pricing leads | `uiiq_pricing_leads_list` | See who used the public pricing calculator |
+| Website connect | `uiiq_iqlink_claim`, `uiiq_tenant_api_key` | Pair a connected site and issue its Connect key |
+
+### Run — operations, finance, people and knowledge
+
+| Feature | Tool prefix | You can |
+| --- | --- | --- |
+| Tasks and boards | `uiiq_task_*`, `uiiq_board_*` | Create projects, boards and cards, assign, comment, move, tick checklists |
+| Workflows and automations | `uiiq_workflow_*`, `uiiq_automation_*` | Trigger workflows, inspect instances, toggle automations |
+| HR and payroll | `uiiq_hr_*` | Staff records, clock-ins, timesheets, leave approvals, payroll runs and exports |
+| Costs and planning | `uiiq_costs_*`, `uiiq_plan_*`, `uiiq_report_*` | Bills, allocations, recurring costs, period locks, KPI rolls; the business plan's revenue, expenses, personnel and statements; revenue and usage reports |
+| Billing and credits | `uiiq_billing_*`, `uiiq_credits_*` | Invoices, usage, billing overrides, the IQEX credit balance and ledger |
+| Portfolio | `uiiq_portfolio_*` | Every product as a project record with blockers |
+| Documents, media, templates | `uiiq_document_*`, `uiiq_media_*`, `uiiq_template_*` | Read documents, upload or generate media, use social and email templates |
+| Knowledge and advisors | `uiiq_brains_*`, `uiiq_boardroom_*`, `uiiq_agent_*` | Ask a sector Brain, run a Boardroom session with the Mastermind team, read agent definitions |
+| Journeys | `uiiq_journey_*` | Start, advance and resume guided Make-a-Trail journeys |
+| Materials and legacy films | `uiiq_material_*`, `uiiq_legacy_*` | Discover, verify and watch materials; list legacy films |
+
+### Devices and IQ products
+
+| Feature | Tool prefix | You can |
+| --- | --- | --- |
+| IQDisplay signage | `uiiq_display_*` | Screens, channels, items, groups and schedules |
+| IQPlant | `uiiq_iqplant_*`, `uiiq_till_iqplant_plan_code` | Garden Planner plans, nursery stock mapping, plan-code redemption at the till |
+
+### Platform administration
+
+| Feature | Tool prefix | You can |
+| --- | --- | --- |
+| Tenants and organisations | `uiiq_tenant_*`, `uiiq_org_*` | Create, rename, delete or restore tenants, set features, read usage |
+| Health | `uiiq_status`, `uiiq_system_health` | API health and latency, infrastructure, alarms and AWS cost against budget |
+
+### Asking the server directly
+
+The server describes itself over the MCP protocol: `tools/list` returns every tool with its description and input schema, which is what this README is generated from. Any MCP client can ask it what it can do without reading this file.
+
 ## Setup
 
 ```
