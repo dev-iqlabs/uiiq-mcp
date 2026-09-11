@@ -19,6 +19,7 @@ import { communicationsTools } from "./tools/communications.js";
 import { commerceTools }       from "./tools/commerce.js";
 import { billingTools }        from "./tools/billing.js";
 import { documentTools }       from "./tools/document.js";
+import { localityTools }       from "./tools/locality.js";
 import { googleTools }         from "./tools/google.js";
 import { seoTools }            from "./tools/seo.js";
 import { smsTools }            from "./tools/sms.js";
@@ -68,6 +69,7 @@ const ALL_TOOLS = [
   ...commerceTools,
   ...billingTools,
   ...documentTools,
+  ...localityTools,
   ...googleTools,
   ...seoTools,
   ...smsTools,
@@ -104,7 +106,7 @@ const ALL_TOOLS = [
 const TOOL_MAP = Object.fromEntries(ALL_TOOLS.map(t => [t.name, t]));
 
 const server = new Server(
-  { name: "uiiq-mcp", version: "2.21.0" },
+  { name: "uiiq-mcp", version: "2.22.0" },
   { capabilities: { tools: {} } }
 );
 
