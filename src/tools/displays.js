@@ -1,4 +1,5 @@
 import { apiClient } from "../auth.js";
+import { BASE } from "../config.js";
 
 // Every tool takes an optional `tenant` (id, slug or exact name). Without it the
 // call lands in whatever tenant the stored login belongs to; with it the client
@@ -348,6 +349,92 @@ export const displayTools = [
       if (search) params.set("search", search);
       const qs = params.toString() ? `?${params}` : "";
       const res = await api(tenant)(`/displays/videos${qs}`);
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    },
+  },
+  // ---- Token boards (/board/<token>) ----------------------------------------
+  // A board is a public, unguessable, revocable URL a screen plays as a URL
+  // item: KPI (staff numbers), SHOWCASE (auto-cycling cards with scan-to-buy /
+  // scan-to-book QRs — retail products, bookable experiences, or What's On =
+  // upcoming events soonest first) and EVENT (one event's card, minted by the
+  // Events hub fan-out, not here). Minting is admin-grade on the platform.
+  {
+    name: "uiiq_display_boards",
+    description:
+      "List the tenant's token boards (KPI / SHOWCASE / EVENT) with their public /board/<token> URL, config and active flag. Add one to a channel with uiiq_display_channel_item_add (content_type=URL, content_url=url), or mint-and-add in one go with uiiq_display_board_create.",
+    inputSchema: { type: "object", properties: { tenant: TENANT_PROP } },
+    async handler({ tenant } = {}) {
+      const res = await api(tenant)("/boards");
+      if (!res.ok) throw new Error(await res.text());
+      const boards = await res.json();
+      return (Array.isArray(boards) ? boards : []).map((b) => ({ ...b, url: `${BASE}/board/${b.token}` }));
+    },
+  },
+  {
+    name: "uiiq_display_board_create",
+    description:
+      "Mint a token board and optionally add it straight to a channel. kind=KPI reuses the tenant's active KPI board. kind=SHOWCASE needs `source`: 'retail' (till products, optional `category`), 'experience' (bookable experiences, optional `experienceType` e.g. EVENT/TIMED_ENTRY), or 'whatson' (What's On — published event experiences with a session on/after today, soonest first, date on the card, scan-to-book QR, past events drop off; no filter). `intervalSec` = seconds per card (3–120, default 10); `showPrice` default true. Pass `channelId` to add the board's URL as a URL item on that channel in the same call (`duration` overrides that channel's default seconds). Returns the board plus its public `url`. Admin-grade: the session must be an admin of the tenant.",
+    inputSchema: {
+      type: "object",
+      required: ["kind"],
+      properties: {
+        kind: { type: "string", enum: ["KPI", "SHOWCASE"] },
+        source: { type: "string", enum: ["retail", "experience", "whatson"], description: "SHOWCASE only" },
+        category: { type: "string", description: "SHOWCASE retail: till category name" },
+        experienceType: { type: "string", description: "SHOWCASE experience: ExperienceType enum value" },
+        ids: { type: "array", items: { type: "string" }, description: "SHOWCASE: hand-picked product/experience ids" },
+        intervalSec: { type: "number", description: "Seconds per card, 3–120 (default 10)" },
+        showPrice: { type: "boolean", description: "Show prices on cards (default true)" },
+        name: { type: "string", description: "Board name; defaults per kind/source" },
+        channelId: { type: "number", description: "Also add the board to this channel as a URL item" },
+        duration: { type: "number", description: "Seconds for that channel item; omit for the channel default" },
+        tenant: TENANT_PROP,
+      },
+    },
+    async handler({ kind, source, category, experienceType, ids, intervalSec, showPrice, name, channelId, duration, tenant } = {}) {
+      if (kind === "SHOWCASE" && !source) throw new Error("source is required for a SHOWCASE board: retail, experience or whatson");
+      const body = { kind };
+      if (name) body.name = name;
+      if (kind === "SHOWCASE") {
+        body.config = { source };
+        if (category) body.config.category = category;
+        if (experienceType) body.config.experienceType = experienceType;
+        if (Array.isArray(ids) && ids.length) body.config.ids = ids;
+        if (intervalSec !== undefined) body.config.intervalSec = intervalSec;
+        if (showPrice !== undefined) body.config.showPrice = showPrice;
+      }
+      const res = await api(tenant)("/boards", { method: "POST", body: JSON.stringify(body) });
+      if (!res.ok) throw new Error(await res.text());
+      const board = await res.json();
+      const url = `${BASE}/board/${board.token}`;
+      let item = null;
+      if (channelId) {
+        const add = await api(tenant)(`/displays/channels/${channelId}/items`, {
+          method: "POST",
+          body: JSON.stringify({ content_type: "URL", content_url: url, ...(duration ? { duration } : {}) }),
+        });
+        if (!add.ok) throw new Error(`Board ${board.id} minted (${url}) but adding it to channel ${channelId} failed: ${await add.text()}`);
+        item = await add.json();
+      }
+      return { ...board, url, channelItem: item };
+    },
+  },
+  {
+    name: "uiiq_display_board_revoke",
+    description:
+      "Revoke a token board (active=false) so its /board/<token> URL 404s on the screen's next poll and the item goes dark — or re-enable it (active=true). Remove the channel item separately with uiiq_display_channel_item_delete if you want it out of the loop rather than dark.",
+    inputSchema: {
+      type: "object",
+      required: ["boardId"],
+      properties: {
+        boardId: { type: "string" },
+        active: { type: "boolean", description: "false to revoke (default), true to re-enable" },
+        tenant: TENANT_PROP,
+      },
+    },
+    async handler({ boardId, active = false, tenant } = {}) {
+      const res = await api(tenant)(`/boards/${boardId}`, { method: "PATCH", body: JSON.stringify({ active }) });
       if (!res.ok) throw new Error(await res.text());
       return res.json();
     },
