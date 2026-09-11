@@ -106,7 +106,7 @@ const ALL_TOOLS = [
 const TOOL_MAP = Object.fromEntries(ALL_TOOLS.map(t => [t.name, t]));
 
 const server = new Server(
-  { name: "uiiq-mcp", version: "2.24.0" },
+  { name: "uiiq-mcp", version: "2.25.0" },
   { capabilities: { tools: {} } }
 );
 
