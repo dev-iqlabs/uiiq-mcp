@@ -40,18 +40,70 @@ export const sellTools = [
   },
   {
     name: "uiiq_sell_subscription_list",
-    description: "List UIIQ membership subscribers. Filter by status.",
+    description:
+      "List UIIQ membership subscribers (members), newest first. Filter by status, by residency-check outcome (eligibility: flagged = waiting for a person to review a postcode outside the plan's local area), by plan, or search name / email / member code. Use it to check a plan has no members before editing or deleting it. Needs UiiQ-platform GET /admin/memberships/subscribers (locality PR) — before that the route was POST-only and this call died on an empty body.",
     inputSchema: {
       type: "object",
-      properties: { status: { type: "string", description: "active | cancelled | expired" },
+      properties: {
+        status: { type: "string", description: "active | paused | cancelled | expired" },
+        eligibility: { type: "string", description: "not_required | passed | flagged | approved | rejected" },
+        planId: { type: "string" },
+        q: { type: "string", description: "Search name, email or member code" },
+        limit: { type: "number", description: "Default 200, max 500" },
         tenant: TENANT_PROP,
       }
     },
-    async handler({ status, tenant } = {}) {
-      const qs = status ? "?status=" + encodeURIComponent(status) : "";
+    async handler({ status, eligibility, planId, q, limit, tenant } = {}) {
+      const params = new URLSearchParams();
+      if (status) params.set("status", status);
+      if (eligibility) params.set("eligibility", eligibility);
+      if (planId) params.set("planId", planId);
+      if (q) params.set("q", q);
+      if (limit) params.set("limit", String(limit));
+      const qs = params.toString() ? `?${params}` : "";
       const res = await api(tenant)("/admin/memberships/subscribers" + qs);
+      if (!res.ok) throw new Error(`${res.status} ${await res.text()}`);
       const data = await res.json();
       return Array.isArray(data) ? data : data.subscribers ?? [];
+    }
+  },
+  {
+    name: "uiiq_sell_subscription_get",
+    description: "One membership subscriber by id: plan, status, member code, address, residency-check outcome and who verified it.",
+    inputSchema: { type: "object", required: ["id"], properties: { id: { type: "string" }, tenant: TENANT_PROP } },
+    async handler({ id, tenant }) {
+      const res = await api(tenant)(`/admin/memberships/subscribers/${encodeURIComponent(id)}`);
+      if (!res.ok) throw new Error(`${res.status} ${await res.text()}`);
+      return res.json();
+    }
+  },
+  {
+    name: "uiiq_sell_subscription_review",
+    description:
+      "Residency review for a residents-only pass. review=approve records who verified, when and how (verificationMethod, a fixed list — never free text) and clears the member for member pricing; review=reject marks them REJECTED. reason is optional, max 200 chars, and must not contain ID numbers, dates of birth or anything about health or family circumstances. No ID document is ever stored.",
+    inputSchema: {
+      type: "object",
+      required: ["id", "review"],
+      properties: {
+        id: { type: "string", description: "Membership (subscriber) id" },
+        review: { type: "string", enum: ["approve", "reject"] },
+        verificationMethod: {
+          type: "string",
+          enum: ["DRIVING_LICENCE_IN_PERSON", "UTILITY_BILL_IN_PERSON", "COUNCIL_TAX_IN_PERSON", "BANK_STATEMENT_IN_PERSON", "OTHER_IN_PERSON", "POSTCODE_ONLY"],
+          description: "Required for approve",
+        },
+        reason: { type: "string", description: "Optional, max 200 chars" },
+        tenant: TENANT_PROP,
+      }
+    },
+    async handler({ id, review, verificationMethod, reason, tenant }) {
+      const res = await api(tenant)(`/admin/memberships/subscribers/${encodeURIComponent(id)}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ review, verificationMethod, reason }),
+      });
+      if (!res.ok) throw new Error(`${res.status} ${await res.text()}`);
+      return res.json();
     }
   },
   {
@@ -507,7 +559,10 @@ export const sellTools = [
   },
   {
     name: "uiiq_sell_pricing_rule_create",
-    description: "Create a UIIQ Sell pricing rule. type=DISCOUNT_PERCENT|DISCOUNT_FIXED|SURCHARGE_PERCENT|SURCHARGE_FIXED. value is percent (15) or pence (500=£5).",
+    description:
+      "Create a UIIQ Sell pricing rule. type=DISCOUNT_PERCENT|DISCOUNT_FIXED|SURCHARGE_PERCENT|SURCHARGE_FIXED. value is percent (15) or pence (500=£5). " +
+      "Members-only rules: requiresMembershipPlanId (booker must hold an active, residency-cleared membership on that plan) or requiresAnyMembership. " +
+      "Stacking: a member rule is a rule like any other — it takes its turn by priority and compounds on the running total; nothing is exclusive.",
     inputSchema: {
       type: "object",
       required: ["name", "type", "value"],
@@ -520,12 +575,50 @@ export const sellTools = [
         dateTo:       { type: "string", description: "YYYY-MM-DD latest applicable date" },
         experienceId: { type: "string", description: "Scope to one experience (default: all)" },
         priority:     { type: "number", description: "Higher wins when rules overlap (default 0)" },
+        requiresMembershipPlanId: { type: "string", description: "Only for active members of this membership plan" },
+        requiresAnyMembership:    { type: "boolean", description: "Only for active members of any plan" },
         tenant: TENANT_PROP,
       }
     },
-    async handler(body) {
+    async handler({ tenant, ...body }) {
+      // Previously `handler(body)` referenced an undefined `tenant` — the tool
+      // threw before it ever reached the API.
       const res = await api(tenant)("/admin/pricing-rules", {
         method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    }
+  },
+  {
+    name: "uiiq_sell_pricing_rule_update",
+    description: "Edit a UIIQ Sell pricing rule. Only the fields you send change. Set requiresMembershipPlanId to null to make a rule open to everyone again.",
+    inputSchema: {
+      type: "object",
+      required: ["id"],
+      properties: {
+        id:           { type: "string" },
+        name:         { type: "string" },
+        type:         { type: "string", enum: ["DISCOUNT_PERCENT", "DISCOUNT_FIXED", "SURCHARGE_PERCENT", "SURCHARGE_FIXED"] },
+        value:        { type: "number" },
+        daysOfWeek:   { type: "array", items: { type: "number" } },
+        dateFrom:     { type: "string" },
+        dateTo:       { type: "string" },
+        experienceId: { type: "string" },
+        priority:     { type: "number" },
+        isActive:     { type: "boolean" },
+        requiresMembershipPlanId: { type: ["string", "null"] },
+        requiresAnyMembership:    { type: "boolean" },
+        tenant: TENANT_PROP,
+      }
+    },
+    async handler({ id, tenant, ...fields }) {
+      const body = Object.fromEntries(Object.entries(fields).filter(([, v]) => v !== undefined));
+      if (Object.keys(body).length === 0) throw new Error("Send at least one field to change");
+      const res = await api(tenant)(`/admin/pricing-rules/${encodeURIComponent(id)}`, {
+        method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });
@@ -551,7 +644,7 @@ export const sellTools = [
   },
   {
     name: "uiiq_sell_pricing_rule_quote",
-    description: "Preview what a UIIQ Sell experience would cost on a given date after all matching pricing rules cascade. Returns basePricePence, finalPricePence, and the applied[] breakdown.",
+    description: "Preview what a UIIQ Sell experience would cost on a given date after all matching pricing rules cascade. Returns basePricePence, finalPricePence, applied[] (memberOnly: true on rules that needed a membership) and member (the membership honoured, or null). Pass memberCode or memberEmail to see a member's price.",
     inputSchema: {
       type: "object",
       required: ["experienceId", "date"],
@@ -559,12 +652,16 @@ export const sellTools = [
         experienceId:    { type: "string" },
         date:            { type: "string", description: "YYYY-MM-DD" },
         basePricePence:  { type: "number", description: "Optional override of experience.priceFromPence" },
+        memberCode:      { type: "string", description: "Member code (MEM-XXXXXX) to apply members-only rules" },
+        memberEmail:     { type: "string", description: "Booker email, as an alternative to memberCode" },
         tenant: TENANT_PROP,
       }
     },
-    async handler({ experienceId, date, basePricePence, tenant }) {
+    async handler({ experienceId, date, basePricePence, memberCode, memberEmail, tenant }) {
       const params = new URLSearchParams({ experienceId, date });
       if (basePricePence != null) params.set("basePricePence", String(basePricePence));
+      if (memberCode) params.set("memberCode", memberCode);
+      if (memberEmail) params.set("memberEmail", memberEmail);
       const res = await api(tenant)(`/admin/pricing-rules/quote?${params}`);
       if (!res.ok) throw new Error(await res.text());
       return res.json();
@@ -1077,6 +1174,8 @@ export const sellTools = [
         autoRenew:      { type: "boolean", description: "Default true (ongoing). false = fixed-term pass." },
         maxMembers:     { type: "number", description: "People covered by one purchase (default 1)" },
         benefits:       { type: "object", description: "Free-form benefits JSON" },
+        eligibilityLocalityId: { type: "string", description: "Residents-only: id of a tenant locality (uiiq_locality_list). Signups are asked for an address and the postcode is checked." },
+        eligibilityMode: { type: "string", enum: ["block", "flag_for_review"], description: "What to do with a postcode outside the locality. Default flag_for_review: accept, mark FLAGGED, a person approves (uiiq_sell_subscription_review)." },
         tenant: TENANT_PROP,
       }
     },
@@ -1098,7 +1197,8 @@ export const sellTools = [
       "Only the fields you send change. " +
       "A new price applies to NEW purchases only: anyone already subscribed keeps billing at their " +
       "Stripe price, and a fixed-term pass has no subscription at all. " +
-      "Requires UiiQ-platform #435 to be deployed — before that the endpoint only accepted classCover.",
+      "benefits REPLACES the whole benefits object (card image, tagline, features…) — send the full object; until the locality PR this was write-once at creation. " +
+      "eligibilityLocalityId / eligibilityMode make a plan residents-only (see uiiq_sell_membership_plan_create).",
     inputSchema: {
       type: "object",
       required: ["planId"],
@@ -1113,6 +1213,9 @@ export const sellTools = [
         isActive:       { type: "boolean", description: "false hides it from sale without deleting it" },
         position:       { type: "number", description: "Display order" },
         classCover:     { description: '"unlimited", { perWeek: 1–14 } or null' },
+        benefits:       { type: ["object", "null"], description: "Whole benefits JSON — replaces what is there" },
+        eligibilityLocalityId: { type: ["string", "null"], description: "Locality id, or null to open the plan to everyone" },
+        eligibilityMode: { type: "string", enum: ["block", "flag_for_review"] },
         tenant: TENANT_PROP,
       }
     },
