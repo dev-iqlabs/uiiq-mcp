@@ -596,6 +596,7 @@ Every product's target against its actual, by week, month or fiscal year, colour
 | `uiiq_targets_source_update` | Rename a source, change its settings, or pause and resume it. |
 | `uiiq_targets_source_remove` | Remove a source and every figure it recorded. |
 | `uiiq_targets_source_test` | Read yesterday's and today's figure from a source without storing anything. |
+| `uiiq_targets_history_upload` | Upload past monthly figures from an accounts CSV (`path` or `csv`). Checks only unless `apply`; never writes a month another source holds; `replace` overwrites only an earlier upload's months. |
 
 ### Billing — `src/tools/billing.js`
 
@@ -679,4 +680,4 @@ Every product's target against its actual, by week, month or fiscal year, colour
 | `uiiq_workflow_instances` | List active UIIQ workflow instances. |
 | `uiiq_workflow_trigger` | Trigger a new UIIQ workflow instance from a template. |
 
-355 tools.
+356 tools.
