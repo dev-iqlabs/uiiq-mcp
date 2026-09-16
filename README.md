@@ -647,6 +647,7 @@ Every product's target against its actual, by week, month or fiscal year, colour
 | `uiiq_plan_personnel` | Business plan — team headcount and cost plan. |
 | `uiiq_plan_statements` | Business plan — profit & loss statements. |
 | `uiiq_plan_assets` | Business plan — asset register (capital items with purchase cost/month and useful life; the targets for capital-bill linking in cost tracking). |
+| `uiiq_plan_revenue_from_actuals` | Fill a fiscal year of the revenue forecast (= the board's targets) from last year's actuals × uplift; preview unless apply=true; empty months only unless overwrite. Fill is owner/admin only (STAFF get 403). |
 
 ### Reports — `src/tools/report.js`
 
@@ -680,4 +681,4 @@ Every product's target against its actual, by week, month or fiscal year, colour
 | `uiiq_workflow_instances` | List active UIIQ workflow instances. |
 | `uiiq_workflow_trigger` | Trigger a new UIIQ workflow instance from a template. |
 
-356 tools.
+357 tools.
