@@ -357,12 +357,13 @@ export const displayTools = [
   // A board is a public, unguessable, revocable URL a screen plays as a URL
   // item: KPI (staff numbers), SHOWCASE (auto-cycling cards with scan-to-buy /
   // scan-to-book QRs — retail products, bookable experiences, or What's On =
-  // upcoming events soonest first) and EVENT (one event's card, minted by the
-  // Events hub fan-out, not here). Minting is admin-grade on the platform.
+  // upcoming events soonest first), TARGETS (every product's target against its
+  // actual — see targets.js) and EVENT (one event's card, minted by the Events
+  // hub fan-out, not here). Minting is admin-grade on the platform.
   {
     name: "uiiq_display_boards",
     description:
-      "List the tenant's token boards (KPI / SHOWCASE / EVENT) with their public /board/<token> URL, config and active flag. Add one to a channel with uiiq_display_channel_item_add (content_type=URL, content_url=url), or mint-and-add in one go with uiiq_display_board_create.",
+      "List the tenant's token boards (KPI / SHOWCASE / TARGETS / EVENT) with their public /board/<token> URL, config (a TARGETS board's config carries period and layout) and active flag. Add one to a channel with uiiq_display_channel_item_add (content_type=URL, content_url=url), or mint-and-add in one go with uiiq_display_board_create.",
     inputSchema: { type: "object", properties: { tenant: TENANT_PROP } },
     async handler({ tenant } = {}) {
       const res = await api(tenant)("/boards");
@@ -374,12 +375,15 @@ export const displayTools = [
   {
     name: "uiiq_display_board_create",
     description:
-      "Mint a token board and optionally add it straight to a channel. kind=KPI reuses the tenant's active KPI board. kind=SHOWCASE needs `source`: 'retail' (till products, optional `category`), 'experience' (bookable experiences, optional `experienceType` e.g. EVENT/TIMED_ENTRY), or 'whatson' (What's On — published event experiences with a session on/after today, soonest first, date on the card, scan-to-book QR, past events drop off; no filter). `intervalSec` = seconds per card (3–120, default 10); `showPrice` default true. Pass `channelId` to add the board's URL as a URL item on that channel in the same call (`duration` overrides that channel's default seconds). Returns the board plus its public `url`. Admin-grade: the session must be an admin of the tenant.",
+      "Mint a token board and optionally add it straight to a channel. kind=KPI reuses the tenant's active KPI board. kind=TARGETS is the office targets wall (needs the tenant's targets_board feature): `period` week | month | year | cycle (cycle = week → month → year, `cycleSec` each, 10–600, default 30; default month) and `layout` lanes (default: a lane per company, lines not yet trading in a 'coming up' strip) | tiles (equal grid) | race (a column per company, every line a bar). kind=SHOWCASE needs `source`: 'retail' (till products, optional `category`), 'experience' (bookable experiences, optional `experienceType` e.g. EVENT/TIMED_ENTRY), or 'whatson' (What's On — published event experiences with a session on/after today, soonest first, date on the card, scan-to-book QR, past events drop off; no filter). `intervalSec` = seconds per card (3–120, default 10); `showPrice` default true. Pass `channelId` to add the board's URL as a URL item on that channel in the same call (`duration` overrides that channel's default seconds). Returns the board plus its public `url`. Admin-grade: the session must be an admin of the tenant.",
     inputSchema: {
       type: "object",
       required: ["kind"],
       properties: {
-        kind: { type: "string", enum: ["KPI", "SHOWCASE"] },
+        kind: { type: "string", enum: ["KPI", "SHOWCASE", "TARGETS"] },
+        period: { type: "string", enum: ["week", "month", "year", "cycle"], description: "TARGETS only; default month" },
+        cycleSec: { type: "number", description: "TARGETS cycle: seconds per period, 10–600 (default 30)" },
+        layout: { type: "string", enum: ["lanes", "tiles", "race"], description: "TARGETS only; default lanes. Change later with uiiq_display_board_layout" },
         source: { type: "string", enum: ["retail", "experience", "whatson"], description: "SHOWCASE only" },
         category: { type: "string", description: "SHOWCASE retail: till category name" },
         experienceType: { type: "string", description: "SHOWCASE experience: ExperienceType enum value" },
@@ -392,10 +396,16 @@ export const displayTools = [
         tenant: TENANT_PROP,
       },
     },
-    async handler({ kind, source, category, experienceType, ids, intervalSec, showPrice, name, channelId, duration, tenant } = {}) {
+    async handler({ kind, period, cycleSec, layout, source, category, experienceType, ids, intervalSec, showPrice, name, channelId, duration, tenant } = {}) {
       if (kind === "SHOWCASE" && !source) throw new Error("source is required for a SHOWCASE board: retail, experience or whatson");
       const body = { kind };
       if (name) body.name = name;
+      if (kind === "TARGETS") {
+        body.config = {};
+        if (period) body.config.period = period;
+        if (cycleSec !== undefined) body.config.cycleSec = cycleSec;
+        if (layout) body.config.layout = layout;
+      }
       if (kind === "SHOWCASE") {
         body.config = { source };
         if (category) body.config.category = category;
@@ -435,6 +445,40 @@ export const displayTools = [
     },
     async handler({ boardId, active = false, tenant } = {}) {
       const res = await api(tenant)(`/boards/${boardId}`, { method: "PATCH", body: JSON.stringify({ active }) });
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    },
+  },
+  {
+    name: "uiiq_display_board_layout",
+    description:
+      "Change how a TARGETS board draws itself on the wall: lanes (a lane per company, the company total on the left, lines not yet trading in a 'coming up' strip), tiles (the original equal grid) or race (a column per company, every line a bar, sorted by need). Keeps the board's period, cycle and chosen lines. The screen picks it up on its next poll (about a minute). To preview a layout without changing the setting, open the board URL with ?layout=race (or tiles / lanes). 400 for a non-TARGETS board. Admin-grade.",
+    inputSchema: {
+      type: "object",
+      required: ["boardId", "layout"],
+      properties: {
+        boardId: { type: "string" },
+        layout: { type: "string", enum: ["lanes", "tiles", "race"] },
+        tenant: TENANT_PROP,
+      },
+    },
+    async handler({ boardId, layout, tenant } = {}) {
+      const res = await api(tenant)(`/boards/${boardId}`, { method: "PATCH", body: JSON.stringify({ layout }) });
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    },
+  },
+  {
+    name: "uiiq_display_board_delete",
+    description:
+      "Delete a token board for good (revoking only darkens its URL; deleting removes the row — it cannot be undone). Refused with 409 and the channel names while any channel still plays the board's link: take it off those channels first. 503 if IQEX can't be reached to check — it never deletes on a guess. Admin-grade.",
+    inputSchema: {
+      type: "object",
+      required: ["boardId"],
+      properties: { boardId: { type: "string" }, tenant: TENANT_PROP },
+    },
+    async handler({ boardId, tenant } = {}) {
+      const res = await api(tenant)(`/boards/${boardId}`, { method: "DELETE" });
       if (!res.ok) throw new Error(await res.text());
       return res.json();
     },
