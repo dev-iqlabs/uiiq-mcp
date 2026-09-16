@@ -39,6 +39,7 @@ import { tillTools }            from "./tools/till.js";
 import { systemTools }          from "./tools/system.js";
 import { merchSetTools }        from "./tools/merch.js";
 import { displayTools }         from "./tools/displays.js";
+import { targetsTools }         from "./tools/targets.js";
 import { journeyTools }         from "./tools/journey.js";
 import { menuTools }            from "./tools/menu.js";
 import { ticketsTools }         from "./tools/tickets.js";
@@ -89,6 +90,7 @@ const ALL_TOOLS = [
   ...agentTools,
   ...merchSetTools,
   ...displayTools,
+  ...targetsTools,
   ...journeyTools,
   ...menuTools,
   ...ticketsTools,

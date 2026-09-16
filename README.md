@@ -45,6 +45,7 @@ UIIQ is one subscription whose modules are grouped as **Sell**, **Grow** and **R
 | Workflows and automations | `uiiq_workflow_*`, `uiiq_automation_*` | Trigger workflows, inspect instances, toggle automations |
 | HR and payroll | `uiiq_hr_*` | Staff records, clock-ins, timesheets, leave approvals, payroll runs and exports |
 | Costs and planning | `uiiq_costs_*`, `uiiq_plan_*`, `uiiq_report_*` | Bills, allocations, recurring costs, period locks, KPI rolls; the business plan's revenue, expenses, personnel and statements; revenue and usage reports |
+| Targets board | `uiiq_targets_*` | Every product's target against its actual by week, month or year; set a line's stage and launch month, merge monthly targets, add and test where actuals come from, type figures in |
 | Billing and credits | `uiiq_billing_*`, `uiiq_credits_*` | Invoices, usage, billing overrides, the IQEX credit balance and ledger |
 | Portfolio | `uiiq_portfolio_*` | Every product as a project record with blockers |
 | Documents, media, templates | `uiiq_document_*`, `uiiq_media_*`, `uiiq_template_*` | Read documents, upload or generate media, use social and email templates |
@@ -56,7 +57,7 @@ UIIQ is one subscription whose modules are grouped as **Sell**, **Grow** and **R
 
 | Feature | Tool prefix | You can |
 | --- | --- | --- |
-| IQDisplay signage | `uiiq_display_*` | Screens, channels, items, groups and schedules |
+| IQDisplay signage | `uiiq_display_*` | Screens, channels, items, groups and schedules; token boards (KPI, showcase, targets wall) including a targets board's layout |
 | IQPlant | `uiiq_iqplant_*`, `uiiq_till_iqplant_plan_code` | Garden Planner plans, nursery stock mapping, plan-code redemption at the till |
 
 ### Platform administration
@@ -574,6 +575,27 @@ Not exposed on purpose: the platform-to-platform callbacks under `/api/platform/
 | `uiiq_display_schedule_rule_add` | Add a rule to a schedule: show `channel` during a time window, optionally limited to days of the week and a date range. |
 | `uiiq_display_projects` | List the tenant's IQEX projects available to add to a channel (the PROJECT picker). |
 | `uiiq_display_videos` | List the tenant's Bunny Stream signage videos (the picker behind the channel editor), each with its `ready` flag and `embedUrl`. |
+| `uiiq_display_boards` | List token boards (KPI / SHOWCASE / TARGETS / EVENT) with their public `/board/<token>` URL, config and active flag. |
+| `uiiq_display_board_create` | Mint a token board (KPI; SHOWCASE of retail, experiences or What's On; TARGETS with `period` and `layout`) and optionally add it to a channel in the same call. |
+| `uiiq_display_board_revoke` | Revoke a board so its URL goes dark on the next poll, or re-enable it. |
+| `uiiq_display_board_layout` | Switch a TARGETS board between `lanes`, `tiles` and `race`; keeps its period and lines; the screen picks it up within a minute. |
+| `uiiq_display_board_delete` | Delete a board for good; refused (409, with the channel names) while a channel still plays it, and 503 if IQEX can't be reached to check. |
+
+### Targets board — `src/tools/targets.js`
+
+Every product's target against its actual, by week, month or fiscal year, coloured by pace. The targets are the business plan's revenue forecast; actuals come from each product's sources. Needs the tenant's `targets_board` feature; writes are admin-grade. Put it on a screen with `uiiq_display_board_create` kind `TARGETS`.
+
+| Tool | What it does |
+| --- | --- |
+| `uiiq_targets_board` | The board as the dashboard sees it for a `period` and `date`: tiles by company with target, expected by today, actual, % of pace and state, plus totals. Read-only. |
+| `uiiq_targets_streams` | Every product line with its board settings (stage, launch month, company, measure), this year's target and its sources' health. Read-only. |
+| `uiiq_targets_stream_create` | Add a product line to the business plan (creating the plan if needed). |
+| `uiiq_targets_stream_update` | Change a line's board settings, `stage` (live / `NOT_LAUNCHED` / `RND`), `launchMonth`, or merge `monthly` targets in pence. |
+| `uiiq_targets_manual_figure` | Type an actual into an "Entered by hand" source; a week or month figure is spread over its days and replaces what was there. |
+| `uiiq_targets_source_add` | Add where a line's actual comes from: `UIIQ_TENANT`, `WOO_SHOP`, `MANUAL`, or `IQEX_CREDITS` (SuperAdmin only). |
+| `uiiq_targets_source_update` | Rename a source, change its settings, or pause and resume it. |
+| `uiiq_targets_source_remove` | Remove a source and every figure it recorded. |
+| `uiiq_targets_source_test` | Read yesterday's and today's figure from a source without storing anything. |
 
 ### Billing — `src/tools/billing.js`
 
@@ -657,4 +679,4 @@ Not exposed on purpose: the platform-to-platform callbacks under `/api/platform/
 | `uiiq_workflow_instances` | List active UIIQ workflow instances. |
 | `uiiq_workflow_trigger` | Trigger a new UIIQ workflow instance from a template. |
 
-328 tools.
+358 tools.
