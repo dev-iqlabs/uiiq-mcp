@@ -1,3 +1,4 @@
+import { readFile } from "node:fs/promises";
 import { apiClient } from "../auth.js";
 
 // Every tool takes an optional `tenant` (id, slug or exact name). Without it the
@@ -165,6 +166,59 @@ export const targetsTools = [
     },
     async handler({ sourceId, tenant } = {}) {
       return body(await api(tenant)(`/targets/sources/${encodeURIComponent(sourceId)}`, { method: "DELETE" }));
+    },
+  },
+  {
+    name: "uiiq_targets_history_upload",
+    description:
+      "Upload PAST monthly figures from the accounts for an existing business, so the board has last year for real. The CSV needs a product, a month and an amount per row (a monthly sales-by-product report is ideal): columns found by header (Product / Month / Amount, Sales, Net… in any order) or taken as product, month, amount with no header; months like 2026-08, 08/2026, 31/08/2026 or Aug 2026; amounts in £ (a count for a UNITS line). Products must match a line's name or tile name. " +
+      "Without apply=true NOTHING is written: you get what would happen per product-month — write, replace (only with replace=true), unchanged, keep (an earlier upload's month, left alone) or covered (another source already has figures that month, so it is never written: both would be counted). This month and later, anything over five years old, negatives and amounts too large to store are refused. " +
+      "With apply=true the plan is made again and written in one locked transaction; a second upload for the same workspace at the same moment gets 409. Each month is spread evenly over its days on the product's own 'Past figures (uploaded)' source, which counts only for periods it covers, can't be paused, and can't be typed into. 2 MB at most. Admin-grade.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        path: { type: "string", description: "Local path to the CSV. One of path or csv." },
+        csv: { type: "string", description: "The CSV text itself. One of path or csv." },
+        apply: { type: "boolean", description: "Write the months the check allows. Default false (check only)." },
+        replace: { type: "boolean", description: "Overwrite months an EARLIER upload wrote. Never overwrites another source. Default false." },
+        tenant: TENANT_PROP,
+      },
+    },
+    async handler({ path, csv, apply = false, replace = false, tenant } = {}) {
+      if (!path && !csv) throw new Error("Provide a local `path` to the CSV or its text as `csv`.");
+      if (path && csv) throw new Error("Provide `path` or `csv`, not both.");
+      const text = path ? await readFile(path, "utf8") : csv;
+      if (Buffer.byteLength(text, "utf8") > 2_000_000) throw new Error("That file is over 2 MB. Split it by year and upload each part.");
+      const r = await body(await api(tenant)("/targets/history", { method: "POST", body: JSON.stringify({ csv: text, apply, replace }) }));
+
+      // A preview can list up to 2,000 product-months: give the totals per
+      // product and the first 100 rows, and say how many were left out.
+      const byProduct = {};
+      for (const i of r.items ?? []) {
+        if (i.status !== "write" && i.status !== "replace") continue;
+        const p = (byProduct[i.product] ??= { months: 0, first: i.month, last: i.month, total: 0, measure: i.measure });
+        p.months += 1;
+        if (i.month < p.first) p.first = i.month;
+        if (i.month > p.last) p.last = i.month;
+        p.total += i.value;
+      }
+      const items = r.items ?? [];
+      return {
+        applied: r.applied,
+        ...(r.applied ? { written: r.written, products: r.products } : {}),
+        columns: r.columns,
+        rowsRead: r.rowsRead,
+        counts: r.counts,
+        toImportByProduct: byProduct,
+        unmatched: r.unmatched,
+        outOfRange: r.outOfRange,
+        outOfRangeCount: r.outOfRangeCount,
+        errors: r.errors,
+        errorCount: r.errorCount,
+        tooMany: r.tooMany,
+        items: items.slice(0, 100),
+        ...(items.length > 100 ? { itemsOmitted: items.length - 100 } : {}),
+      };
     },
   },
   {
