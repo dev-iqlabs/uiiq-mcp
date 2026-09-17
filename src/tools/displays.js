@@ -375,7 +375,7 @@ export const displayTools = [
   {
     name: "uiiq_display_board_create",
     description:
-      "Mint a token board and optionally add it straight to a channel. kind=KPI reuses the tenant's active KPI board. kind=TARGETS is the office targets wall (needs the tenant's targets_board feature): `period` week | month | year | cycle (cycle = week → month → year, `cycleSec` each, 10–600, default 30; default month) and `layout` lanes (default: a lane per company, lines not yet trading in a 'coming up' strip) | tiles (equal grid) | race (a column per company, every line a bar). kind=SHOWCASE needs `source`: 'retail' (till products, optional `category`), 'experience' (bookable experiences, optional `experienceType` e.g. EVENT/TIMED_ENTRY), or 'whatson' (What's On — published event experiences with a session on/after today, soonest first, date on the card, scan-to-book QR, past events drop off; no filter). `intervalSec` = seconds per card (3–120, default 10); `showPrice` default true. Pass `channelId` to add the board's URL as a URL item on that channel in the same call (`duration` overrides that channel's default seconds). Returns the board plus its public `url`. Admin-grade: the session must be an admin of the tenant.",
+      "Mint a token board and optionally add it straight to a channel. kind=KPI reuses the tenant's active KPI board. kind=TARGETS is the office targets wall (needs the tenant's targets_board feature): `period` week | month | year | cycle (cycle = week → month → year, `cycleSec` each, 10–600, default 30; default month) and `layout` lanes (default: a lane per company, lines not yet trading in a 'coming up' strip) | tiles (equal grid) | race (a column per company, every line a bar). kind=SHOWCASE needs `source`: 'retail' (till products, optional `category`), 'experience' (bookable experiences, optional `experienceType` e.g. EVENT/TIMED_ENTRY), or 'whatson' (What's On — published event experiences with a session on/after today, soonest first, date on the card, scan-to-book QR, past events drop off; optional `maxItems` = only the next N events (1–50) and `withinDays` = only events whose next date is within N days (1–366)). `intervalSec` = seconds per card (3–120, default 10); `showPrice` default true. Pass `channelId` to add the board's URL as a URL item on that channel in the same call (`duration` sets that item's seconds; omitted, a cycling board gets one full loop — the API's `loopSec` — and anything else the channel default). Returns the board plus its public `url`. Admin-grade: the session must be an admin of the tenant.",
     inputSchema: {
       type: "object",
       required: ["kind"],
@@ -389,6 +389,8 @@ export const displayTools = [
         experienceType: { type: "string", description: "SHOWCASE experience: ExperienceType enum value" },
         ids: { type: "array", items: { type: "string" }, description: "SHOWCASE: hand-picked product/experience ids" },
         intervalSec: { type: "number", description: "Seconds per card, 3–120 (default 10)" },
+        maxItems: { type: "integer", minimum: 1, maximum: 50, description: "SHOWCASE whatson only: show only the next N events" },
+        withinDays: { type: "integer", minimum: 1, maximum: 366, description: "SHOWCASE whatson only: only events whose next date is within N days" },
         showPrice: { type: "boolean", description: "Show prices on cards (default true)" },
         name: { type: "string", description: "Board name; defaults per kind/source" },
         channelId: { type: "number", description: "Also add the board to this channel as a URL item" },
@@ -396,7 +398,7 @@ export const displayTools = [
         tenant: TENANT_PROP,
       },
     },
-    async handler({ kind, period, cycleSec, layout, source, category, experienceType, ids, intervalSec, showPrice, name, channelId, duration, tenant } = {}) {
+    async handler({ kind, period, cycleSec, layout, source, category, experienceType, ids, intervalSec, showPrice, maxItems, withinDays, name, channelId, duration, tenant } = {}) {
       if (kind === "SHOWCASE" && !source) throw new Error("source is required for a SHOWCASE board: retail, experience or whatson");
       const body = { kind };
       if (name) body.name = name;
@@ -413,6 +415,8 @@ export const displayTools = [
         if (Array.isArray(ids) && ids.length) body.config.ids = ids;
         if (intervalSec !== undefined) body.config.intervalSec = intervalSec;
         if (showPrice !== undefined) body.config.showPrice = showPrice;
+        if (maxItems !== undefined) body.config.maxItems = maxItems;
+        if (withinDays !== undefined) body.config.withinDays = withinDays;
       }
       const res = await api(tenant)("/boards", { method: "POST", body: JSON.stringify(body) });
       if (!res.ok) throw new Error(await res.text());
@@ -422,7 +426,7 @@ export const displayTools = [
       if (channelId) {
         const add = await api(tenant)(`/displays/channels/${channelId}/items`, {
           method: "POST",
-          body: JSON.stringify({ content_type: "URL", content_url: url, ...(duration ? { duration } : {}) }),
+          body: JSON.stringify({ content_type: "URL", content_url: url, ...((duration ?? board.loopSec) ? { duration: duration ?? board.loopSec } : {}) }),
         });
         if (!add.ok) throw new Error(`Board ${board.id} minted (${url}) but adding it to channel ${channelId} failed: ${await add.text()}`);
         item = await add.json();

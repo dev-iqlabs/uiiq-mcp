@@ -578,7 +578,7 @@ Not exposed on purpose: the platform-to-platform callbacks under `/api/platform/
 | `uiiq_display_projects` | List the tenant's IQEX projects available to add to a channel (the PROJECT picker). |
 | `uiiq_display_videos` | List the tenant's Bunny Stream signage videos (the picker behind the channel editor), each with its `ready` flag and `embedUrl`. |
 | `uiiq_display_boards` | List token boards (KPI / SHOWCASE / TARGETS / EVENT) with their public `/board/<token>` URL, config and active flag. |
-| `uiiq_display_board_create` | Mint a token board (KPI; SHOWCASE of retail, experiences or What's On; TARGETS with `period` and `layout`) and optionally add it to a channel in the same call. |
+| `uiiq_display_board_create` | Mint a token board (KPI; SHOWCASE of retail, experiences or What's On, with `maxItems`/`withinDays` for What's On; TARGETS with `period` and `layout`) and optionally add it to a channel in the same call, held for one full loop unless `duration` is given. |
 | `uiiq_display_board_revoke` | Revoke a board so its URL goes dark on the next poll, or re-enable it. |
 | `uiiq_display_board_layout` | Switch a TARGETS board between `lanes`, `tiles` and `race`; keeps its period and lines; the screen picks it up within a minute. |
 | `uiiq_display_board_delete` | Delete a board for good; refused (409, with the channel names) while a channel still plays it, and 503 if IQEX can't be reached to check. |
