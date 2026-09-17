@@ -81,7 +81,7 @@ export const tillTools = [
   },
   {
     name: "uiiq_till_payment_intent",
-    description: "Create a card PaymentIntent on the tenant's connected account. lines = [{source,amountPence,costPence?}] for per-source fees.",
+    description: "Create a card PaymentIntent on the tenant's connected account. lines = [{source,amountPence,costPence?}] for per-source fees: lines are optional; when sent, every line needs source OWN or RESELL and a whole positive amountPence (costPence optional, whole), at most 500 lines, and the lines must add up exactly to amountPence or the server answers 400. The platform fee never goes below the till rate on the whole charge.",
     inputSchema: {
       type: "object",
       required: ["amountPence"],
@@ -89,7 +89,20 @@ export const tillTools = [
         amountPence: { type: "number" },
         paymentMethodTypes: { type: "array", items: { type: "string" } },
         description: { type: "string" },
-        lines: { type: "array", items: { type: "object" } },
+        lines: {
+          type: "array",
+          maxItems: 500,
+          description: "Optional. Must add up exactly to amountPence.",
+          items: {
+            type: "object",
+            required: ["source", "amountPence"],
+            properties: {
+              source: { type: "string", enum: ["OWN", "RESELL"] },
+              amountPence: { type: "integer", minimum: 1 },
+              costPence: { type: "integer", minimum: 0 },
+            },
+          },
+        },
       },
     },
     async handler({ amountPence, paymentMethodTypes, description, lines }) {
