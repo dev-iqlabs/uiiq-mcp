@@ -54,18 +54,61 @@ export const campaignTools = [
             TELL_ME_MORE: { type: "string" },
           },
         },
+        prospectAudience: {
+          type: "object",
+          description:
+            "Send to the CRM pipeline instead of the contact list: businesses matching these filters, one email each " +
+            "(main contact, else the business address; do-not-email and anyone emailed from the CRM in the last 3 days " +
+            "are left out). Each send lands on the prospect's journey. GATED: the tenant needs the `prospect_campaigns` " +
+            "feature ticked or the send is refused — preview with uiiq_campaign_prospect_audience first. " +
+            "Stages default to the open ones; includeClosed adds WON and LOST.",
+          properties: {
+            stages: { type: "array", items: { type: "string", enum: ["NEW", "CONTACTED", "QUALIFIED", "QUOTED", "WON", "LOST"] } },
+            category: { type: "string", description: "Exact category, case-insensitive" },
+            town: { type: "string", description: "Town contains" },
+            tags: { type: "array", items: { type: "string" }, description: "Every one of these tags" },
+            includeClosed: { type: "boolean" },
+            type: { type: "string", enum: ["PROSPECT", "CUSTOMER", "SUPPLIER", "PARTNER"], description: "Defaults to PROSPECT" },
+          },
+        },
         tenant: TENANT_PROP,
       },
     },
-    async handler({ name, subject, templateId, segmentId, responseButtons, responseLabels, tenant }) {
+    async handler({ name, subject, templateId, segmentId, responseButtons, responseLabels, prospectAudience, tenant }) {
       const res = await api(tenant)("/campaigns", {
         method: "POST",
         body: JSON.stringify({
           name, subject, templateId, segmentId,
           ...(responseButtons !== undefined ? { responseButtons } : {}),
           ...(responseLabels ? { responseLabels } : {}),
+          ...(prospectAudience ? { sendTo: "prospects", sendToProspects: prospectAudience } : {}),
         }),
       });
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    },
+  },
+  {
+    name: "uiiq_campaign_prospect_audience",
+    description:
+      "Preview who a campaign to prospects would go to — nothing is sent or created. Returns `enabled` (whether the " +
+      "tenant's `prospect_campaigns` feature is ticked), how many businesses matched, how many would be sent, what was " +
+      "left out (asked not to be emailed / no address / emailed in the last 3 days / duplicate address) and a sample. " +
+      "Same filters as uiiq_campaign_create's prospectAudience.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        stages: { type: "array", items: { type: "string", enum: ["NEW", "CONTACTED", "QUALIFIED", "QUOTED", "WON", "LOST"] } },
+        category: { type: "string" },
+        town: { type: "string" },
+        tags: { type: "array", items: { type: "string" } },
+        includeClosed: { type: "boolean" },
+        type: { type: "string", enum: ["PROSPECT", "CUSTOMER", "SUPPLIER", "PARTNER"] },
+        tenant: TENANT_PROP,
+      },
+    },
+    async handler({ tenant, ...spec } = {}) {
+      const res = await api(tenant)("/campaigns/prospect-audience", { method: "POST", body: JSON.stringify(spec) });
       if (!res.ok) throw new Error(await res.text());
       return res.json();
     },

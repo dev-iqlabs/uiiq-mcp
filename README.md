@@ -316,7 +316,8 @@ Not exposed on purpose: the platform-to-platform callbacks under `/api/platform/
 | Tool | What it does |
 | --- | --- |
 | `uiiq_campaign_get` | Get an email campaign by ID. |
-| `uiiq_campaign_create` | Create a new email campaign — optionally with the three reply buttons (`responseButtons`, `responseLabels`). |
+| `uiiq_campaign_create` | Create a new email campaign — optionally with the three reply buttons (`responseButtons`, `responseLabels`), or to the CRM pipeline (`prospectAudience`; gated on the `prospect_campaigns` feature). |
+| `uiiq_campaign_prospect_audience` | Preview who a campaign to prospects would go to: matched, sendable, what was left out and why, whether the feature is on. Nothing is sent. |
 | `uiiq_campaign_responses` | Who pressed which reply button on a campaign: counts, one row per recipient with their matched prospect, scanner presses ignored. |
 | `uiiq_campaign_duplicate` | Duplicate an existing campaign. |
 | `uiiq_campaign_test_send` | Send a test email for a campaign to a given address. |
