@@ -30,6 +30,17 @@ async function multipart(form) {
   };
 }
 
+/** The body POST /api/media/reframe takes: exactly one source, and only the options given. */
+export function reframeBody({ assetId, url, targets, method, padColor, force } = {}) {
+  if ((assetId == null) === !url) throw new Error("Provide assetId or url (one of them).");
+  const body = { source: assetId != null ? { assetId: Number(assetId) } : { url } };
+  if (targets?.length) body.targets = targets;
+  if (method) body.method = method;
+  if (padColor) body.padColor = padColor;
+  if (force) body.force = true;
+  return body;
+}
+
 export const mediaTools = [
   {
     name: "uiiq_media_list",
@@ -63,10 +74,19 @@ export const mediaTools = [
         url: { type: "string", description: "http(s) URL to fetch and upload. One of path or url is required." },
         name: { type: "string", description: "Display name for the asset. Defaults to the file name." },
         category: { type: "string", description: "Asset category, e.g. 'library' (default) or 'sting'." },
+        reframe: {
+          type: "object",
+          description: "Images only. Reframe straight after upload (by the new asset's id), so one call also yields the shapes. Same options as uiiq_media_reframe; pass {} for the tenant's defaults. The upload stands even if the reframe fails; the reframe result or error comes back beside it.",
+          properties: {
+            targets: { type: "array", items: { type: "string", enum: ["square", "landscape", "og", "thumb"] } },
+            method: { type: "string", enum: ["pad", "crop"] },
+            padColor: { type: "string", description: "#rrggbb" },
+          },
+        },
         tenant: TENANT_PROP,
       },
     },
-    async handler({ path, url, name, category, tenant } = {}) {
+    async handler({ path, url, name, category, reframe, tenant } = {}) {
       if (!path && !url) throw new Error("Provide a local `path` or a `url` to upload.");
       if (path && url) throw new Error("Provide `path` or `url`, not both.");
 
@@ -104,6 +124,66 @@ export const mediaTools = [
         headers: { "Content-Type": contentType },
       });
       if (!res.ok) throw new Error(await res.text());
+      const asset = await res.json();
+
+      if (reframe && mime.startsWith("image/") && asset?.id) {
+        // The upload is done and stands on its own; a reframe that fails is
+        // reported beside it, not allowed to fail the upload.
+        const rres = await api(tenant)("/media/reframe", {
+          method: "POST",
+          body: JSON.stringify(reframeBody({ assetId: asset.id, ...reframe })),
+        });
+        asset.reframe = rres.ok ? await rres.json() : { status: rres.status, error: await rres.text() };
+      }
+      return asset;
+    },
+  },
+  {
+    name: "uiiq_media_reframe",
+    description:
+      "Make ready-sized copies of one of the workspace's OWN images: square (1080, cards), landscape (1600×900, heroes), og (1200×630, link previews) and thumb (480). " +
+      "method 'pad' (default) keeps the whole image and fills the new space with a colour from its own edges (or a blurred backdrop when the edges are busy) — nothing on a poster is cut; 'crop' cuts to the shape (for photographs). No AI, no credits; never upscales; JPEG (PNG with transparency) plus WebP. " +
+      "Source: a Media Vault image by assetId (checked against this workspace's IQEX organisation), or by url an image uploaded to UIIQ in this workspace's own folder. Anything else — another host, another workspace's file, an IQEX URL given as a url — is refused (403). " +
+      "Shapes that already exist are returned, not remade, unless force. Owner or admin only; 30 reframes an hour per workspace (429 beyond). A call has a ~24 s budget: shapes not started in time come back in `unfinished` — call again for those. " +
+      "Unreadable, animated, over 25 MB / 50 MP, or longer than 1:10 images are refused (422). The feed at /api/v1/experiences shows the shapes as images.square etc.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        assetId: { type: "number", description: "Media Vault image id. One of assetId or url." },
+        url: { type: "string", description: "https URL of an image uploaded to UIIQ in this workspace's folder. One of assetId or url." },
+        targets: { type: "array", items: { type: "string", enum: ["square", "landscape", "og", "thumb"] }, description: "Which shapes. Default: the workspace's setting, else all four." },
+        method: { type: "string", enum: ["pad", "crop"], description: "Default: the workspace's setting, else pad." },
+        padColor: { type: "string", description: "pad only: #rrggbb instead of the sampled colour." },
+        force: { type: "boolean", description: "Remake shapes that already exist (overwrites them)." },
+        tenant: TENANT_PROP,
+      },
+    },
+    async handler({ assetId, url, targets, method, padColor, force, tenant } = {}) {
+      const res = await api(tenant)("/media/reframe", {
+        method: "POST",
+        body: JSON.stringify(reframeBody({ assetId, url, targets, method, padColor, force })),
+      });
+      if (!res.ok) throw new Error(`${res.status}: ${await res.text()}`);
+      return res.json();
+    },
+  },
+  {
+    name: "uiiq_media_derivatives",
+    description:
+      "The ready-sized copies already made for one image (target, url, webpUrl, width, height, bytes, format, status, method, untouched), from stored records only — nothing is fetched or made. Check here before reframing again. Give the same assetId or url you reframed with.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        assetId: { type: "number", description: "Media Vault image id. One of assetId or url." },
+        url: { type: "string", description: "The image URL that was reframed. One of assetId or url." },
+        tenant: TENANT_PROP,
+      },
+    },
+    async handler({ assetId, url, tenant } = {}) {
+      if ((assetId == null) === !url) throw new Error("Provide assetId or url (one of them).");
+      const qs = new URLSearchParams(assetId != null ? { assetId: String(assetId) } : { url });
+      const res = await api(tenant)(`/media/derivatives?${qs}`);
+      if (!res.ok) throw new Error(`${res.status}: ${await res.text()}`);
       return res.json();
     },
   },

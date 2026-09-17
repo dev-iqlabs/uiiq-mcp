@@ -424,7 +424,9 @@ Not exposed on purpose: the platform-to-platform callbacks under `/api/platform/
 | Tool | What it does |
 | --- | --- |
 | `uiiq_media_list` | List the tenant's Media Vault (images and video, stored in IQEX). |
-| `uiiq_media_upload` | Upload an image or video into the tenant's Media Vault from a local file path or a URL. |
+| `uiiq_media_upload` | Upload an image or video into the tenant's Media Vault from a local file path or a URL; `reframe` makes the shapes straight after. |
+| `uiiq_media_reframe` | Make square / landscape / og / thumb copies of one of the workspace's own images (by assetId, or url of its own UIIQ upload); pad (default) or crop, no AI. Owner/admin, 30/h, `unfinished` when out of time. |
+| `uiiq_media_derivatives` | The ready-sized copies already made for one image, from stored records only. |
 | `uiiq_media_generate` | Generate an image or video with AI into the tenant's Media Vault (IQEX does the generating and charges the org's credits; the result appears in… |
 | `uiiq_media_delete` | Delete an asset from the tenant's Media Vault permanently — cannot be undone. |
 
@@ -681,4 +683,4 @@ Every product's target against its actual, by week, month or fiscal year, colour
 | `uiiq_workflow_instances` | List active UIIQ workflow instances. |
 | `uiiq_workflow_trigger` | Trigger a new UIIQ workflow instance from a template. |
 
-357 tools.
+359 tools.
