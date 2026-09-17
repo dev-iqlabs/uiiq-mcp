@@ -119,7 +119,7 @@ Not exposed on purpose: the platform-to-platform callbacks under `/api/platform/
 | `uiiq_tenant_usage` | Get usage stats for a UIIQ tenant (sends, contacts, API calls). |
 | `uiiq_tenant_rename` | Change a UIIQ tenant's slug. |
 | `uiiq_tenant_delete` | Delete or restore a UIIQ tenant. |
-| `uiiq_tenant_settings_update` | Update a tenant's own settings — patch semantics, only the fields you send change. |
+| `uiiq_tenant_settings_update` | Update a tenant's own settings — patch semantics, only the fields you send change. Includes `crmFollowUpBoardId`, where a reply-button press raises its task. |
 
 ### Organisations — `src/tools/org.js`
 
@@ -143,7 +143,7 @@ Not exposed on purpose: the platform-to-platform callbacks under `/api/platform/
 
 | Tool | What it does |
 | --- | --- |
-| `uiiq_prospect_list` | List a tenant's prospects (or suppliers / partners / business customers) with pipeline stage counts. |
+| `uiiq_prospect_list` | List a tenant's prospects (or suppliers / partners / business customers) with pipeline stage counts; `responded` narrows to a latest reply-button answer. |
 | `uiiq_prospect_get` | Get one business — full record including its people and any custom fields from import. |
 | `uiiq_prospect_create` | Add a prospect (or supplier / partner) by hand. |
 | `uiiq_prospect_update` | Update a business — most often to move it along the pipeline: { stage: 'CONTACTED' }. |
@@ -316,7 +316,8 @@ Not exposed on purpose: the platform-to-platform callbacks under `/api/platform/
 | Tool | What it does |
 | --- | --- |
 | `uiiq_campaign_get` | Get an email campaign by ID. |
-| `uiiq_campaign_create` | Create a new email campaign. |
+| `uiiq_campaign_create` | Create a new email campaign — optionally with the three reply buttons (`responseButtons`, `responseLabels`). |
+| `uiiq_campaign_responses` | Who pressed which reply button on a campaign: counts, one row per recipient with their matched prospect, scanner presses ignored. |
 | `uiiq_campaign_duplicate` | Duplicate an existing campaign. |
 | `uiiq_campaign_test_send` | Send a test email for a campaign to a given address. |
 | `uiiq_segment_list` | List contact segments. |

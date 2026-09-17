@@ -37,19 +37,28 @@ export const crmTools = [
         category: { type: "string", description: "Exact category, case-insensitive — the dropdown filter, as opposed to q's contains-match" },
         archived: { type: "boolean", description: "Show archived instead of live (default false)" },
         limit: { type: "number", description: "Max rows, up to 1000 (default 200)" },
+        responded: {
+          type: "string",
+          enum: ["ANY", "INTERESTED", "NOT_INTERESTED", "TELL_ME_MORE"],
+          description:
+            "Only businesses whose latest email reply-button press was this (or ANY press). " +
+            "The response's `latestResponses` maps business id → { choice, at } for the rows returned, " +
+            "and `responseCounts` counts businesses by latest answer.",
+        },
         tenant: TENANT_PROP,
       },
     },
-    async handler({ type = "PROSPECT", stage, q, category, archived, limit, tenant } = {}) {
+    async handler({ type = "PROSPECT", stage, q, category, archived, limit, responded, tenant } = {}) {
       const params = new URLSearchParams({ type });
       if (stage) params.set("stage", stage);
       if (q) params.set("q", q);
       if (category) params.set("category", category);
       if (archived) params.set("archived", "1");
       if (limit != null) params.set("limit", String(limit));
+      if (responded) params.set("responded", responded);
       const res = await api(tenant)(`/businesses?${params}`);
       if (!res.ok) throw new Error(await res.text());
-      return res.json(); // { businesses, stageCounts, categories }
+      return res.json(); // { businesses, stageCounts, categories, latestResponses, responseCounts }
     },
   },
 
