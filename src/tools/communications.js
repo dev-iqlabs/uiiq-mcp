@@ -82,7 +82,7 @@ export const communicationsTools = [
         tenant: TENANT_PROP,
       },
     },
-    async handler(body) {
+    async handler({ tenant, ...body } = {}) {
       const res = await api(tenant)("/communications/press-releases", {
         method: "POST",
         body: JSON.stringify(body),
@@ -225,7 +225,7 @@ export const communicationsTools = [
         tenant: TENANT_PROP,
       },
     },
-    async handler(body) {
+    async handler({ tenant, ...body } = {}) {
       const res = await api(tenant)("/communications/journalist-contacts", {
         method: "POST",
         body: JSON.stringify(body),
