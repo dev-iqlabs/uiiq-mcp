@@ -34,7 +34,7 @@ UIIQ is one subscription whose modules are grouped as **Sell**, **Grow** and **R
 | Social and press | `uiiq_social_*`, `uiiq_press_release_*`, `uiiq_journalist_contact_*` | Schedule posts from templates, draft, redraft, approve and distribute press releases |
 | Briefs | `uiiq_grow_brief_morning*`, `uiiq_grow_campaign_brief_generate` | Read or generate the morning brief, turn one campaign brief into channel copy |
 | SEO and Google | `uiiq_seo_*`, `uiiq_google_*` | Run audits, apply fixes, check PageSpeed, read Ads, Analytics and Search Console |
-| Pricing leads | `uiiq_pricing_leads_list` | See who used the public pricing calculator |
+| Pricing | `uiiq_price_list`, `uiiq_pricing_leads_list` | Page through price items by type, see who used the public pricing calculator |
 | Website connect | `uiiq_iqlink_claim`, `uiiq_tenant_api_key` | Pair a connected site and issue its Connect key |
 
 ### Run — operations, finance, people and knowledge
@@ -364,6 +364,7 @@ Not exposed on purpose: the platform-to-platform callbacks under `/api/platform/
 
 | Tool | What it does |
 | --- | --- |
+| `uiiq_price_list` | List price items 25 per page, optionally one type (services, materials & retail, tickets…). |
 | `uiiq_pricing_leads_list` | List recent leads from the public pricing calculator (newest first, up to 200). |
 
 ### SEO — `src/tools/seo.js`
@@ -683,4 +684,4 @@ Every product's target against its actual, by week, month or fiscal year, colour
 | `uiiq_workflow_instances` | List active UIIQ workflow instances. |
 | `uiiq_workflow_trigger` | Trigger a new UIIQ workflow instance from a template. |
 
-359 tools.
+360 tools.
