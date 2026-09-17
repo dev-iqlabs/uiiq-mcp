@@ -151,7 +151,7 @@ export const sellTools = [
         tenant: TENANT_PROP,
       }
     },
-    async handler(args) {
+    async handler({ tenant, ...args } = {}) {
       const res = await api(tenant)("/gift-cards", {
         method: "POST",
         body: JSON.stringify(args),
@@ -181,7 +181,7 @@ export const sellTools = [
         tenant: TENANT_PROP,
       }
     },
-    async handler(args) {
+    async handler({ tenant, ...args } = {}) {
       const res = await api(tenant)("/gift-cards/bulk", {
         method: "POST",
         body: JSON.stringify(args),
@@ -283,7 +283,7 @@ export const sellTools = [
         tenant: TENANT_PROP,
       }
     },
-    async handler(args) {
+    async handler({ tenant, ...args } = {}) {
       const res = await api(tenant)("/gift-cards/voucher-template", {
         method: "PATCH",
         body: JSON.stringify(args),
@@ -916,7 +916,7 @@ export const sellTools = [
         tenant: TENANT_PROP,
       }
     },
-    async handler(args) {
+    async handler({ tenant, ...args } = {}) {
       const body = {};
       for (const k of ["customerName", "customerEmail", "customerPhone", "intervalDays", "nextVisitDate", "windowStart", "windowEnd", "address", "lat", "lng", "defaultResourceId", "serviceAreaId", "experienceId", "notes"]) {
         if (args[k] !== undefined) body[k] = args[k];

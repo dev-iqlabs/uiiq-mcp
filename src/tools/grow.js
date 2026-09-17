@@ -43,7 +43,7 @@ export const growTools = [
         tenant: TENANT_PROP,
       }
     },
-    async handler(body) {
+    async handler({ tenant, ...body } = {}) {
       const res = await api(tenant)("/ads/campaign-brief", {
         method: "POST",
         body: JSON.stringify(body),

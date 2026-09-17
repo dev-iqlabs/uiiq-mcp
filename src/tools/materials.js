@@ -54,7 +54,7 @@ export const materialsTools = [
         tenant: TENANT_PROP,
       },
     },
-    async handler(body) {
+    async handler({ tenant, ...body } = {}) {
       const res = await api(tenant)("/materials", { method: "POST", body: JSON.stringify(body) });
       if (!res.ok) throw new Error(await res.text());
       return res.json();
