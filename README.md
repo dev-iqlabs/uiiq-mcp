@@ -540,7 +540,7 @@ Not exposed on purpose: the platform-to-platform callbacks under `/api/platform/
 | `uiiq_till_catalog` | List the till catalog (device-scoped). |
 | `uiiq_till_ping` | Till device heartbeat — confirm the device is registered and active. |
 | `uiiq_till_verify_pin` | Start a staff session with a PIN. |
-| `uiiq_till_payment_intent` | Create a card PaymentIntent on the tenant's connected account. |
+| `uiiq_till_payment_intent` | Create a card PaymentIntent on the tenant's connected account; optional `lines` must each have source OWN/RESELL and whole pence, and add up to `amountPence` (max 500). |
 | `uiiq_till_sale` | Ring up a till sale. |
 | `uiiq_till_iqplant_plan_code` | The till scanned an IQPlant garden-plan code (the QR in the customer's email / on their phone). |
 
