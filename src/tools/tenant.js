@@ -202,6 +202,14 @@ export const tenantTools = [
         vatNumber: { type: "string" }, companyRegNumber: { type: "string" },
         socialFacebook: { type: "string" }, socialInstagram: { type: "string" }, socialTwitter: { type: "string" },
         socialLinkedin: { type: "string" }, socialTiktok: { type: "string" }, socialYoutube: { type: "string" },
+        crmFollowUpBoardId: {
+          type: "string",
+          description:
+            "Task board (uiiq_board_list) where an email reply button press — Interested or Tell me more — raises its " +
+            "follow-up task, in the board's first column, assigned to the prospect's owner or else the sender. " +
+            "Must be one of the tenant's own boards. Empty string = none: the press still lands on the prospect's " +
+            "journey with a follow-up due today.",
+        },
         tenant: { type: "string", description: "Tenant id, slug or exact name to act in. Omit for your own tenant." },
       },
     },
