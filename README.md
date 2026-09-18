@@ -34,7 +34,7 @@ UIIQ is one subscription whose modules are grouped as **Sell**, **Grow** and **R
 | Social and press | `uiiq_social_*`, `uiiq_press_release_*`, `uiiq_journalist_contact_*` | Schedule posts from templates, draft, redraft, approve and distribute press releases |
 | Briefs | `uiiq_grow_brief_morning*`, `uiiq_grow_campaign_brief_generate` | Read or generate the morning brief, turn one campaign brief into channel copy |
 | SEO and Google | `uiiq_seo_*`, `uiiq_google_*` | Run audits, apply fixes, check PageSpeed, read Ads, Analytics and Search Console |
-| Pricing leads | `uiiq_pricing_leads_list` | See who used the public pricing calculator |
+| Pricing | `uiiq_price_list`, `uiiq_pricing_leads_list` | Page through price items by type, see who used the public pricing calculator |
 | Website connect | `uiiq_iqlink_claim`, `uiiq_tenant_api_key` | Pair a connected site and issue its Connect key |
 
 ### Run — operations, finance, people and knowledge
@@ -119,7 +119,7 @@ Not exposed on purpose: the platform-to-platform callbacks under `/api/platform/
 | `uiiq_tenant_usage` | Get usage stats for a UIIQ tenant (sends, contacts, API calls). |
 | `uiiq_tenant_rename` | Change a UIIQ tenant's slug. |
 | `uiiq_tenant_delete` | Delete or restore a UIIQ tenant. |
-| `uiiq_tenant_settings_update` | Update a tenant's own settings — patch semantics, only the fields you send change. |
+| `uiiq_tenant_settings_update` | Update a tenant's own settings — patch semantics, only the fields you send change. Includes `crmFollowUpBoardId`, where a reply-button press raises its task. |
 
 ### Organisations — `src/tools/org.js`
 
@@ -143,7 +143,7 @@ Not exposed on purpose: the platform-to-platform callbacks under `/api/platform/
 
 | Tool | What it does |
 | --- | --- |
-| `uiiq_prospect_list` | List a tenant's prospects (or suppliers / partners / business customers) with pipeline stage counts. |
+| `uiiq_prospect_list` | List a tenant's prospects (or suppliers / partners / business customers) with pipeline stage counts; `responded` narrows to a latest reply-button answer. |
 | `uiiq_prospect_get` | Get one business — full record including its people and any custom fields from import. |
 | `uiiq_prospect_create` | Add a prospect (or supplier / partner) by hand. |
 | `uiiq_prospect_update` | Update a business — most often to move it along the pipeline: { stage: 'CONTACTED' }. |
@@ -316,7 +316,9 @@ Not exposed on purpose: the platform-to-platform callbacks under `/api/platform/
 | Tool | What it does |
 | --- | --- |
 | `uiiq_campaign_get` | Get an email campaign by ID. |
-| `uiiq_campaign_create` | Create a new email campaign. |
+| `uiiq_campaign_create` | Create a new email campaign — optionally with the three reply buttons (`responseButtons`, `responseLabels`), or to the CRM pipeline (`prospectAudience`; gated on the `prospect_campaigns` feature). |
+| `uiiq_campaign_prospect_audience` | Preview who a campaign to prospects would go to: matched, sendable, what was left out and why, whether the feature is on. Nothing is sent. |
+| `uiiq_campaign_responses` | Who pressed which reply button on a campaign: counts, one row per recipient with their matched prospect, scanner presses ignored. |
 | `uiiq_campaign_duplicate` | Duplicate an existing campaign. |
 | `uiiq_campaign_test_send` | Send a test email for a campaign to a given address. |
 | `uiiq_segment_list` | List contact segments. |
@@ -364,6 +366,7 @@ Not exposed on purpose: the platform-to-platform callbacks under `/api/platform/
 
 | Tool | What it does |
 | --- | --- |
+| `uiiq_price_list` | List price items 25 per page, optionally one type (services, materials & retail, tickets…). |
 | `uiiq_pricing_leads_list` | List recent leads from the public pricing calculator (newest first, up to 200). |
 
 ### SEO — `src/tools/seo.js`
@@ -683,4 +686,4 @@ Every product's target against its actual, by week, month or fiscal year, colour
 | `uiiq_workflow_instances` | List active UIIQ workflow instances. |
 | `uiiq_workflow_trigger` | Trigger a new UIIQ workflow instance from a template. |
 
-359 tools.
+360 tools.
