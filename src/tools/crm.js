@@ -132,6 +132,21 @@ export const crmTools = [
         customFields: { type: "object", description: "Replaces the whole custom-fields object" },
         archived: { type: "boolean", description: "true = soft-delete (drops out of every list, keeps history); false = restore" },
         ownerUserId: { type: "string", description: "User id who owns the relationship; empty string clears it" },
+        legalForm: {
+          type: "string",
+          enum: ["LTD", "PLC", "LLP", "SCOTTISH_PARTNERSHIP", "PUBLIC_BODY", "OTHER_CORPORATE", "SOLE_TRADER", "PARTNERSHIP", "UNKNOWN"],
+          description:
+            "The legal form. Campaigns to prospects only email the first six (corporate subscribers under PECR); " +
+            "a sole trader, a partnership (England/Wales/NI) or UNKNOWN is left out. Who set it and when are recorded.",
+        },
+        companyNumber: { type: "string", description: "Companies House number, e.g. 01234567 or SC123456; empty string clears it" },
+        doNotEmail: {
+          type: "boolean",
+          description:
+            "true = they asked not to be emailed (outreach and campaigns refuse; their addresses go on the do-not-email list). " +
+            "false overrides their no: owner/admin only, with doNotEmailReason (logged on the journey).",
+        },
+        doNotEmailReason: { type: "string", description: "Why they can be emailed again — required with doNotEmail: false" },
         primaryPerson: {
           type: "object",
           description: "Upserts the isPrimary contact — { name (required), role?, email?, phone? }. Never touches other people on the business",

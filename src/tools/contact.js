@@ -64,7 +64,13 @@ export const contactTools = [
         email: { type: "string" },
         phone: { type: "string" },
         tags: { type: "array", items: { type: "string" }, description: "Replaces the whole tag list" },
-        subscribed: { type: "boolean", description: "Email marketing opt-in" },
+        subscribed: {
+          type: "boolean",
+          description:
+            "Email marketing opt-in. false puts their address on the workspace's do-not-email list. " +
+            "true for someone not subscribed overrides their no: owner/admin only, and subscribedReason is required (logged).",
+        },
+        subscribedReason: { type: "string", description: "Why they can be emailed again — required when setting subscribed true on someone not subscribed" },
         smsSubscribed: { type: "boolean", description: "SMS marketing opt-in" },
         archived: { type: "boolean" },
         tenant: TENANT_PROP,

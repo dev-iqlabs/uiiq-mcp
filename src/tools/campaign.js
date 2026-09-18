@@ -93,7 +93,7 @@ export const campaignTools = [
     description:
       "Preview who a campaign to prospects would go to — nothing is sent or created. Returns `enabled` (whether the " +
       "tenant's `prospect_campaigns` feature is ticked), how many businesses matched, how many would be sent, what was " +
-      "left out (asked not to be emailed / no address / emailed in the last 3 days / duplicate address) and a sample. " +
+      "left out (not marked as a company — sole traders, partnerships and unmarked businesses are never cold-emailed / asked not to be emailed / no address / emailed in the last 3 days / duplicate address) and a sample. " +
       "Same filters as uiiq_campaign_create's prospectAudience.",
     inputSchema: {
       type: "object",
