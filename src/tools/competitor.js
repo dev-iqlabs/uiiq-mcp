@@ -116,4 +116,48 @@ export const competitorTools = [
       return res.json();
     },
   },
+  {
+    name: "uiiq_competitor_research",
+    description:
+      "A competitor's research: run history (each source as 'N found' or 'could not look' with the reason — an unreadable source is null, never zero), what changed since the previous run, the ads from the latest run that could read them, and the repeat cadence. Costs nothing.",
+    inputSchema: { type: "object", required: ["id"], properties: { id: { type: "string" }, tenant: TENANT_PROP } },
+    async handler({ id, tenant }) {
+      const res = await api(tenant)(`/ads/competitors/${encodeURIComponent(id)}/research`);
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    },
+  },
+  {
+    name: "uiiq_competitor_research_run",
+    description:
+      "Research a competitor now on IQEX (ads, Google results, keywords). SPENDS the tenant's IQEX credits — one research run per call, charged even when every source was unavailable. Takes up to 30s; `pending: true` means it outlived the wait and will finish on its own — read uiiq_competitor_research in a minute rather than running it again.",
+    inputSchema: { type: "object", required: ["id"], properties: { id: { type: "string" }, tenant: TENANT_PROP } },
+    async handler({ id, tenant }) {
+      const res = await api(tenant)(`/ads/competitors/${encodeURIComponent(id)}/research`, { method: "POST" });
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    },
+  },
+  {
+    name: "uiiq_competitor_research_schedule",
+    description:
+      "How often IQEX re-researches a competitor on its own: WEEKLY, MONTHLY, or OFF. Every scheduled run spends credits like a manual one.",
+    inputSchema: {
+      type: "object",
+      required: ["id", "cadence"],
+      properties: {
+        id: { type: "string" },
+        cadence: { type: "string", enum: ["WEEKLY", "MONTHLY", "OFF"] },
+        tenant: TENANT_PROP,
+      },
+    },
+    async handler({ id, cadence, tenant }) {
+      const res = await api(tenant)(`/ads/competitors/${encodeURIComponent(id)}/research/schedule`, {
+        method: "PUT",
+        body: JSON.stringify({ cadence: cadence === "OFF" ? null : cadence }),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    },
+  },
 ];
