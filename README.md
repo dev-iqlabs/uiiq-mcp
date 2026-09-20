@@ -389,6 +389,9 @@ Dashboard → Ads → Competitors. Needs the `ads_search` feature and the ads ti
 | `uiiq_competitor_add` | Track a competitor from a name and/or domains, with optional priority, market, Facebook Page ID, search word, socials and notes. A domain already tracked adds to its existing competitor. |
 | `uiiq_competitor_update` | Change the profile. Only sent fields change; `domains` replaces the list; `clearMetaPageId` removes the Page ID. |
 | `uiiq_competitor_remove` | Stop tracking a competitor and all of its domains. |
+| `uiiq_competitor_research` | Run history with each source as found / could not look (and why), what changed since the previous run, the latest ads, the repeat cadence. Free. |
+| `uiiq_competitor_research_run` | Research the competitor now on IQEX. **Spends credits.** `pending: true` = still running; read the research in a minute, do not re-run. |
+| `uiiq_competitor_research_schedule` | Re-research WEEKLY, MONTHLY or OFF. Scheduled runs spend credits too. |
 
 ### Google (Ads, Analytics, Search Console) — `src/tools/google.js`
 
