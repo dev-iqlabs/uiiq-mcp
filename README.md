@@ -33,6 +33,7 @@ UIIQ is one subscription whose modules are grouped as **Sell**, **Grow** and **R
 | Email and SMS campaigns | `uiiq_campaign_*`, `uiiq_sms_*` | Create, duplicate and test-send campaigns, read SMS history |
 | Social and press | `uiiq_social_*`, `uiiq_press_release_*`, `uiiq_journalist_contact_*` | Schedule posts from templates, draft, redraft, approve and distribute press releases |
 | Briefs | `uiiq_grow_brief_morning*`, `uiiq_grow_campaign_brief_generate` | Read or generate the morning brief, turn one campaign brief into channel copy |
+| Competitors | `uiiq_competitor_*` | Track competitors as companies with several domains, a priority, market, Facebook Page ID, socials and notes; get a deep link to each one's live ads in Meta's Ad Library |
 | SEO and Google | `uiiq_seo_*`, `uiiq_google_*` | Run audits, apply fixes, check PageSpeed, read Ads, Analytics and Search Console |
 | Pricing | `uiiq_price_list`, `uiiq_pricing_leads_list` | Page through price items by type, see who used the public pricing calculator |
 | Website connect | `uiiq_iqlink_claim`, `uiiq_tenant_api_key` | Pair a connected site and issue its Connect key |
@@ -377,6 +378,17 @@ Not exposed on purpose: the platform-to-platform callbacks under `/api/platform/
 | `uiiq_seo_audit` | Run an SEO audit for a URL. |
 | `uiiq_seo_pagespeed` | Run a PageSpeed check for a URL. |
 | `uiiq_seo_fix` | Apply/suggest a fix for an SEO audit finding. |
+
+### Competitors — `src/tools/competitor.js`
+
+Dashboard → Ads → Competitors. Needs the `ads_search` feature and the ads tier that includes competitors. Every competitor comes back with `adLibrary.activeUrl` / `allUrl` — links to their ads in Meta's public Ad Library for their market — and `adLibrary.exact`, true only when a Facebook Page ID pins the link to that advertiser rather than a keyword search on the name.
+
+| Tool | What it does |
+| --- | --- |
+| `uiiq_competitor_list` | Tracked competitors, main ones first, with domains, profile and Ad Library links. |
+| `uiiq_competitor_add` | Track a competitor from a name and/or domains, with optional priority, market, Facebook Page ID, search word, socials and notes. A domain already tracked adds to its existing competitor. |
+| `uiiq_competitor_update` | Change the profile. Only sent fields change; `domains` replaces the list; `clearMetaPageId` removes the Page ID. |
+| `uiiq_competitor_remove` | Stop tracking a competitor and all of its domains. |
 
 ### Google (Ads, Analytics, Search Console) — `src/tools/google.js`
 

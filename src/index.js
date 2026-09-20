@@ -20,6 +20,7 @@ import { commerceTools }       from "./tools/commerce.js";
 import { billingTools }        from "./tools/billing.js";
 import { documentTools }       from "./tools/document.js";
 import { localityTools }       from "./tools/locality.js";
+import { competitorTools }     from "./tools/competitor.js";
 import { googleTools }         from "./tools/google.js";
 import { seoTools }            from "./tools/seo.js";
 import { smsTools }            from "./tools/sms.js";
@@ -71,6 +72,7 @@ const ALL_TOOLS = [
   ...billingTools,
   ...documentTools,
   ...localityTools,
+  ...competitorTools,
   ...googleTools,
   ...seoTools,
   ...smsTools,
