@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { createRequire } from "node:module";
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { ListToolsRequestSchema, CallToolRequestSchema } from "@modelcontextprotocol/sdk/types.js";
@@ -109,8 +110,15 @@ const ALL_TOOLS = [
 
 const TOOL_MAP = Object.fromEntries(ALL_TOOLS.map(t => [t.name, t]));
 
+// Read from package.json rather than a second copy here. This was pinned at
+// "2.26.0" while package.json had reached 2.38.0, so the version this server
+// announced over the protocol was twelve releases stale. That is not cosmetic:
+// a session asked today whether the Targets tools had shipped, read "2.26.0",
+// and concluded they had not — while all eleven of them sat in this same file.
+const { version } = createRequire(import.meta.url)("../package.json");
+
 const server = new Server(
-  { name: "uiiq-mcp", version: "2.26.0" },
+  { name: "uiiq-mcp", version },
   { capabilities: { tools: {} } }
 );
 
