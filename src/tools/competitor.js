@@ -119,7 +119,7 @@ export const competitorTools = [
   {
     name: "uiiq_competitor_research",
     description:
-      "A competitor's research: run history (each source as 'N found' or 'could not look' with the reason — an unreadable source is null, never zero), what changed since the previous run, the ads from the latest run that could read them, and the repeat cadence. Costs nothing.",
+      "A competitor's research: run history (each source as 'N found' or 'could not look' with the reason — an unreadable source is null, never zero), what changed since the previous run, the ads from the latest run that could read them, and the repeat cadence. Also `analysis`, the figures behind the ads report: when `found` is true — counts, launchesPerMonth (silent months included), runLengths, longestLive (the winners, ranked by run length, needs no reach), reach, hooks and segments (allTime vs live; `dropped` = tried and abandoned), headlines, landingHosts, languages, platforms, targeting, localisationFlags. Any section Meta or IQEX could not supply is {available: false, reason, detail}: quote `reason`, which is written for people; `detail` is IQEX's own technical text. `newerRunFailed` set means the figures are from an older run. Who paid for the ads is deliberately never included. Costs nothing.",
     inputSchema: { type: "object", required: ["id"], properties: { id: { type: "string" }, tenant: TENANT_PROP } },
     async handler({ id, tenant }) {
       const res = await api(tenant)(`/ads/competitors/${encodeURIComponent(id)}/research`);
