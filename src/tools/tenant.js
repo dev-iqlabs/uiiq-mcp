@@ -65,7 +65,8 @@ export const tenantTools = [
   },
   {
     name: "uiiq_tenant_api_key",
-    description: "Generate or retrieve the UIIQ Connect API key for a tenant (used for the uiiq-connect WordPress plugin).",
+    description:
+      "ROTATE the UIIQ Connect API key for a tenant: issues a NEW key and returns it once. The old key stops working at once, so the tenant's WordPress site (uiiq-connect), IQEX and any n8n or CLI integration go offline until each is given the new key. To LOOK UP the current key without changing it, use uiiq_tenant_api_key_get.",
     inputSchema: {
       type: "object",
       required: ["id"],
@@ -82,6 +83,21 @@ export const tenantTools = [
         if (!res.ok) throw new Error(await res.text());
         return res.json();
       });
+    }
+  },
+  {
+    name: "uiiq_tenant_api_key_get",
+    description:
+      "Look up a tenant's CURRENT UIIQ Connect API key (the key the uiiq-connect WordPress plugin, IQEX and n8n send). Read-only: nothing is rotated and nothing goes offline. Super-admin. Returns { apiKey, tenantSlug }; apiKey is null when the tenant has no key yet.",
+    inputSchema: {
+      type: "object",
+      required: ["id"],
+      properties: { id: { type: "string", description: "Tenant ID" } }
+    },
+    async handler({ id }) {
+      const res = await apiClient()(`/admin/tenants/${id}/api-key`);
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
     }
   },
   {
