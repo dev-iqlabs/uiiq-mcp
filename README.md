@@ -36,7 +36,7 @@ UIIQ is one subscription whose modules are grouped as **Sell**, **Grow** and **R
 | Competitors | `uiiq_competitor_*` | Track competitors as companies with several domains, a priority, market, Facebook Page ID, socials and notes; get a deep link to each one's live ads in Meta's Ad Library |
 | SEO and Google | `uiiq_seo_*`, `uiiq_google_*` | Run audits, apply fixes, check PageSpeed, read Ads, Analytics and Search Console |
 | Pricing | `uiiq_price_list`, `uiiq_pricing_leads_list` | Page through price items by type, see who used the public pricing calculator |
-| Website connect | `uiiq_iqlink_claim`, `uiiq_tenant_api_key` | Pair a connected site and issue its Connect key |
+| Website connect | `uiiq_iqlink_claim`, `uiiq_tenant_api_key_get`, `uiiq_tenant_api_key` | Pair a connected site, look up its Connect key, or rotate it |
 
 ### Run — operations, finance, people and knowledge
 
@@ -115,7 +115,8 @@ Not exposed on purpose: the platform-to-platform callbacks under `/api/platform/
 | `uiiq_tenant_list` | List UIIQ tenants (summary rows). |
 | `uiiq_tenant_get` | Get full detail for a UIIQ tenant by ID. |
 | `uiiq_tenant_create` | Create a new UIIQ tenant. |
-| `uiiq_tenant_api_key` | Generate or retrieve the UIIQ Connect API key for a tenant (used for the uiiq-connect WordPress plugin). |
+| `uiiq_tenant_api_key` | ROTATE a tenant's UIIQ Connect API key: a new key, returned once; the old one stops working, so the site, IQEX and n8n go offline until updated. |
+| `uiiq_tenant_api_key_get` | Look up a tenant's current UIIQ Connect API key. Read-only. |
 | `uiiq_tenant_features` | Get or set feature flags for a UIIQ tenant. |
 | `uiiq_tenant_usage` | Get usage stats for a UIIQ tenant (sends, contacts, API calls). |
 | `uiiq_tenant_rename` | Change a UIIQ tenant's slug. |

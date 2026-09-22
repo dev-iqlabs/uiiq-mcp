@@ -282,7 +282,7 @@ export const prospectTools = [
     name: "uiiq_prospect_ingest",
     description:
       "A business enquiry becomes a prospect — the route IQForms (via iqlink) and website forms feed lead generation through. Dedupes on the BUSINESS (website, then name+postcode, then exact name), so two enquiries from one venue are one prospect with two interactions. The enquiry is logged as the first (INBOUND NOTE) interaction. NO marketing Contact is created. " +
-      "Auth is the tenant's Connect key (X-API-Key) — get it with uiiq_tenant_api_key or set UIIQ_CONNECT_API_KEY; a uiiq_live_… platform key is the wrong kind and is refused.",
+      "Auth is the tenant's Connect key (X-API-Key) — look it up with uiiq_tenant_api_key_get (read-only; uiiq_tenant_api_key ROTATES it) or set UIIQ_CONNECT_API_KEY; a uiiq_live_… platform key is the wrong kind and is refused.",
     inputSchema: {
       type: "object",
       required: ["business_name"],
@@ -303,7 +303,7 @@ export const prospectTools = [
     },
     async handler({ apiKey, ...body }) {
       const key = apiKey ?? process.env.UIIQ_CONNECT_API_KEY;
-      if (!key) throw new Error("No Connect key. Pass apiKey (see uiiq_tenant_api_key) or set UIIQ_CONNECT_API_KEY.");
+      if (!key) throw new Error("No Connect key. Pass apiKey (look it up with uiiq_tenant_api_key_get) or set UIIQ_CONNECT_API_KEY.");
       const res = await fetch(`${BASE}/api/crm/prospects/ingest`, {
         method: "POST",
         headers: { "Content-Type": "application/json", "X-API-Key": key },
