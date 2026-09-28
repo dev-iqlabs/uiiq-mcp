@@ -368,7 +368,7 @@ Not exposed on purpose: the platform-to-platform callbacks under `/api/platform/
 
 | Tool | What it does |
 | --- | --- |
-| `uiiq_price_list` | List price items 25 per page, optionally one type (services, materials & retail, tickets…). |
+| `uiiq_price_list` | List price items 25 per page, optionally one type (services, materials, retail, tickets…). |
 | `uiiq_pricing_leads_list` | List recent leads from the public pricing calculator (newest first, up to 200). |
 
 ### SEO — `src/tools/seo.js`
