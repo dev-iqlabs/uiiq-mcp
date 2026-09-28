@@ -16,6 +16,7 @@ import { hrTools }         from "./tools/hr.js";
 import { statusTools }    from "./tools/status.js";
 import { agentTools }    from "./tools/agents.js";
 import { growTools }           from "./tools/grow.js";
+import { adsTools }            from "./tools/ads.js";
 import { communicationsTools } from "./tools/communications.js";
 import { commerceTools }       from "./tools/commerce.js";
 import { billingTools }        from "./tools/billing.js";
@@ -72,6 +73,7 @@ const ALL_TOOLS = [
   ...automationTools,
   ...hrTools,
   ...growTools,
+  ...adsTools,
   ...communicationsTools,
   ...commerceTools,
   ...billingTools,
