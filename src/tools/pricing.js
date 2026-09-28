@@ -4,13 +4,13 @@ import { apiClient } from "../auth.js";
 // the underlying /api/admin/pricing-leads route is SUPER_ADMIN-only and reads
 // across tenants, so (like uiiq_tenant_list) these ride the stored SUPER_ADMIN
 // login directly — no tenant impersonation.
-const ITEM_TYPES = ["SERVICE", "LABOUR", "MATERIAL", "TICKET", "ADD_ON", "PACKAGE", "HIRE", "SUBSCRIPTION", "CUSTOM"];
+const ITEM_TYPES = ["SERVICE", "LABOUR", "MATERIAL", "TICKET", "ADD_ON", "PACKAGE", "HIRE", "SUBSCRIPTION", "CUSTOM", "RETAIL"];
 
 export const pricingTools = [
   {
     name: "uiiq_price_list",
     description:
-      "List the tenant's price items (the Pricing screen), 25 per page in name order. Filter by type: SERVICE, LABOUR, MATERIAL (materials & retail), TICKET, ADD_ON, PACKAGE, HIRE, SUBSCRIPTION or CUSTOM. Returns { items, total, page, pages, pageSize, type }; sellPricePence and costPricePence are in pence.",
+      "List the tenant's price items (the Pricing screen), 25 per page in name order. Filter by type: SERVICE, LABOUR, MATERIAL (materials), RETAIL (goods sold as they are), TICKET, ADD_ON, PACKAGE, HIRE, SUBSCRIPTION or CUSTOM. Returns { items, total, page, pages, pageSize, type }; sellPricePence and costPricePence are in pence.",
     inputSchema: {
       type: "object",
       properties: {
