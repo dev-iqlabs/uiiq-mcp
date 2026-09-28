@@ -33,9 +33,9 @@ UIIQ is one subscription whose modules are grouped as **Sell**, **Grow** and **R
 | Email and SMS campaigns | `uiiq_campaign_*`, `uiiq_sms_*` | Create, duplicate and test-send campaigns, read SMS history |
 | Social and press | `uiiq_social_*`, `uiiq_press_release_*`, `uiiq_journalist_contact_*` | Schedule posts from templates, draft, redraft, approve and distribute press releases |
 | Briefs | `uiiq_grow_brief_morning*`, `uiiq_grow_campaign_brief_generate` | Read or generate the morning brief, turn one campaign brief into channel copy |
-| Competitors | `uiiq_competitor_*` | Track competitors as companies with several domains, a priority, market, Facebook Page ID, socials and notes; get a deep link to each one's live ads in Meta's Ad Library |
+| Competitors | `uiiq_competitor_*`, `uiiq_admin_competitor_research_block` | Track competitors as companies with several domains, a priority, market, Facebook Page ID, socials and notes; research them on IQEX, watch rules and their hits; honour a research objection across every tenant |
 | SEO and Google | `uiiq_seo_*`, `uiiq_google_*` | Run audits, apply fixes, check PageSpeed, read Ads, Analytics and Search Console |
-| Pricing | `uiiq_price_list`, `uiiq_pricing_leads_list` | Page through price items by type, see who used the public pricing calculator |
+| Pricing | `uiiq_price_list`, `uiiq_price_item_*`, `uiiq_pricing_leads_list` | Page through price items by type, add / edit / delete them, see who used the public pricing calculator |
 | Website connect | `uiiq_iqlink_claim`, `uiiq_tenant_api_key_get`, `uiiq_tenant_api_key` | Pair a connected site, look up its Connect key, or rotate it |
 
 ### Run — operations, finance, people and knowledge
@@ -52,7 +52,11 @@ UIIQ is one subscription whose modules are grouped as **Sell**, **Grow** and **R
 | Documents, media, templates | `uiiq_document_*`, `uiiq_media_*`, `uiiq_template_*` | Read documents, upload or generate media, use social and email templates |
 | Knowledge and advisors | `uiiq_brains_*`, `uiiq_boardroom_*`, `uiiq_agent_*` | Ask a sector Brain, run a Boardroom session with the Mastermind team, read agent definitions |
 | Journeys | `uiiq_journey_*` | Start, advance and resume guided Make-a-Trail journeys |
-| Materials and legacy films | `uiiq_material_*`, `uiiq_legacy_*` | Discover, verify and watch materials; list legacy films |
+| Materials and legacy films | `uiiq_material_*`, `uiiq_legacy_*` | Discover, verify and watch materials, check whether each lead's link leads anywhere, edit or delete a material; list legacy films |
+| Postroom | `uiiq_postroom_*` | The parcels board: product ready, label printed, dispatch, corrections, add recent orders, the return address (needs the `postroom` feature) |
+| Appeals | `uiiq_appeal_*`, `uiiq_admin_appeal_suspend` | Fundraising appeals on a cause: draft, publish under the Fundraising Regulator's Code, match pledges, updates emailed to supporters (needs the `appeals` feature) |
+| Auctions | `uiiq_auction_*` | The seller's side: draft, lots, publish, bids, withdraw, defaults (needs the `auctions` feature; buyers bid through the public API) |
+| NX2U live streaming | `uiiq_nx2u_*` | Channels, events, the control room (provision, running order, slate, end, replay), the video library, usage (needs the `nx2u` feature; platform switches OFF until Steve turns them on) |
 
 ### Devices and IQ products
 
@@ -287,6 +291,7 @@ Not exposed on purpose: the platform-to-platform callbacks under `/api/platform/
 | `uiiq_sell_membership_plan_list` | List the tenant's membership plans and passes, with prices in pence. |
 | `uiiq_sell_membership_plan_create` | Create a membership plan or a fixed-term pass. |
 | `uiiq_sell_membership_plan_update` | Change a membership plan or pass — price, name, term, auto-renew, active state. |
+| `uiiq_sell_membership_plan_delete` | Delete a plan with no members; deactivate instead to stop sign-ups. |
 
 ### Tickets — `src/tools/tickets.js`
 
@@ -370,6 +375,9 @@ Not exposed on purpose: the platform-to-platform callbacks under `/api/platform/
 | --- | --- |
 | `uiiq_price_list` | List price items 25 per page, optionally one type (services, materials, retail, tickets…). |
 | `uiiq_pricing_leads_list` | List recent leads from the public pricing calculator (newest first, up to 200). |
+| `uiiq_price_item_create` | Add a price item (what the workspace sells); RETAIL is its own type. |
+| `uiiq_price_item_update` | Edit a price item; only the fields sent change. |
+| `uiiq_price_item_delete` | Delete a price item. |
 
 ### SEO — `src/tools/seo.js`
 
@@ -393,6 +401,10 @@ Dashboard → Ads → Competitors. Needs the `ads_search` feature and the ads ti
 | `uiiq_competitor_research` | Run history with each source as found / could not look (and why), what changed since the previous run, the latest ads, the repeat cadence, and `analysis` — the ads report's figures (launches per month, run lengths, winners, reach, hooks and segments with what they dropped). Unmeasured sections say why. Free. |
 | `uiiq_competitor_research_run` | Research the competitor now on IQEX. **Spends credits.** `pending: true` = still running; read the research in a minute, do not re-run. |
 | `uiiq_competitor_research_schedule` | Re-research WEEKLY, MONTHLY or OFF. Scheduled runs spend credits too. |
+| `uiiq_competitor_signals` | Competitor watch hits (a rule fired on a research run), unacknowledged unless `all`. |
+| `uiiq_competitor_signal_acknowledge` | Mark a watch hit as seen. |
+| `uiiq_competitor_watch_rule` | Set `watchLiveAdsJumpPct` (25/50/100/200, or null): tell me when their live ad count rises by this much. |
+| `uiiq_admin_competitor_research_block` | SUPER_ADMIN: honour a research objection across every tenant. A dry run unless `confirm`; no unblock. |
 
 ### Google (Ads, Analytics, Search Console) — `src/tools/google.js`
 
@@ -496,6 +508,9 @@ Dashboard → Ads → Competitors. Needs the `ads_search` feature and the ads ti
 | `uiiq_material_adopt` | Adopt a candidate as the supplier for a material — creates a RetailSupplier and moves the baseline to the adopted landed cost. |
 | `uiiq_material_watch_set` | Create or update a price watch on a material (scheduled re-pricing + cheaper-supplier alert). |
 | `uiiq_material_watch_remove` | Stop and remove the price watch on a material. |
+| `uiiq_material_check_links` | Check whether each unverified lead's link leads anywhere (no credits); `remaining` > 0 = call again. |
+| `uiiq_material_update` | Edit a material: name, supplier, link, unit cost, spec, notes. |
+| `uiiq_material_delete` | Delete a material and its leads, history and watch. |
 
 ### Merch sets — `src/tools/merch.js`
 
@@ -702,4 +717,77 @@ Every product's target against its actual, by week, month or fiscal year, colour
 | `uiiq_workflow_instances` | List active UIIQ workflow instances. |
 | `uiiq_workflow_trigger` | Trigger a new UIIQ workflow instance from a template. |
 
-360 tools.
+### Postroom — `src/tools/postroom.js`
+
+| Tool | What it does |
+|---|---|
+| `uiiq_postroom_list` | The Postroom board: every open parcel (Waiting on product, Waiting on stock, Ready to pack, Label printed) plus the last week's dispatched, with the pick list against My Retail stock and the postage check. |
+| `uiiq_postroom_product_ready` | Waiting on product â†’ Ready to pack, by hand: the product is made (a DTF print finished, or a print-ready signal that never arrived). |
+| `uiiq_postroom_label_printed` | Ready to pack â†’ Label printed. |
+| `uiiq_postroom_dispatch` | Mark a parcel dispatched. |
+| `uiiq_postroom_reopen` | Dispatched â†’ Label printed: dispatch was pressed by mistake. |
+| `uiiq_postroom_tell_shop` | A dispatched parcel whose shop was not told (the write-back failed): try again. |
+| `uiiq_postroom_correct` | Correct a parcel before it goes: the address (any of shipName, shipCompany, shipPhone, shipAddress1, shipAddress2, shipCity, shipPostcode, shipCountry â€” blank clears), service, weightGrams, trackingNumber, postagePaid. |
+| `uiiq_postroom_add_recent` | 'Add recent orders': make parcels for shop orders from the last N hours that have none, because they arrived before Postroom was switched on. |
+| `uiiq_postroom_settings` | Postroom settings: the return address printed on every label (null = the workspace's own address), what a label prints now, and the reorder-task board. |
+| `uiiq_postroom_settings_update` | Set the return address (one line per array entry, at most 7; empty = the workspace's own address) and/or the board that reorder tasks go on (taskBoardId, null = none). |
+
+### Appeals — `src/tools/appeals.js`
+
+| Tool | What it does |
+|---|---|
+| `uiiq_appeal_list` | The workspace's appeals, every status, with raised so far. |
+| `uiiq_appeal_get` | One appeal with progress, match pledges and updates. |
+| `uiiq_appeal_create` | A draft appeal on one of the workspace's causes (uiiq_donations_causes_list). |
+| `uiiq_appeal_update` | Edit an appeal: any of closesAt, opensAt, targetPence, story, videoUrl, gallery. |
+| `uiiq_appeal_delete` | Delete a draft appeal that has no gifts. |
+| `uiiq_appeal_publish` | Publish an appeal (owner/admin). |
+| `uiiq_appeal_pledge_add` | Record a sponsor's match-funding pledge (recorded, not charged through us). |
+| `uiiq_appeal_pledge_update` | Edit a pledge, or move it PROMISED â†’ RECEIVED / WITHDRAWN. |
+| `uiiq_appeal_pledge_delete` | Delete a pledge on a draft appeal. |
+| `uiiq_appeal_supporters` | The people behind an appeal's gifts. |
+| `uiiq_appeal_update_add` | A news update on an appeal: title and body, optional imageUrl (https, own bucket). |
+| `uiiq_appeal_update_edit` | Edit an update; publish: true shows it, false hides it. |
+| `uiiq_appeal_update_delete` | Delete an update. |
+| `uiiq_appeal_update_email` | Email a published update, once, to the supporters who asked for updates when they gave (owner/admin). |
+| `uiiq_admin_appeal_suspend` | SUPER_ADMIN only, not while impersonating: suspend an appeal at once (stops gifts, shows a neutral 'paused' notice â€” the takedown duty under the Code of Fundraising Practice) with a reason, or lift a suspension with suspend: false. |
+
+### Auctions — `src/tools/auctions.js`
+
+| Tool | What it does |
+|---|---|
+| `uiiq_auction_list` | The workspace's auctions, every status. |
+| `uiiq_auction_get` | The seller's live view of one auction: its lots, current bids, status. |
+| `uiiq_auction_create` | A draft auction. |
+| `uiiq_auction_update` | Edit an auction's title, description, opensAt or closesAt, or change its state with action: 'publish' (in front of buyers) or 'cancel'. |
+| `uiiq_auction_lot_add` | Add a lot (quantity 1). |
+| `uiiq_auction_lot_bids` | A lot's bid history. |
+| `uiiq_auction_lot_update` | Edit a lot (title, description, attributes, mediaRefs, startPence, reservePence, buyNowPence) or withdraw it with action: 'withdraw' (owner/admin). |
+| `uiiq_auction_settings` | The workspace's auction defaults that new auctions copy: the increment ladder, softCloseSeconds, buyNowAllowed, currency, maxBidPence. |
+| `uiiq_auction_settings_update` | Change the defaults (owner/admin). |
+
+### NX2U live streaming — `src/tools/nx2u.js`
+
+| Tool | What it does |
+|---|---|
+| `uiiq_nx2u_channel_list` | The tenant's NX2U channels (each a public face at its own URL) with event counts. |
+| `uiiq_nx2u_channel_create` | A new channel (owner/admin). |
+| `uiiq_nx2u_channel_update` | Edit a channel's name, slug, visibility, defaultAccess or branding (owner/admin). |
+| `uiiq_nx2u_channel_delete` | Delete a channel (owner/admin). |
+| `uiiq_nx2u_event_list` | The tenant's events, newest first, optionally one channel's. |
+| `uiiq_nx2u_event_get` | The control room's view of one event: the provider is asked, so status and viewers are live. |
+| `uiiq_nx2u_event_create` | A new event. |
+| `uiiq_nx2u_event_update` | Edit an event: title, kind, scheduledStart, scheduledEnd, access, tier, replayDays, licenceRef. |
+| `uiiq_nx2u_event_provision` | Create the stream on the provider and return the encoder settings, KEY INCLUDED (owner/admin; audit-logged). |
+| `uiiq_nx2u_event_ingest` | Show the encoder settings (with the key) again for a provisioned event. |
+| `uiiq_nx2u_event_pin_rotate` | A new PIN for a PIN-protected event, returned once; the old one stops working at once, so the family needs the new link. |
+| `uiiq_nx2u_event_segments_set` | Replace an event's running order. |
+| `uiiq_nx2u_event_segment_mark` | The control room's big buttons: this part is on now (start), has finished (end), or clear the marker. |
+| `uiiq_nx2u_event_slate` | 'Slate now' (on: true) shows viewers the holding card within ~10 s; 'Back on air' (on: false). |
+| `uiiq_nx2u_event_end` | The event is over: the replay window starts and the recording is looked for. |
+| `uiiq_nx2u_event_replay_check` | Ask the provider again for the recording of an ended event. |
+| `uiiq_nx2u_library` | The tenant's video library (Bunny or Cloudflare), keys masked. |
+| `uiiq_nx2u_library_set` | Record (or re-key) the tenant's video library (owner/admin). |
+| `uiiq_nx2u_usage` | The tenant's last twelve months of NX2U delivery: viewer-seconds, GB, events. |
+
+434 tools.

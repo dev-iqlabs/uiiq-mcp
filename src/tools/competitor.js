@@ -160,4 +160,53 @@ export const competitorTools = [
       return res.json();
     },
   },
+  {
+    name: "uiiq_competitor_signals",
+    description:
+      "Competitor watch hits (UiiQ #716): a rule such as 'tell me when their live ad count rises by 25/50/100/200%' fired on a research run. Unacknowledged only unless all: true. Each hit is one row per (competitor, rule, run), so a run fires once; the morning brief carries each once too.",
+    inputSchema: { type: "object", properties: { all: { type: "boolean", description: "Include acknowledged hits" }, tenant: TENANT_PROP } },
+    async handler({ all, tenant } = {}) {
+      const res = await api(tenant)(`/ads/competitors/signals${all ? "?all=1" : ""}`);
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    },
+  },
+  {
+    name: "uiiq_competitor_signal_acknowledge",
+    description: "Mark a competitor watch hit as seen: it leaves the Triggered panel and the brief.",
+    inputSchema: { type: "object", required: ["id"], properties: { id: { type: "string", description: "signal id" }, tenant: TENANT_PROP } },
+    async handler({ id, tenant }) {
+      const res = await api(tenant)(`/ads/competitors/signals/${encodeURIComponent(id)}`, { method: "PATCH" });
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    },
+  },
+  {
+    name: "uiiq_competitor_watch_rule",
+    description: "Set a competitor's watch rule: watchLiveAdsJumpPct = tell me when their live ad count rises by this % between research runs (25, 50, 100 or 200), null to switch it off. Evaluated by the daily cron and after every 'Research now'.",
+    inputSchema: { type: "object", required: ["id", "watchLiveAdsJumpPct"], properties: { id: { type: "string" }, watchLiveAdsJumpPct: { type: ["number", "null"] }, tenant: TENANT_PROP } },
+    async handler({ id, watchLiveAdsJumpPct, tenant }) {
+      const res = await api(tenant)(`/ads/competitors/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify({ watchLiveAdsJumpPct }) });
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    },
+  },
+  {
+    name: "uiiq_admin_competitor_research_block",
+    description:
+      "SUPER_ADMIN only, not while impersonating: honour a business's objection to competitor research (Kim, LEGAL-DECISIONS-2026-09-22 s.5) across EVERY tenant. Without confirm: true it is ALWAYS a dry run listing what it would block — send that first and check the matches (a name matches every business of that name). reference is the ticket (OBJ-2026-0001) and nothing else — never the objector's name or contact details. Give name (two words or more), domains and/or metaPageId. There is no unblock. Rides the stored SUPER_ADMIN login; no tenant argument.",
+    inputSchema: {
+      type: "object",
+      required: ["reference"],
+      properties: {
+        reference: { type: "string" }, name: { type: "string" }, domains: { type: "array", items: { type: "string" } }, metaPageId: { type: "string" },
+        receivedAt: { type: "string", description: "ISO date the objection arrived" }, confirm: { type: "boolean", description: "true = apply; omit for the dry run" },
+      },
+    },
+    async handler(body) {
+      const res = await apiClient()("/admin/competitors/research-block", { method: "POST", body: JSON.stringify(body) });
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    },
+  },
 ];

@@ -54,6 +54,10 @@ import { crmJourneyTools }      from "./tools/crm-journey.js";
 import { prospectTools }        from "./tools/prospects.js";
 import { connectTools }         from "./tools/connect.js";
 import { iqplantTools }         from "./tools/iqplant.js";
+import { postroomTools }        from "./tools/postroom.js";
+import { appealsTools }         from "./tools/appeals.js";
+import { auctionsTools }        from "./tools/auctions.js";
+import { nx2uTools }            from "./tools/nx2u.js";
 
 const ALL_TOOLS = [
   ...statusTools,
@@ -106,6 +110,10 @@ const ALL_TOOLS = [
   ...prospectTools,
   ...connectTools,
   ...iqplantTools,
+  ...postroomTools,
+  ...appealsTools,
+  ...auctionsTools,
+  ...nx2uTools,
 ];
 
 const TOOL_MAP = Object.fromEntries(ALL_TOOLS.map(t => [t.name, t]));

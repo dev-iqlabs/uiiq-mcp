@@ -4,6 +4,11 @@ import { apiClient } from "../auth.js";
 // the underlying /api/admin/pricing-leads route is SUPER_ADMIN-only and reads
 // across tenants, so (like uiiq_tenant_list) these ride the stored SUPER_ADMIN
 // login directly — no tenant impersonation.
+const TENANT_PROP = {
+  type: "string",
+  description: "Tenant id, slug or exact name to act in. Omit for your own tenant.",
+};
+const api = (tenant) => apiClient(tenant ? { tenant } : {});
 const ITEM_TYPES = ["SERVICE", "LABOUR", "MATERIAL", "TICKET", "ADD_ON", "PACKAGE", "HIRE", "SUBSCRIPTION", "CUSTOM", "RETAIL"];
 
 export const pricingTools = [
@@ -34,6 +39,53 @@ export const pricingTools = [
     inputSchema: { type: "object", properties: {} },
     async handler() {
       const res = await apiClient()("/admin/pricing-leads");
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    },
+  },
+  {
+    name: "uiiq_price_item_create",
+    description: `Add a price item (what the workspace sells). itemType one of ${ITEM_TYPES.join(", ")} (RETAIL = goods sold as they are; MATERIAL = materials). Prices in pence; taxRate as a percentage (default 20).`,
+    inputSchema: {
+      type: "object",
+      required: ["name", "sellPricePence"],
+      properties: {
+        name: { type: "string" }, code: { type: "string" }, description: { type: "string" }, category: { type: "string" },
+        itemType: { type: "string", enum: ITEM_TYPES }, unitType: { type: "string", description: "e.g. item, hour, day" },
+        sellPricePence: { type: "number" }, costPricePence: { type: "number" }, taxRate: { type: "number" }, targetMarginPercent: { type: "number" },
+        isActive: { type: "boolean" }, internalNotes: { type: "string" }, publicNotes: { type: "string" }, tenant: TENANT_PROP,
+      },
+    },
+    async handler({ tenant, ...body }) {
+      const res = await api(tenant)("/price-list", { method: "POST", body: JSON.stringify(body) });
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    },
+  },
+  {
+    name: "uiiq_price_item_update",
+    description: "Edit a price item: any of the create fields. Only the fields sent change. A new price applies to new quotes; existing estimates keep theirs.",
+    inputSchema: {
+      type: "object",
+      required: ["id"],
+      properties: {
+        id: { type: "string" }, name: { type: "string" }, code: { type: "string" }, description: { type: "string" }, category: { type: "string" },
+        itemType: { type: "string", enum: ITEM_TYPES }, unitType: { type: "string" }, sellPricePence: { type: "number" }, costPricePence: { type: "number" },
+        taxRate: { type: "number" }, targetMarginPercent: { type: "number" }, isActive: { type: "boolean" }, internalNotes: { type: "string" }, publicNotes: { type: "string" }, tenant: TENANT_PROP,
+      },
+    },
+    async handler({ id, tenant, ...body }) {
+      const res = await api(tenant)(`/price-list/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify(body) });
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    },
+  },
+  {
+    name: "uiiq_price_item_delete",
+    description: "Delete a price item. Estimate lines that used it keep their copied figures.",
+    inputSchema: { type: "object", required: ["id"], properties: { id: { type: "string" }, tenant: TENANT_PROP } },
+    async handler({ id, tenant }) {
+      const res = await api(tenant)(`/price-list/${encodeURIComponent(id)}`, { method: "DELETE" });
       if (!res.ok) throw new Error(await res.text());
       return res.json();
     },

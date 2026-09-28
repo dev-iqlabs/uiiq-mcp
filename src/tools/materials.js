@@ -180,6 +180,45 @@ export const materialsTools = [
     },
   },
   {
+    name: "uiiq_material_check_links",
+    description:
+      "Check whether each unverified supplier lead's link leads anywhere (28 Sep 2026: AI leads came back with websites that don't exist). No credits. Each lead gets linkStatus OK / NOT_FOUND / PARKED / UNREACHABLE / BLOCKED and a note; only a verified lead counts as a price to beat. Returns { checked, counts, remaining } — remaining > 0 means the time budget ran out: call again for the rest. Links checked in the last 10 minutes are skipped.",
+    inputSchema: { type: "object", required: ["id"], properties: { id: { type: "string", description: "material id" }, tenant: TENANT_PROP } },
+    async handler({ id, tenant }) {
+      const res = await api(tenant)(`/materials/${encodeURIComponent(id)}/check-links`, { method: "POST" });
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    },
+  },
+  {
+    name: "uiiq_material_update",
+    description: "Edit a material: name, unitLabel, targetQty, spec, currentSupplierName, currentUnitCostPence (the price to beat), currentSourceUrl (https), notes. Only the fields sent change.",
+    inputSchema: {
+      type: "object",
+      required: ["id"],
+      properties: {
+        id: { type: "string" }, name: { type: "string" }, unitLabel: { type: "string" }, targetQty: { type: "number" }, spec: { type: "object" },
+        currentSupplierName: { type: "string" }, currentUnitCostPence: { type: "number" }, currentSourceUrl: { type: "string" }, notes: { type: "string" },
+        tenant: TENANT_PROP,
+      },
+    },
+    async handler({ id, tenant, ...body }) {
+      const res = await api(tenant)(`/materials/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify(body) });
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    },
+  },
+  {
+    name: "uiiq_material_delete",
+    description: "Delete a material and everything under it: its supplier leads, price history and price watch. Cannot be undone.",
+    inputSchema: { type: "object", required: ["id"], properties: { id: { type: "string" }, tenant: TENANT_PROP } },
+    async handler({ id, tenant }) {
+      const res = await api(tenant)(`/materials/${encodeURIComponent(id)}`, { method: "DELETE" });
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    },
+  },
+  {
     name: "uiiq_material_watch_remove",
     description: "Stop and remove the price watch on a material.",
     inputSchema: { type: "object", required: ["id"], properties: { id: { type: "string", description: "material id" },
