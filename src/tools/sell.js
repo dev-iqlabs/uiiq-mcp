@@ -1191,6 +1191,16 @@ export const sellTools = [
   },
 
   {
+    name: "uiiq_sell_membership_plan_delete",
+    description: "Delete a membership plan. Refused while it has members (check uiiq_sell_membership_subscriber_list first); deactivate it instead (isActive false) to stop new sign-ups.",
+    inputSchema: { type: "object", required: ["planId"], properties: { planId: { type: "string" }, tenant: TENANT_PROP } },
+    async handler({ planId, tenant }) {
+      const res = await api(tenant)(`/admin/memberships/plans/${encodeURIComponent(planId)}`, { method: "DELETE" });
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    },
+  },
+  {
     name: "uiiq_sell_membership_plan_update",
     description:
       "Change a membership plan or pass — price, name, term, auto-renew, active state. " +
