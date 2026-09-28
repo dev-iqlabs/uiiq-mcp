@@ -58,7 +58,8 @@ export const mediaTools = [
       const qs = new URLSearchParams();
       if (type) qs.set("type", type);
       if (page) qs.set("page", String(page));
-      const res = await api(tenant)(`/assets${qs.size ? `?${qs}` : ""}`);
+      const q = qs.size ? `?${qs}` : "";
+      const res = await api(tenant)(`/assets${q}`);
       if (!res.ok) throw new Error(await res.text());
       return res.json();
     },
@@ -237,6 +238,39 @@ export const mediaTools = [
       const res = await api(tenant)(`/assets/${assetId}`, { method: "DELETE" });
       if (!res.ok) throw new Error(await res.text());
       return res.json();
+    },
+  },
+  {
+    name: "uiiq_media_presign",
+    description:
+      "Get a presigned S3 POST for a direct upload into the workspace's own UIIQ storage folder (uploads, logos, covers, experiences, thumbnails, causes, events, displays, social, staff) — the path the web app uses for logos, covers and social media, distinct from the IQEX Media Vault. Returns { url, fields, fileUrl, key, maxBytes }: POST the file as multipart to url with those fields. Give a local path and the upload is done for you, returning the public fileUrl. JPEG/PNG/GIF/WebP up to 10 MB; MP4/MOV/WebM up to 200 MB.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        path: { type: "string", description: "Local file to upload straight away (fileName and contentType are taken from it)." },
+        fileName: { type: "string", description: "Required without path." },
+        contentType: { type: "string", description: "MIME type; required without path." },
+        folder: { type: "string", enum: ["uploads", "logos", "covers", "experiences", "thumbnails", "causes", "events", "displays", "social", "staff"], description: "Default uploads." },
+        tenant: TENANT_PROP,
+      },
+    },
+    async handler({ path, fileName, contentType, folder, tenant } = {}) {
+      if (path) {
+        fileName = fileName || basename(path);
+        contentType = contentType || MIME_BY_EXT[fileName.split(".").pop()?.toLowerCase() ?? ""];
+        if (!contentType) throw new Error(`Unsupported file type: ${fileName} — use jpg/png/gif/webp/mp4/mov/webm.`);
+      }
+      if (!fileName || !contentType) throw new Error("Provide a local `path`, or both fileName and contentType.");
+      const res = await api(tenant)("/upload/presign", { method: "POST", body: JSON.stringify({ fileName, contentType, ...(folder ? { folder } : {}) }) });
+      if (!res.ok) throw new Error(await res.text());
+      const presign = await res.json();
+      if (!path) return presign;
+      const form = new FormData();
+      for (const [k, v] of Object.entries(presign.fields ?? {})) form.append(k, v);
+      form.append("file", new Blob([await readFile(path)], { type: contentType }), fileName);
+      const up = await fetch(presign.url, { method: "POST", body: form });
+      if (!up.ok) throw new Error(`S3 upload failed: HTTP ${up.status} ${await up.text()}`);
+      return { uploaded: true, fileUrl: presign.fileUrl, key: presign.key };
     },
   },
 ];

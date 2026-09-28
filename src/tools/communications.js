@@ -234,4 +234,30 @@ export const communicationsTools = [
       return res.json();
     },
   },
+  {
+    name: "uiiq_journalist_contact_update",
+    description: "Edit one of the tenant's own journalist contacts: name, email, publication, beat, region, notes, isActive. Only the fields sent change. Global platform contacts cannot be edited (404).",
+    inputSchema: {
+      type: "object",
+      required: ["id"],
+      properties: { id: { type: "string" }, name: { type: "string" }, email: { type: "string" }, publication: { type: "string" }, beat: { type: "string" }, region: { type: "string" }, notes: { type: "string" }, isActive: { type: "boolean" }, tenant: TENANT_PROP },
+    },
+    async handler({ id, tenant, ...fields }) {
+      const body = Object.fromEntries(Object.entries(fields).filter(([, v]) => v !== undefined));
+      if (!Object.keys(body).length) throw new Error("Send at least one field to change");
+      const res = await api(tenant)(`/communications/journalist-contacts/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify(body) });
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    },
+  },
+  {
+    name: "uiiq_journalist_contact_delete",
+    description: "Retire one of the tenant's own journalist contacts (soft delete: isActive false, so it drops out of distribution lists). Restore with uiiq_journalist_contact_update isActive true.",
+    inputSchema: { type: "object", required: ["id"], properties: { id: { type: "string" }, tenant: TENANT_PROP } },
+    async handler({ id, tenant }) {
+      const res = await api(tenant)(`/communications/journalist-contacts/${encodeURIComponent(id)}`, { method: "DELETE" });
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    },
+  },
 ];

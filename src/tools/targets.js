@@ -40,7 +40,8 @@ export const targetsTools = [
       const q = new URLSearchParams();
       if (period) q.set("period", period);
       if (date) q.set("date", date);
-      return body(await api(tenant)(`/targets/board${q.size ? `?${q}` : ""}`));
+      const qs = q.size ? `?${q}` : "";
+      return body(await api(tenant)(`/targets/board${qs}`));
     },
   },
   {

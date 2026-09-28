@@ -1,3 +1,5 @@
+import { readFile } from "node:fs/promises";
+import { basename } from "node:path";
 import { apiClient } from "../auth.js";
 
 // Every tool takes an optional `tenant` (id, slug or exact name). Without it the
@@ -684,7 +686,8 @@ export const sellTools = [
       const params = new URLSearchParams();
       if (lookaheadDays != null) params.set("lookaheadDays", String(lookaheadDays));
       if (historyDays != null)   params.set("historyDays",   String(historyDays));
-      const path = `/admin/pricing-intelligence/recommend${params.toString() ? "?" + params : ""}`;
+      const qs = params.toString() ? "?" + params : "";
+      const path = `/admin/pricing-intelligence/recommend${qs}`;
       const res = await api(tenant)(path);
       if (!res.ok) throw new Error(await res.text());
       return res.json();
@@ -1240,5 +1243,49 @@ export const sellTools = [
       if (!res.ok) throw new Error(await res.text());
       return res.json();
     }
-  }
+  },
+  {
+    name: "uiiq_sell_gift_programmes",
+    description: "The tenant's Gift Programmes (read-only): key, card type, label, enabled, the values on offer with buyerPence, and the journey / outcome each one drives. Feeds the Issue New Card type picker; editing is super-admin only on the tenant's admin page.",
+    inputSchema: { type: "object", properties: { tenant: TENANT_PROP } },
+    async handler({ tenant } = {}) {
+      const res = await api(tenant)("/gift-cards/programmes");
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    },
+  },
+  {
+    name: "uiiq_sell_field_visit_presign",
+    description: "Get a presigned S3 POST for a field visit's proof photo (JPEG/PNG/WebP, 15 MB) or the customer signature (PNG, 2 MB). Returns { post: { url, fields, fileUrl }, key, fileUrl }; give a local path and the upload is done for you. Save the returned key on the visit with uiiq_sell_field_visit_update action complete (photos / signatureKey).",
+    inputSchema: {
+      type: "object",
+      required: ["id", "kind"],
+      properties: {
+        id: { type: "string", description: "Visit (booking) id" },
+        kind: { type: "string", enum: ["photo", "signature"] },
+        path: { type: "string", description: "Local file to upload straight away (filename and contentType are taken from it)" },
+        filename: { type: "string" },
+        contentType: { type: "string", description: "image/jpeg | image/png | image/webp (signature: image/png)" },
+        tenant: TENANT_PROP,
+      },
+    },
+    async handler({ id, kind, path: localPath, filename, contentType, tenant }) {
+      const MIME = { jpg: "image/jpeg", jpeg: "image/jpeg", png: "image/png", webp: "image/webp" };
+      if (localPath) {
+        filename = filename || basename(localPath);
+        contentType = contentType || MIME[filename.split(".").pop()?.toLowerCase() ?? ""];
+      }
+      if (!contentType) throw new Error("Provide a local `path` or a contentType.");
+      const res = await api(tenant)(`/field/visits/${encodeURIComponent(id)}/presign`, { method: "POST", body: JSON.stringify({ kind, filename, contentType }) });
+      if (!res.ok) throw new Error(await res.text());
+      const presign = await res.json();
+      if (!localPath) return presign;
+      const form = new FormData();
+      for (const [k, v] of Object.entries(presign.post?.fields ?? {})) form.append(k, v);
+      form.append("file", new Blob([await readFile(localPath)], { type: contentType }), filename);
+      const up = await fetch(presign.post.url, { method: "POST", body: form });
+      if (!up.ok) throw new Error(`S3 upload failed: HTTP ${up.status} ${await up.text()}`);
+      return { uploaded: true, key: presign.key, fileUrl: presign.fileUrl };
+    },
+  },
 ];

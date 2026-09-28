@@ -158,7 +158,7 @@ export const taskTools = [
     async handler({ board, tenant }) {
       const client = api(tenant);
       const boardId = await resolveBoardId(client, board);
-      return json(await client("/tasks/boards/" + boardId));
+      return json(await client(`/tasks/boards/${encodeURIComponent(boardId)}`));
     },
   },
   {
@@ -223,7 +223,7 @@ export const taskTools = [
       if (name !== undefined) body.name = name;
       if (color !== undefined) body.color = color;
       if (position !== undefined) body.position = position;
-      return json(await client("/tasks/boards/" + boardId, { method: "PATCH", body: JSON.stringify(body) }));
+      return json(await client(`/tasks/boards/${encodeURIComponent(boardId)}`, { method: "PATCH", body: JSON.stringify(body) }));
     },
   },
   {
@@ -242,9 +242,8 @@ export const taskTools = [
     async handler({ board, force, tenant }) {
       const client = api(tenant);
       const boardId = await resolveBoardId(client, board);
-      return json(
-        await client(`/tasks/boards/${boardId}${force ? "?force=true" : ""}`, { method: "DELETE" }),
-      );
+      const qs = force ? "?force=true" : "";
+      return json(await client(`/tasks/boards/${encodeURIComponent(boardId)}${qs}`, { method: "DELETE" }));
     },
   },
   {
@@ -613,7 +612,7 @@ export const taskTools = [
     },
     async handler({ id, body, tenant }) {
       return json(
-        await api(tenant)("/tasks/cards/" + id + "/comments", {
+        await api(tenant)(`/tasks/cards/${encodeURIComponent(id)}/comments`, {
           method: "POST",
           body: JSON.stringify({ body }),
         }),
@@ -657,6 +656,35 @@ export const taskTools = [
           body: JSON.stringify({ itemId, isChecked }),
         }),
       );
+    },
+  },
+  {
+    name: "uiiq_task_attachment_list",
+    description: "List a UIIQ task card's attachments (file name, URL, size, type, who added it, when).",
+    inputSchema: { type: "object", required: ["id"], properties: { id: { type: "string", description: "Card id" }, tenant: TENANT_PROP } },
+    async handler({ id, tenant }) {
+      return json(await api(tenant)(`/tasks/cards/${encodeURIComponent(id)}/attachments`));
+    },
+  },
+  {
+    name: "uiiq_task_attachment_add",
+    description: "Attach a file to a UIIQ task card by URL — the file must already be hosted (e.g. uploaded with uiiq_media_presign). Records an 'attached' activity on the card.",
+    inputSchema: {
+      type: "object",
+      required: ["id", "fileName", "fileUrl"],
+      properties: { id: { type: "string", description: "Card id" }, fileName: { type: "string" }, fileUrl: { type: "string" }, fileSize: { type: "number", description: "Bytes" }, fileType: { type: "string", description: "MIME type" }, tenant: TENANT_PROP },
+    },
+    async handler({ id, tenant, ...body }) {
+      return json(await api(tenant)(`/tasks/cards/${encodeURIComponent(id)}/attachments`, { method: "POST", body: JSON.stringify(body) }));
+    },
+  },
+  {
+    name: "uiiq_task_attachment_delete",
+    description: "Remove an attachment from a UIIQ task card. Deletes the attachment record only; the hosted file is not touched.",
+    inputSchema: { type: "object", required: ["id", "attachmentId"], properties: { id: { type: "string", description: "Card id" }, attachmentId: { type: "string" }, tenant: TENANT_PROP } },
+    async handler({ id, attachmentId, tenant }) {
+      const qs = `?attachmentId=${encodeURIComponent(attachmentId)}`;
+      return json(await api(tenant)(`/tasks/cards/${encodeURIComponent(id)}/attachments${qs}`, { method: "DELETE" }));
     },
   },
 ];

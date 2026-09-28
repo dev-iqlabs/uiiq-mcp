@@ -198,4 +198,25 @@ export const crmTools = [
       return res.json(); // { created, updated, peopleCreated, total, type }
     },
   },
+  // ── Prospect Campaigns terms addendum ──
+  {
+    name: "uiiq_prospect_campaign_terms_get",
+    description: "The Prospect Campaigns terms addendum: current version, full text, this workspace's acceptance (or null) and canAccept (true for the workspace's own OWNER/ADMIN, never an impersonating operator). Reading and accepting the terms comes BEFORE the prospect_campaigns feature is switched on; neither alone enables anything.",
+    inputSchema: { type: "object", properties: { tenant: TENANT_PROP } },
+    async handler({ tenant } = {}) {
+      const res = await api(tenant)("/terms/prospect-campaigns");
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    },
+  },
+  {
+    name: "uiiq_prospect_campaign_terms_accept",
+    description: "Accept the Prospect Campaigns terms for the workspace, as its own OWNER or ADMIN (403 when impersonating or for other roles). version must match the current one (409 otherwise); confirmAuthorised must be true. Audit-logged. Returns { ok, acceptance, already }.",
+    inputSchema: { type: "object", required: ["version", "confirmAuthorised"], properties: { version: { type: "string", description: "From uiiq_prospect_campaign_terms_get" }, confirmAuthorised: { type: "boolean", description: "You are authorised to accept for the organisation" }, tenant: TENANT_PROP } },
+    async handler({ version, confirmAuthorised, tenant }) {
+      const res = await api(tenant)("/terms/prospect-campaigns", { method: "POST", body: JSON.stringify({ version, confirmAuthorised }) });
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    },
+  },
 ];

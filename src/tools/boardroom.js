@@ -1,3 +1,5 @@
+import fs from "fs";
+import path from "path";
 import { apiClient } from "../auth.js";
 
 // Every tool takes an optional `tenant` (id, slug or exact name). Without it the
@@ -9,6 +11,14 @@ const TENANT_PROP = {
   description: "Tenant id, slug or exact name to act in. Omit for your own tenant.",
 };
 const api = (tenant) => apiClient(tenant ? { tenant } : {});
+
+async function saveAudio(res, outPath) {
+  const bytes = Buffer.from(await res.arrayBuffer());
+  const target = path.resolve(outPath);
+  fs.mkdirSync(path.dirname(target), { recursive: true });
+  fs.writeFileSync(target, bytes);
+  return { path: target, bytes: bytes.length, provider: res.headers.get("x-tts-provider") ?? "chatterbox" };
+}
 
 
 export const boardroomTools = [
@@ -90,6 +100,69 @@ export const boardroomTools = [
         respondents,
         responses: Object.entries(responses).map(([agentSlug, content]) => ({ agentSlug, content })),
       };
+    },
+  },
+
+  // ── Agent voices, meeting turns and text-to-speech ──
+  {
+    name: "uiiq_boardroom_agent_voice_get",
+    description: "The ElevenLabs voice id configured for a boardroom agent in this workspace (null = the platform default).",
+    inputSchema: { type: "object", required: ["agentSlug"], properties: { agentSlug: { type: "string" }, tenant: TENANT_PROP } },
+    async handler({ agentSlug, tenant }) {
+      const res = await api(tenant)(`/boardroom/agent/${encodeURIComponent(agentSlug)}`);
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    },
+  },
+  {
+    name: "uiiq_boardroom_agent_voice_set",
+    description: "Set (or clear with null) the ElevenLabs voice id a boardroom agent speaks with in this workspace.",
+    inputSchema: { type: "object", required: ["agentSlug"], properties: { agentSlug: { type: "string" }, voiceId: { type: ["string", "null"] }, tenant: TENANT_PROP } },
+    async handler({ agentSlug, voiceId = null, tenant }) {
+      const res = await api(tenant)(`/boardroom/agent/${encodeURIComponent(agentSlug)}`, { method: "PATCH", body: JSON.stringify({ voiceId }) });
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    },
+  },
+  {
+    name: "uiiq_boardroom_meeting_turn",
+    description: "One agent's turn in a multi-agent meeting thread: pass the whole thread as messages [{ role:'user'|'assistant', content, agentSlug?, agentName? }] and the agent answers in 2–4 sentences seeing every other member's contribution. Runs an Anthropic call. Returns { agentSlug, agentName, content }.",
+    inputSchema: {
+      type: "object",
+      required: ["agentSlug", "messages"],
+      properties: {
+        agentSlug: { type: "string" },
+        messages: { type: "array", items: { type: "object", required: ["role", "content"], properties: { role: { type: "string", enum: ["user", "assistant"] }, content: { type: "string" }, agentSlug: { type: "string" }, agentName: { type: "string" } } } },
+        tenant: TENANT_PROP,
+      },
+    },
+    async handler({ agentSlug, messages, tenant }) {
+      const res = await api(tenant)("/boardroom/meeting", { method: "POST", body: JSON.stringify({ agentSlug, messages }) });
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    },
+  },
+  {
+    name: "uiiq_boardroom_tts",
+    description: "Speak text in a boardroom agent's voice (agentSlug default quinn). ElevenLabs answers with audio straight away — saved to outPath (default ./tts-<agentSlug>.mp3) and the characters are LOGGED TO IQEX FOR CREDIT DEDUCTION. Without an ElevenLabs voice it falls back to a Chatterbox job and returns { assetId } to poll with uiiq_boardroom_tts_poll.",
+    inputSchema: { type: "object", required: ["text"], properties: { text: { type: "string" }, agentSlug: { type: "string" }, outPath: { type: "string" }, tenant: TENANT_PROP } },
+    async handler({ text, agentSlug, outPath, tenant }) {
+      const res = await api(tenant)("/boardroom/tts", { method: "POST", body: JSON.stringify({ text, agentSlug }) });
+      if (!res.ok) throw new Error(await res.text());
+      if (!(res.headers.get("content-type") ?? "").startsWith("audio/")) return res.json();
+      return saveAudio(res, outPath || `tts-${agentSlug || "quinn"}.mp3`);
+    },
+  },
+  {
+    name: "uiiq_boardroom_tts_poll",
+    description: "Poll a Chatterbox TTS job by assetId. Returns { ready:false } until the audio exists, then saves it to outPath (default ./tts-<assetId>.wav) and returns { path, bytes, provider }.",
+    inputSchema: { type: "object", required: ["assetId"], properties: { assetId: { type: "string" }, outPath: { type: "string" }, tenant: TENANT_PROP } },
+    async handler({ assetId, outPath, tenant }) {
+      const qs = `?assetId=${encodeURIComponent(assetId)}`;
+      const res = await api(tenant)(`/boardroom/tts${qs}`);
+      if (!res.ok) throw new Error(await res.text());
+      if (!(res.headers.get("content-type") ?? "").startsWith("audio/")) return res.json();
+      return saveAudio(res, outPath || `tts-${assetId}.wav`);
     },
   },
 ];

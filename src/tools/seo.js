@@ -58,4 +58,14 @@ export const seoTools = [
       return res.json();
     },
   },
+  {
+    name: "uiiq_seo_crawl",
+    description: "Crawl the tenant's website and save an SEO + AIO audit (scores, issues, pages crawled). Needs the `seo_audit` feature. siteId picks the website when the brand is bound to more than one (the API answers 400 with the choices otherwise). Returns pageSpeedPending: true — pass the id to uiiq_seo_pagespeed to fold in Core Web Vitals.",
+    inputSchema: { type: "object", properties: { siteId: { type: "string" }, tenant: TENANT_PROP } },
+    async handler({ siteId, tenant } = {}) {
+      const res = await api(tenant)("/seo/crawl", { method: "POST", body: JSON.stringify(siteId ? { siteId } : {}) });
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    },
+  },
 ];

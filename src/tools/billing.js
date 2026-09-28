@@ -110,4 +110,46 @@ export const billingTools = [
       return res.json();
     },
   },
+
+  // ── Plan sizes, right-size estimate, Stripe checkout + portal ──
+  {
+    name: "uiiq_billing_tiers",
+    description: "The subscription sizes this tenant can buy (only sizes with a Stripe price configured): tier START|GROW|SCALE, basePence, monthlyCredits, platformFeePct — plus the tenant's currentTier.",
+    inputSchema: { type: "object", properties: { tenant: TENANT_PROP } },
+    async handler({ tenant } = {}) {
+      const res = await api(tenant)("/billing/tiers");
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    },
+  },
+  {
+    name: "uiiq_billing_estimate",
+    description: "The 'right-size' what-if: this month's real usage priced across every plan size at list price, and the cheapest size that fits. { estimate: null } when billing isn't configured.",
+    inputSchema: { type: "object", properties: { tenant: TENANT_PROP } },
+    async handler({ tenant } = {}) {
+      const res = await api(tenant)("/billing/estimate");
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    },
+  },
+  {
+    name: "uiiq_billing_checkout",
+    description: "Start a paid UIIQ subscription (trial → paid): creates a Stripe Checkout session and RETURNS A CHECKOUT URL for a person to open and pay — nothing is charged until they complete it. tier START|GROW|SCALE (omit for the legacy single platform price). Any active base-%-off override is applied as a coupon. Refused on a read-only impersonation session.",
+    inputSchema: { type: "object", properties: { tier: { type: "string", enum: ["START", "GROW", "SCALE"] }, tenant: TENANT_PROP } },
+    async handler({ tier, tenant } = {}) {
+      const res = await api(tenant)("/billing/checkout", { method: "POST", body: JSON.stringify(tier ? { tier } : {}) });
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    },
+  },
+  {
+    name: "uiiq_billing_portal",
+    description: "Open the Stripe customer billing portal: RETURNS A URL where the tenant can change card, view invoices or cancel. 400 when the tenant has no Stripe customer yet. OWNER/ADMIN only.",
+    inputSchema: { type: "object", properties: { tenant: TENANT_PROP } },
+    async handler({ tenant } = {}) {
+      const res = await api(tenant)("/billing/portal", { method: "POST" });
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    },
+  },
 ];

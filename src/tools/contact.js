@@ -125,4 +125,14 @@ export const contactTools = [
       return res.json(); // { ok, type, created, linked, archived, total, businessIds }
     },
   },
+  {
+    name: "uiiq_contact_delete_impact",
+    description: "What a HARD delete of a contact would destroy (campaign sends and their open/click history, SMS sends, automation runs, business-person links, students, bookings, donations — each with a count) and any blockers that forbid it (financial records). Read this before deleting. Needs the contact_database feature.",
+    inputSchema: { type: "object", required: ["id"], properties: { id: { type: "string" }, tenant: TENANT_PROP } },
+    async handler({ id, tenant }) {
+      const res = await api(tenant)(`/contacts/${encodeURIComponent(id)}/delete-impact`);
+      if (!res.ok) throw new Error(await res.text());
+      return res.json(); // { id, name, destroys: [{ label, count }], blockers }
+    },
+  },
 ];
