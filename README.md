@@ -33,6 +33,7 @@ UIIQ is one subscription whose modules are grouped as **Sell**, **Grow** and **R
 | Email and SMS campaigns | `uiiq_campaign_*`, `uiiq_sms_*` | Create, duplicate and test-send campaigns, read SMS history |
 | Social and press | `uiiq_social_*`, `uiiq_press_release_*`, `uiiq_journalist_contact_*` | Schedule posts from templates, draft, redraft, approve and distribute press releases |
 | Briefs | `uiiq_grow_brief_morning*`, `uiiq_grow_campaign_brief_generate` | Read or generate the morning brief, turn one campaign brief into channel copy |
+| Ads & Search | `uiiq_ads_*` | The overview, keyword research and rank tracking, the keyword gap against a competitor, local search (map pack, local keywords, nearby competitors), YouTube research, advert videos (generate on an engine, approve, publish, SEO copy, thumbnails), Google campaign controls, Pinterest alerts, Google review reply drafts. Needs `ads_search`; research spends credits |
 | Competitors | `uiiq_competitor_*`, `uiiq_admin_competitor_research_block` | Track competitors as companies with several domains, a priority, market, Facebook Page ID, socials and notes; research them on IQEX, watch rules and their hits; honour a research objection across every tenant |
 | SEO and Google | `uiiq_seo_*`, `uiiq_google_*` | Run audits, apply fixes, check PageSpeed, read Ads, Analytics and Search Console |
 | Pricing | `uiiq_price_list`, `uiiq_price_item_*`, `uiiq_pricing_leads_list` | Page through price items by type, add / edit / delete them, see who used the public pricing calculator |
@@ -717,6 +718,45 @@ Every product's target against its actual, by week, month or fiscal year, colour
 | `uiiq_workflow_instances` | List active UIIQ workflow instances. |
 | `uiiq_workflow_trigger` | Trigger a new UIIQ workflow instance from a template. |
 
+### Ads & Search — `src/tools/ads.js`
+
+| Tool | What it does |
+|---|---|
+| `uiiq_ads_overview` | The Ads & Search overview: spend, results and status per channel, keyword ranks, local pack, reviews. |
+| `uiiq_ads_advert_briefs` | The workspace's guided Ad-Brief adverts (channel + generated copy) from IQEX. |
+| `uiiq_ads_diagram_start` | Start a diagram from text (Napkin, via IQEX). |
+| `uiiq_ads_diagram_poll` | Check on a diagram with the requestId and token from uiiq_ads_diagram_start. |
+| `uiiq_ads_keyword_research` | Keyword ideas from seed terms (IQEX keyword research): volume, competition, suggested bids. |
+| `uiiq_ads_keyword_track` | Track a keyword's rank for the workspace (optionally for one target URL). |
+| `uiiq_ads_keyword_untrack` | Stop tracking a keyword (by its id from the overview). |
+| `uiiq_ads_keyword_gap` | Keywords a competitor's domain ranks for that we don't. |
+| `uiiq_ads_local` | The workspace's local-search state: the Google Business profile, tracked local keywords and their map-pack positions, recent reviews. |
+| `uiiq_ads_local_pack` | Who is in the Google map pack for a keyword near a postcode, right now. |
+| `uiiq_ads_local_keywords` | The local keywords (keyword + postcode) the workspace tracks in the map pack. |
+| `uiiq_ads_local_keyword_track` | Track a keyword's map-pack position near a postcode. |
+| `uiiq_ads_local_keyword_untrack` | Stop tracking a local keyword (by id). |
+| `uiiq_ads_local_competitors` | Nearby businesses in a category around a postcode, compared with our own name / reviews / rating / photo count when given. |
+| `uiiq_ads_youtube_search` | Search YouTube for a query (research: what already ranks). |
+| `uiiq_ads_youtube_channels` | Stats for YouTube channels by id (subscribers, views, uploads). |
+| `uiiq_ads_youtube_intel` | YouTube intelligence for a topic in a region: top channels, formats and titles that work. |
+| `uiiq_ads_video_capabilities` | The text-to-video engines and what each accepts (aspect ratios Ã— durations). |
+| `uiiq_ads_video_profiles` | The organisation, service and object profiles on IQEX an advert can be grounded in (their ids go to generate / ai-assist). |
+| `uiiq_ads_video_ai_assist` | Turn a rough brief into a script, key message, CTA and visual style for an advert, grounded in the profiles given. |
+| `uiiq_ads_video_generate` | Generate an advert video on an engine (topview, runway, wan) from a grounded brief. |
+| `uiiq_ads_video_get` | An advert video asset with its render status (asked of IQEX), master URL when ready, platform variants, SEO copy and approval state. |
+| `uiiq_ads_video_seo_set` | Set a video's SEO copy by hand: seoTitle, seoDescription, seoTags. |
+| `uiiq_ads_video_delete` | Delete an advert video asset. |
+| `uiiq_ads_video_seo_generate` | Generate SEO title, description and tags for a video for one platform (default youtube) from its brief. |
+| `uiiq_ads_video_thumbnails_generate` | Start generating thumbnail variants for a video from its brief. |
+| `uiiq_ads_video_thumbnail_status` | Poll one thumbnail generation: { status, urls }. |
+| `uiiq_ads_video_thumbnails_set` | Save the chosen thumbnail variants on a video (the array from generate/status, edited). |
+| `uiiq_ads_video_approve` | Approve a video (queues organic posts on the given platforms, or the brief's) or reject it with a note. |
+| `uiiq_ads_video_publish` | Publish an approved video as organic posts on platforms the workspace has connected (uiiq_social_accounts). |
+| `uiiq_ads_video_publish_paid` | Submit a finished video to the paid campaign managers for the platforms given. |
+| `uiiq_ads_google_campaign_control` | Pause or enable a Google Ads campaign, or set its daily budget (budgetMicros = pounds Ã— 1,000,000). |
+| `uiiq_ads_pinterest_alert_dismiss` | Dismiss a Pinterest trend alert (from the overview). |
+| `uiiq_ads_review_draft_reply` | Draft a reply to a Google review (by the review's id from uiiq_ads_local) in the workspace's voice. |
+
 ### Postroom — `src/tools/postroom.js`
 
 | Tool | What it does |
@@ -790,4 +830,4 @@ Every product's target against its actual, by week, month or fiscal year, colour
 | `uiiq_nx2u_library_set` | Record (or re-key) the tenant's video library (owner/admin). |
 | `uiiq_nx2u_usage` | The tenant's last twelve months of NX2U delivery: viewer-seconds, GB, events. |
 
-434 tools.
+468 tools.
