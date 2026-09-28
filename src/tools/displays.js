@@ -487,4 +487,110 @@ export const displayTools = [
       return res.json();
     },
   },
+  // ── Channel publish gate, group / schedule / rule edits ──
+  {
+    name: "uiiq_display_channel_preview",
+    description: "A channel's DRAFT playlist resolved exactly as a screen would receive it. 501 when the workspace's IQEX predates the display publish release.",
+    inputSchema: { type: "object", required: ["id"], properties: { id: { type: "number", description: "Channel id" }, tenant: TENANT_PROP } },
+    async handler({ id, tenant }) {
+      const res = await api(tenant)(`/displays/channels/${encodeURIComponent(id)}/preview`);
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    },
+  },
+  {
+    name: "uiiq_display_channel_publish",
+    description: "PUBLISH a channel: freeze its current content as what screens play, so later edits stay draft until the next publish. 501 when the workspace's IQEX predates the display publish release.",
+    inputSchema: { type: "object", required: ["id"], properties: { id: { type: "number", description: "Channel id" }, tenant: TENANT_PROP } },
+    async handler({ id, tenant }) {
+      const res = await api(tenant)(`/displays/channels/${encodeURIComponent(id)}/publish`, { method: "POST" });
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    },
+  },
+  {
+    name: "uiiq_display_channel_unpublish",
+    description: "Drop a channel's publish gate: edits go live on screens as they are made again.",
+    inputSchema: { type: "object", required: ["id"], properties: { id: { type: "number", description: "Channel id" }, tenant: TENANT_PROP } },
+    async handler({ id, tenant }) {
+      const res = await api(tenant)(`/displays/channels/${encodeURIComponent(id)}/publish`, { method: "DELETE" });
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    },
+  },
+  {
+    name: "uiiq_display_group_update",
+    description: "Rename a display group.",
+    inputSchema: { type: "object", required: ["id", "name"], properties: { id: { type: "number", description: "Group id" }, name: { type: "string" }, tenant: TENANT_PROP } },
+    async handler({ id, name, tenant }) {
+      const res = await api(tenant)(`/displays/groups/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify({ name }) });
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    },
+  },
+  {
+    name: "uiiq_display_group_delete",
+    description: "Delete a display group. Screens in it are kept; a schedule attached to the group stops applying.",
+    inputSchema: { type: "object", required: ["id"], properties: { id: { type: "number", description: "Group id" }, tenant: TENANT_PROP } },
+    async handler({ id, tenant }) {
+      const res = await api(tenant)(`/displays/groups/${encodeURIComponent(id)}`, { method: "DELETE" });
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    },
+  },
+  {
+    name: "uiiq_display_schedule_update",
+    description: "Edit a schedule: rename, switch it on/off (active), or change the default channel shown when no rule matches (default_channel; null clears it). Only the fields sent change.",
+    inputSchema: { type: "object", required: ["id"], properties: { id: { type: "number", description: "Schedule id" }, name: { type: "string" }, active: { type: "boolean" }, default_channel: { type: ["number", "null"] }, tenant: TENANT_PROP } },
+    async handler({ id, tenant, ...fields }) {
+      const body = Object.fromEntries(Object.entries(fields).filter(([, v]) => v !== undefined));
+      if (!Object.keys(body).length) throw new Error("Send at least one field to change");
+      const res = await api(tenant)(`/displays/schedules/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify(body) });
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    },
+  },
+  {
+    name: "uiiq_display_schedule_delete",
+    description: "Delete a schedule and its rules. The screens it targeted fall back to their assigned channel.",
+    inputSchema: { type: "object", required: ["id"], properties: { id: { type: "number", description: "Schedule id" }, tenant: TENANT_PROP } },
+    async handler({ id, tenant }) {
+      const res = await api(tenant)(`/displays/schedules/${encodeURIComponent(id)}`, { method: "DELETE" });
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    },
+  },
+  {
+    name: "uiiq_display_schedule_rule_update",
+    description: "Edit one rule on a schedule — same fields as uiiq_display_schedule_rule_add (channel, days_of_week, start_time, end_time, date_start, date_end, priority); only the fields sent change.",
+    inputSchema: {
+      type: "object",
+      required: ["scheduleId", "ruleId"],
+      properties: {
+        scheduleId: { type: "number" }, ruleId: { type: "number" },
+        channel: { type: "number" }, days_of_week: { type: "string", description: "Comma list Mon=0…Sun=6; empty = every day" },
+        start_time: { type: "string", description: "HH:MM" }, end_time: { type: "string", description: "HH:MM" },
+        date_start: { type: ["string", "null"], description: "YYYY-MM-DD" }, date_end: { type: ["string", "null"], description: "YYYY-MM-DD" },
+        priority: { type: "number" },
+        tenant: TENANT_PROP,
+      },
+    },
+    async handler({ scheduleId, ruleId, tenant, ...fields }) {
+      const body = Object.fromEntries(Object.entries(fields).filter(([, v]) => v !== undefined));
+      if (!Object.keys(body).length) throw new Error("Send at least one field to change");
+      const res = await api(tenant)(`/displays/schedules/${encodeURIComponent(scheduleId)}/rules/${encodeURIComponent(ruleId)}`, { method: "PATCH", body: JSON.stringify(body) });
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    },
+  },
+  {
+    name: "uiiq_display_schedule_rule_delete",
+    description: "Remove a rule from a schedule.",
+    inputSchema: { type: "object", required: ["scheduleId", "ruleId"], properties: { scheduleId: { type: "number" }, ruleId: { type: "number" }, tenant: TENANT_PROP } },
+    async handler({ scheduleId, ruleId, tenant }) {
+      const res = await api(tenant)(`/displays/schedules/${encodeURIComponent(scheduleId)}/rules/${encodeURIComponent(ruleId)}`, { method: "DELETE" });
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    },
+  },
 ];

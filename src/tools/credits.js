@@ -33,4 +33,15 @@ export const creditsTools = [
       return res.json();
     },
   },
+
+  {
+    name: "uiiq_credits_checkout",
+    description: "Start a credit top-up: asks IQEX (which owns credit purchasing) for a Stripe Checkout session for one of the packs in uiiq_credits_ledger and RETURNS A CHECKOUT URL for a person to open and pay — nothing is charged until they complete it. 409 when the workspace isn't linked to an IQEX organisation. OWNER/ADMIN only.",
+    inputSchema: { type: "object", required: ["packId"], properties: { packId: { type: "number", description: "IQEX CreditPack id (see the packs in uiiq_credits_ledger)" }, tenant: TENANT_PROP } },
+    async handler({ packId, tenant }) {
+      const res = await api(tenant)("/credits/checkout", { method: "POST", body: JSON.stringify({ packId }) });
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    },
+  },
 ];

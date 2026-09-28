@@ -177,4 +177,55 @@ export const campaignTools = [
       return res.json();
     },
   },
+  {
+    name: "uiiq_campaign_send",
+    description: "SEND an email campaign to its audience now (subscribed contacts, or the CRM pipeline for a prospects campaign — gated on `prospect_campaigns`). Counts against the plan's monthly email allowance and cannot be recalled. With test: true only ONE copy goes to testEmail (default: you) and nothing else changes. Returns { recipients, sent, failed }.",
+    inputSchema: { type: "object", required: ["id"], properties: { id: { type: "string" }, test: { type: "boolean" }, testEmail: { type: "string" }, tenant: TENANT_PROP } },
+    async handler({ id, test, testEmail, tenant }) {
+      const res = await api(tenant)(`/campaigns/${encodeURIComponent(id)}/send`, { method: "POST", body: JSON.stringify(test ? { test: true, testEmail } : {}) });
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    },
+  },
+  {
+    name: "uiiq_campaign_ab_test_get",
+    description: "The A/B subject-line test on a campaign (subjectA/B, splitPercent, winnerMetric, winnerPickAt), or null when there is none.",
+    inputSchema: { type: "object", required: ["id"], properties: { id: { type: "string" }, tenant: TENANT_PROP } },
+    async handler({ id, tenant }) {
+      const res = await api(tenant)(`/campaigns/${encodeURIComponent(id)}/ab-test`);
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    },
+  },
+  {
+    name: "uiiq_campaign_ab_test_set",
+    description: "Create or replace the A/B subject-line test on a DRAFT or SCHEDULED campaign: subjectA, subjectB, splitPercent 5-45 (default 20), winnerMetric open (default) | click, winnerPickAt (ISO). Not available on a campaign to prospects.",
+    inputSchema: { type: "object", required: ["id", "subjectA", "subjectB"], properties: { id: { type: "string" }, subjectA: { type: "string" }, subjectB: { type: "string" }, splitPercent: { type: "integer", minimum: 5, maximum: 45 }, winnerMetric: { type: "string", enum: ["open", "click"] }, winnerPickAt: { type: "string" }, tenant: TENANT_PROP } },
+    async handler({ id, tenant, ...body }) {
+      const res = await api(tenant)(`/campaigns/${encodeURIComponent(id)}/ab-test`, { method: "POST", body: JSON.stringify(body) });
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    },
+  },
+  {
+    name: "uiiq_campaign_ab_test_delete",
+    description: "REMOVE the A/B test from a campaign (back to a single subject).",
+    inputSchema: { type: "object", required: ["id"], properties: { id: { type: "string" }, tenant: TENANT_PROP } },
+    async handler({ id, tenant }) {
+      const res = await api(tenant)(`/campaigns/${encodeURIComponent(id)}/ab-test`, { method: "DELETE" });
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    },
+  },
+  {
+    name: "uiiq_marketing_calendar",
+    description: "The marketing calendar for a window of up to 100 days: events (start to end), scheduled/published social posts (snippet, platforms) and campaign sends. Each series is left out when its feature (events / socials / email_campaigns) is off for the tenant.",
+    inputSchema: { type: "object", required: ["from", "to"], properties: { from: { type: "string", description: "ISO date" }, to: { type: "string", description: "ISO date" }, tenant: TENANT_PROP } },
+    async handler({ from, to, tenant }) {
+      const qs = `?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`;
+      const res = await api(tenant)(`/marketing/calendar${qs}`);
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    },
+  },
 ];

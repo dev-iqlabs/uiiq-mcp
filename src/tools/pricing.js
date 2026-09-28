@@ -90,4 +90,37 @@ export const pricingTools = [
       return res.json();
     },
   },
+  {
+    name: "uiiq_pricing_benchmark_update",
+    description: "Edit a commercial pricing benchmark (a market price point the Pricing Intelligence recommendations draw on): category, region, scope, low/median/high pence, source title/URL/date, confidence, notes. Only the fields sent change; null clears an optional field.",
+    inputSchema: {
+      type: "object",
+      required: ["id"],
+      properties: {
+        id: { type: "string", description: "Benchmark id (from the Pricing Intelligence page)" },
+        category: { type: "string" }, region: { type: ["string", "null"] }, scope: { type: "string" },
+        lowPence: { type: ["number", "null"] }, medianPence: { type: ["number", "null"] }, highPence: { type: ["number", "null"] },
+        sourceTitle: { type: ["string", "null"] }, sourceUrl: { type: ["string", "null"] }, sourceDate: { type: ["string", "null"], description: "YYYY-MM-DD" },
+        confidence: { type: ["string", "null"] }, notes: { type: ["string", "null"] },
+        tenant: TENANT_PROP,
+      },
+    },
+    async handler({ id, tenant, ...fields }) {
+      const body = Object.fromEntries(Object.entries(fields).filter(([, v]) => v !== undefined));
+      if (!Object.keys(body).length) throw new Error("Send at least one field to change");
+      const res = await api(tenant)(`/pricing/benchmarks/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify(body) });
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    },
+  },
+  {
+    name: "uiiq_pricing_benchmark_delete",
+    description: "Delete a commercial pricing benchmark. Not reversible.",
+    inputSchema: { type: "object", required: ["id"], properties: { id: { type: "string" }, tenant: TENANT_PROP } },
+    async handler({ id, tenant }) {
+      const res = await api(tenant)(`/pricing/benchmarks/${encodeURIComponent(id)}`, { method: "DELETE" });
+      if (!res.ok) throw new Error(await res.text());
+      return { deleted: true, id };
+    },
+  },
 ];

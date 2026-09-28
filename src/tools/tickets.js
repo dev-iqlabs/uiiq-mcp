@@ -1,3 +1,5 @@
+import fs from "node:fs";
+import path from "node:path";
 import { apiClient } from "../auth.js";
 
 // Every tool takes an optional `tenant` (id, slug or exact name). Without it the
@@ -131,5 +133,19 @@ export const ticketsTools = [
       if (!res.ok) throw new Error(await res.text());
       return res.json();
     }
+  },
+  {
+    name: "uiiq_ticket_qr",
+    description: "Save a ticket's QR code (600px PNG encoding /t/<code>, the same image the e-ticket carries) to a local file. Default outPath: ./ticket-<code>.png. 404 for an unknown code.",
+    inputSchema: { type: "object", required: ["code"], properties: { code: { type: "string", description: "Ticket code (from uiiq_ticket_list)" }, outPath: { type: "string" }, tenant: TENANT_PROP } },
+    async handler({ code, outPath, tenant }) {
+      const res = await api(tenant)(`/tickets/${encodeURIComponent(code)}/qr.png`);
+      if (!res.ok) throw new Error(await res.text());
+      const bytes = Buffer.from(await res.arrayBuffer());
+      const target = path.resolve(outPath || `ticket-${code}.png`);
+      fs.mkdirSync(path.dirname(target), { recursive: true });
+      fs.writeFileSync(target, bytes);
+      return { path: target, bytes: bytes.length };
+    },
   },
 ];

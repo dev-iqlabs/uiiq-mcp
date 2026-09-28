@@ -34,4 +34,14 @@ export const smsTools = [
       return res.json();
     },
   },
+  {
+    name: "uiiq_sms_campaign_send",
+    description: "SEND an SMS campaign now to its audience (SMS-subscribed contacts with a phone, one per household, 500 max per send) via Twilio. Counts against the plan's monthly SMS allowance and cannot be recalled; 503 when Twilio is not configured. Returns { recipients, sent, failed }.",
+    inputSchema: { type: "object", required: ["id"], properties: { id: { type: "string" }, tenant: TENANT_PROP } },
+    async handler({ id, tenant }) {
+      const res = await api(tenant)(`/sms/campaigns/${encodeURIComponent(id)}/send`, { method: "POST" });
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    },
+  },
 ];

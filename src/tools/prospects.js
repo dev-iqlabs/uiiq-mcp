@@ -13,6 +13,7 @@ const TENANT_PROP = {
   description: "Tenant id, slug or exact name to act in. Omit for your own tenant.",
 };
 const api = (tenant) => apiClient(tenant ? { tenant } : {});
+const INGEST = "/crm/prospects/ingest";
 
 // A preset body is validated whole by the platform (lib/prospect-presets):
 // PATCH replaces every field, so both create and update take the same shape.
@@ -304,7 +305,7 @@ export const prospectTools = [
     async handler({ apiKey, ...body }) {
       const key = apiKey ?? process.env.UIIQ_CONNECT_API_KEY;
       if (!key) throw new Error("No Connect key. Pass apiKey (look it up with uiiq_tenant_api_key_get) or set UIIQ_CONNECT_API_KEY.");
-      const res = await fetch(`${BASE}/api/crm/prospects/ingest`, {
+      const res = await fetch(`${BASE}/api${INGEST}`, {
         method: "POST",
         headers: { "Content-Type": "application/json", "X-API-Key": key },
         body: JSON.stringify(body),

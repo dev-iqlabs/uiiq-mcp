@@ -37,4 +37,38 @@ export const legacyTools = [
       return res.json();
     },
   },
+  {
+    name: "uiiq_legacy_film_renew",
+    description: "Re-sign a legacy film's Bunny delivery URL (a fresh signed link and expiry, saved on the film). Needs the film to have a Bunny video id and the tenant's Bunny settings to be configured (422 otherwise). Returns { success, id, deliveryUrl, deliveryUrlExpiresAt }.",
+    inputSchema: { type: "object", required: ["id"], properties: { id: { type: "string" }, tenant: TENANT_PROP } },
+    async handler({ id, tenant }) {
+      const res = await api(tenant)(`/legacy/films/${encodeURIComponent(id)}/renew`, { method: "POST" });
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    },
+  },
+  {
+    name: "uiiq_legacy_bunny_settings_get",
+    description: "The tenant's Bunny Stream settings for legacy film delivery: libraryId, pullZoneHost, playerCss, filmDeliveryBaseUrl, and whether the API key and token-auth key are set (the keys themselves are never returned). null when not configured.",
+    inputSchema: { type: "object", properties: { tenant: TENANT_PROP } },
+    async handler({ tenant } = {}) {
+      const res = await api(tenant)("/legacy/settings/bunny");
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    },
+  },
+  {
+    name: "uiiq_legacy_bunny_settings_set",
+    description: "Save (upsert) the tenant's Bunny Stream settings for legacy film delivery. libraryId, apiKey, tokenAuthKey and pullZoneHost are all required every time — this replaces the whole record. Optional playerCss and filmDeliveryBaseUrl.",
+    inputSchema: {
+      type: "object",
+      required: ["libraryId", "apiKey", "tokenAuthKey", "pullZoneHost"],
+      properties: { libraryId: { type: "string" }, apiKey: { type: "string" }, tokenAuthKey: { type: "string" }, pullZoneHost: { type: "string", description: "e.g. vz-xxxx.b-cdn.net" }, playerCss: { type: "string" }, filmDeliveryBaseUrl: { type: "string" }, tenant: TENANT_PROP },
+    },
+    async handler({ tenant, ...body }) {
+      const res = await api(tenant)("/legacy/settings/bunny", { method: "POST", body: JSON.stringify(body) });
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    },
+  },
 ];

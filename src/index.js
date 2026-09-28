@@ -59,6 +59,26 @@ import { postroomTools }        from "./tools/postroom.js";
 import { appealsTools }         from "./tools/appeals.js";
 import { auctionsTools }        from "./tools/auctions.js";
 import { nx2uTools }            from "./tools/nx2u.js";
+import { adminOpsTools } from "./tools/admin-ops.js";
+import { adminPlatformTools } from "./tools/admin-platform.js";
+import { apiTools } from "./tools/api.js";
+import { assistantTools } from "./tools/assistant.js";
+import { brandTools } from "./tools/brand.js";
+import { businessesTools } from "./tools/businesses.js";
+import { cardsTools } from "./tools/cards.js";
+import { classesTools } from "./tools/classes.js";
+import { estimatesTools } from "./tools/estimates.js";
+import { eventsTools } from "./tools/events.js";
+import { formsTools } from "./tools/forms.js";
+import { fundingTools } from "./tools/funding.js";
+import { integrationsTools } from "./tools/integrations.js";
+import { mailTools } from "./tools/mail.js";
+import { shopAdminTools } from "./tools/shop-admin.js";
+import { smartPagesTools } from "./tools/smart-pages.js";
+import { studentsTools } from "./tools/students.js";
+import { teamTools } from "./tools/team.js";
+import { virtualOfficeTools } from "./tools/virtual-office.js";
+import { workflowTools } from "./tools/workflow.js";
 
 const ALL_TOOLS = [
   ...statusTools,
@@ -116,6 +136,26 @@ const ALL_TOOLS = [
   ...appealsTools,
   ...auctionsTools,
   ...nx2uTools,
+  ...adminOpsTools,
+  ...adminPlatformTools,
+  ...apiTools,
+  ...assistantTools,
+  ...brandTools,
+  ...businessesTools,
+  ...cardsTools,
+  ...classesTools,
+  ...estimatesTools,
+  ...eventsTools,
+  ...formsTools,
+  ...fundingTools,
+  ...integrationsTools,
+  ...mailTools,
+  ...shopAdminTools,
+  ...smartPagesTools,
+  ...studentsTools,
+  ...teamTools,
+  ...virtualOfficeTools,
+  ...workflowTools,
 ];
 
 const TOOL_MAP = Object.fromEntries(ALL_TOOLS.map(t => [t.name, t]));

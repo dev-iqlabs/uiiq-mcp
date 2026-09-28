@@ -153,4 +153,31 @@ export const postroomTools = [
       return res.json();
     },
   },
+  // ── Mail forwarding addresses (Office → Mail; the id is what uiiq_mail_update's forwardingAddressId takes) ──
+  {
+    name: "uiiq_postroom_forwarding_address_update",
+    description: "Edit a saved mail forwarding address (label, address lines, city, postcode, country). Only the fields sent change; isDefault true makes it the default and un-defaults the previous one.",
+    inputSchema: {
+      type: "object",
+      required: ["id"],
+      properties: { id: { type: "string" }, label: { type: "string" }, addressLine1: { type: "string" }, addressLine2: { type: "string" }, city: { type: "string" }, postcode: { type: "string" }, country: { type: "string" }, isDefault: { type: "boolean" }, tenant: TENANT_PROP },
+    },
+    async handler({ id, tenant, ...fields }) {
+      const body = Object.fromEntries(Object.entries(fields).filter(([, v]) => v !== undefined));
+      if (!Object.keys(body).length) throw new Error("Send at least one field to change");
+      const res = await api(tenant)(`/forwarding/${encodeURIComponent(id)}`, { method: "PUT", body: JSON.stringify(body) });
+      if (!res.ok) throw await fail(res);
+      return res.json();
+    },
+  },
+  {
+    name: "uiiq_postroom_forwarding_address_delete",
+    description: "Delete a saved mail forwarding address. Not reversible; mail items that were forwarded to it keep the address text in their notes.",
+    inputSchema: { type: "object", required: ["id"], properties: { id: { type: "string" }, tenant: TENANT_PROP } },
+    async handler({ id, tenant }) {
+      const res = await api(tenant)(`/forwarding/${encodeURIComponent(id)}`, { method: "DELETE" });
+      if (!res.ok) throw await fail(res);
+      return res.json();
+    },
+  },
 ];

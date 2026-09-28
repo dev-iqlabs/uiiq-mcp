@@ -134,4 +134,24 @@ export const portfolioTools = [
       return { success: true, blockerId };
     }
   },
+  {
+    name: "uiiq_portfolio_task_board_link",
+    description: "Link a task board to a portfolio project so the board's cards feed the project's progress. The board must belong to the same tenant. Returns the project with milestones, blockers and task progress.",
+    inputSchema: { type: "object", required: ["id", "taskBoardId"], properties: { id: { type: "string", description: "Portfolio project id" }, taskBoardId: { type: "string" }, tenant: TENANT_PROP } },
+    async handler({ id, taskBoardId, tenant }) {
+      const res = await api(tenant)(`/portfolio/projects/${encodeURIComponent(id)}/task-boards`, { method: "POST", body: JSON.stringify({ taskBoardId }) });
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    },
+  },
+  {
+    name: "uiiq_portfolio_task_board_unlink",
+    description: "Unlink a task board from a portfolio project (the board and its cards are untouched). Returns the updated project.",
+    inputSchema: { type: "object", required: ["id", "taskBoardId"], properties: { id: { type: "string", description: "Portfolio project id" }, taskBoardId: { type: "string" }, tenant: TENANT_PROP } },
+    async handler({ id, taskBoardId, tenant }) {
+      const res = await api(tenant)(`/portfolio/projects/${encodeURIComponent(id)}/task-boards`, { method: "DELETE", body: JSON.stringify({ taskBoardId }) });
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    },
+  },
 ];

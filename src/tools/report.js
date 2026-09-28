@@ -43,4 +43,26 @@ export const reportTools = [
       return res.json();
     }
   },
+
+  {
+    name: "uiiq_report_vat",
+    description: "VAT summary for a period (default: this quarter to date) from the VAT snapshots on platform sales — till sales + online food orders, de-duplicated — per rate and in total, with the tenant's VAT registration and a rolling-12-month turnover check against the £90k threshold (ok | approaching | over). A GUIDE ONLY: not a complete accounting record and never a basis for an HMRC return on its own; the response carries the disclaimer.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        from: { type: "string", description: "Start date YYYY-MM-DD (default: first day of the current quarter)" },
+        to: { type: "string", description: "End date YYYY-MM-DD (default: today)" },
+        tenant: TENANT_PROP,
+      }
+    },
+    async handler({ from, to, tenant } = {}) {
+      const params = new URLSearchParams();
+      if (from) params.set("from", from);
+      if (to)   params.set("to", to);
+      const qs = params.toString() ? "?" + params : "";
+      const res = await api(tenant)("/reports/vat" + qs);
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    }
+  },
 ];
