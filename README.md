@@ -64,7 +64,7 @@ UIIQ is one subscription whose modules are grouped as **Sell**, **Grow** and **R
 | Knowledge and advisors | `uiiq_brains_*`, `uiiq_boardroom_*`, `uiiq_agent_*` | Ask a sector Brain, run a Boardroom session with the Mastermind team, read agent definitions |
 | Journeys | `uiiq_journey_*` | Start, advance and resume guided Make-a-Trail journeys |
 | Materials and legacy films | `uiiq_material_*`, `uiiq_legacy_*` | Discover, verify and watch materials, check whether each lead's link leads anywhere, edit or delete a material; list legacy films |
-| Postroom | `uiiq_postroom_*` | The parcels board: product ready, label printed, dispatch, corrections, add recent orders, the return address (needs the `postroom` feature) |
+| Postroom | `uiiq_postroom_*`, `uiiq_admin_postroom_*` | The parcels board: product ready, label printed, dispatch, corrections, add recent orders, the return address (needs the `postroom` feature). Postroom HQ: every tenant's parcels for platform admins (tenants with `postroom_hq` switched on via `uiiq_tenant_features`) |
 | Appeals | `uiiq_appeal_*`, `uiiq_admin_appeal_suspend` | Fundraising appeals on a cause: draft, publish under the Fundraising Regulator's Code, match pledges, updates emailed to supporters (needs the `appeals` feature) |
 | Auctions | `uiiq_auction_*` | The seller's side: draft, lots, publish, bids, withdraw, defaults (needs the `auctions` feature; buyers bid through the public API) |
 | NX2U live streaming | `uiiq_nx2u_*` | Channels, events, the control room (provision, running order, slate, end, replay), the video library, usage (needs the `nx2u` feature; platform switches OFF until Steve turns them on) |
@@ -1039,6 +1039,8 @@ Every product's target against its actual, by week, month or fiscal year, colour
 | `uiiq_postroom_settings_update` | Set the return address (one line per array entry, at most 7; empty = the workspace's own address) and/or the board that reorder tasks go on (taskBoardId, null = none). |
 | `uiiq_postroom_forwarding_address_update` | Edit a saved mail forwarding address (label, address lines, city, postcode, country). |
 | `uiiq_postroom_forwarding_address_delete` | Delete a saved mail forwarding address. |
+| `uiiq_admin_postroom_board` | Postroom HQ (SUPER_ADMIN): every tenant with Postroom and "Show in Postroom HQ" on, each with its own board; `tenantId` narrows to one. |
+| `uiiq_admin_postroom_action` | Postroom HQ: product_ready / label_printed / dispatch / reopen / tell_shop / correct on any tenant's parcel, in the shipment's own tenant. Audited. |
 
 ### Appeals — `src/tools/appeals.js`
 
@@ -1616,4 +1618,4 @@ Every product's target against its actual, by week, month or fiscal year, colour
 | `uiiq_workflow_order_assign` | Assign a workflow order to a user in the tenant (assignedUserId null unassigns). |
 | `uiiq_workflow_order_request_approval` | Ask the customer to approve a stage of their order: creates an approval link, moves the order to AWAITING_APPROVAL and EMAILS the customer. |
 
-1117 tools.
+1119 tools.
