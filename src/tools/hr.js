@@ -186,7 +186,8 @@ export const hrTools = [
       },
     },
     async handler({ id, tenant, ...rest }) {
-      const res = await post(tenant, `/hr/staff/${encodeURIComponent(id)}/status`, { action: "deactivate", ...rest });
+      // action LAST: nothing in `rest` may turn a deactivate into a reactivate.
+      const res = await post(tenant, `/hr/staff/${encodeURIComponent(id)}/status`, { ...rest, action: "deactivate" });
       if (!res.ok) throw await fail(res);
       return res.json();
     }
