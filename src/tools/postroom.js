@@ -208,7 +208,8 @@ export const postroomTools = [
     description:
       "Record a withdrawal of a tenant's Postroom HQ request (Kim D.5): the request ends and Show in Postroom HQ switches off at once (even if nothing is open), and the tenant's owners and admins are emailed. " +
       "Either the tenant asked (channel email, letter, phone or in_person; requester_name, requester_role and message_ref all required), or it was our decision (channel our_decision, e.g. a security issue or the end of a contract; reason required instead). " +
-      "received_at is when they asked, or when we decided. Everything is kept on the request's record. Do it within one business day of their asking. SUPER_ADMIN, not while impersonating. Audited.",
+      "received_at is when they asked, or when we decided. Everything is kept on the request's record. Do it within one business day of their asking. SUPER_ADMIN, not while impersonating. Audited. " +
+      "Do NOT use channel our_decision until UiiQ-platform #761 is live: before that the API refuses it (400).",
     inputSchema: {
       type: "object",
       required: ["tenantId", "channel", "received_at"],
@@ -222,17 +223,25 @@ export const postroomTools = [
         reason: { type: "string", description: "Why we're stopping it. Required when channel is our_decision" },
       },
     },
-    async handler({ tenantId, requester_name, requester_role, channel, received_at, message_ref, reason }) {
-      const missing = channel === "our_decision"
+    async handler(args) {
+      // Trimmed first, so "  " counts as missing, not as an answer.
+      const t = (v) => (typeof v === "string" ? v.trim() : v);
+      const { tenantId, channel } = args;
+      const [name, role, ref, reason, receivedAt] = [args.requester_name, args.requester_role, args.message_ref, args.reason, args.received_at].map(t);
+      const ours = channel === "our_decision";
+      const missing = ours
         ? (reason ? [] : ["reason"])
-        : [["requester_name", requester_name], ["requester_role", requester_role], ["message_ref", message_ref]].filter(([, v]) => !v).map(([k]) => k);
-      if (missing.length) throw new Error(`Record how this withdrawal came about: ${missing.join(", ")} required${channel === "our_decision" ? " when channel is our_decision" : " when the tenant asked"}.`);
-      const body = channel === "our_decision"
-        ? { channel, receivedAt: received_at, reason }
-        : { requesterName: requester_name, requesterRole: requester_role, channel, receivedAt: received_at, messageRef: message_ref };
+        : [["requester_name", name], ["requester_role", role], ["message_ref", ref]].filter(([, v]) => !v).map(([k]) => k);
+      if (missing.length) throw new Error(`Record how this withdrawal came about: ${missing.join(", ")} required${ours ? " when channel is our_decision" : " when the tenant asked"}.`);
+      // Fields that don't apply to this channel aren't sent: say so rather than drop them silently.
+      const ignored = (ours ? [["requester_name", name], ["requester_role", role], ["message_ref", ref]] : [["reason", reason]]).filter(([, v]) => v).map(([k]) => k);
+      const body = ours
+        ? { channel, receivedAt, reason }
+        : { requesterName: name, requesterRole: role, channel, receivedAt, messageRef: ref };
       const res = await api(null)(`/admin/tenants/${encodeURIComponent(tenantId)}/postroom-hq-request`, { method: "DELETE", body: JSON.stringify(body) });
       if (!res.ok) throw await fail(res);
-      return res.json();
+      const out = await res.json();
+      return ignored.length ? { ...out, warning: `Ignored for channel ${channel}: ${ignored.join(", ")}.` } : out;
     },
   },
   {
