@@ -205,23 +205,43 @@ export const postroomTools = [
   },
   {
     name: "uiiq_admin_postroom_hq_request_withdraw",
-    description: "Record a withdrawal the tenant sent us (email, letter, phone, in person): the request ends and Show in Postroom HQ switches off at once. Do it within one business day of their asking. SUPER_ADMIN, not while impersonating. Audited.",
+    description:
+      "Record a withdrawal of a tenant's Postroom HQ request (Kim D.5): the request ends and Show in Postroom HQ switches off at once (even if nothing is open), and the tenant's owners and admins are emailed. " +
+      "Either the tenant asked (channel email, letter, phone or in_person; requester_name, requester_role and message_ref all required), or it was our decision (channel our_decision, e.g. a security issue or the end of a contract; reason required instead). " +
+      "received_at is when they asked, or when we decided. Everything is kept on the request's record. Do it within one business day of their asking. SUPER_ADMIN, not while impersonating. Audited. " +
+      "Do NOT use channel our_decision until UiiQ-platform #761 is live: before that the API refuses it (400).",
     inputSchema: {
       type: "object",
-      required: ["tenantId", "requester_name", "channel", "received_at", "message_ref"],
+      required: ["tenantId", "channel", "received_at"],
       properties: {
         tenantId: { type: "string", description: "Tenant id" },
-        requester_name: { type: "string" },
-        channel: { type: "string", enum: ["email", "letter", "phone", "in_person"] },
-        received_at: { type: "string", description: "ISO date-time" },
-        message_ref: { type: "string" },
+        channel: { type: "string", enum: ["email", "letter", "phone", "in_person", "our_decision"], description: "How it came about: the tenant asked by email/letter/phone/in person, or our_decision" },
+        received_at: { type: "string", description: "ISO date-time they asked (or we decided)" },
+        requester_name: { type: "string", description: "Who asked (full name). Required unless our_decision" },
+        requester_role: { type: "string", description: "Their role at the tenant, e.g. Director. Required unless our_decision" },
+        message_ref: { type: "string", description: "Email: sender + subject; phone: number + time; letter: date. Required unless our_decision" },
+        reason: { type: "string", description: "Why we're stopping it. Required when channel is our_decision" },
       },
     },
-    async handler({ tenantId, requester_name, channel, received_at, message_ref }) {
-      const body = { requesterName: requester_name, channel, receivedAt: received_at, messageRef: message_ref };
+    async handler(args) {
+      // Trimmed first, so "  " counts as missing, not as an answer.
+      const t = (v) => (typeof v === "string" ? v.trim() : v);
+      const { tenantId, channel } = args;
+      const [name, role, ref, reason, receivedAt] = [args.requester_name, args.requester_role, args.message_ref, args.reason, args.received_at].map(t);
+      const ours = channel === "our_decision";
+      const missing = ours
+        ? (reason ? [] : ["reason"])
+        : [["requester_name", name], ["requester_role", role], ["message_ref", ref]].filter(([, v]) => !v).map(([k]) => k);
+      if (missing.length) throw new Error(`Record how this withdrawal came about: ${missing.join(", ")} required${ours ? " when channel is our_decision" : " when the tenant asked"}.`);
+      // Fields that don't apply to this channel aren't sent: say so rather than drop them silently.
+      const ignored = (ours ? [["requester_name", name], ["requester_role", role], ["message_ref", ref]] : [["reason", reason]]).filter(([, v]) => v).map(([k]) => k);
+      const body = ours
+        ? { channel, receivedAt, reason }
+        : { requesterName: name, requesterRole: role, channel, receivedAt, messageRef: ref };
       const res = await api(null)(`/admin/tenants/${encodeURIComponent(tenantId)}/postroom-hq-request`, { method: "DELETE", body: JSON.stringify(body) });
       if (!res.ok) throw await fail(res);
-      return res.json();
+      const out = await res.json();
+      return ignored.length ? { ...out, warning: `Ignored for channel ${channel}: ${ignored.join(", ")}.` } : out;
     },
   },
   {
