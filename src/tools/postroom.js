@@ -153,16 +153,98 @@ export const postroomTools = [
       return res.json();
     },
   },
+  // ── Postroom HQ requests: the shop asks, a code is generated (Kim's in-app terms) ──
+  // Requesting Postroom HQ is an Art 28 acceptance, so it is a CLICK in UiiQ
+  // only: the shop's owner or admin in its Postroom settings, or a platform
+  // admin raising it for the shop in the admin UI. The API refuses both from
+  // any API client (Lucas, UiiQ-platform #754 H1), so there is deliberately no
+  // tool to create or raise a request, or to set "group company". These tools
+  // read the status, withdraw (a shop can always stop), and export the log.
+  {
+    name: "uiiq_postroom_hq_request_status",
+    description:
+      "This workspace's Postroom HQ request: status (not_requested, pending, active, on, withdrawn, lapsed), its code (PHQ-<SLUG>-<YYYYMMDD>-<4>), who accepted and when, whether re-acceptance is needed, whether this workspace may request at all (group companies, or once external tenants are switched on), and the terms (text, version, url). Requesting it is a click in UiiQ only (Postroom settings), never through a tool.",
+    inputSchema: { type: "object", properties: { tenant: TENANT_PROP } },
+    async handler({ tenant } = {}) {
+      const res = await api(tenant)("/postroom/hq-request");
+      if (!res.ok) throw await fail(res);
+      return res.json();
+    },
+  },
+  {
+    name: "uiiq_postroom_hq_request_withdraw",
+    description:
+      "Withdraw this workspace's Postroom HQ request: it ends at once and Show in Postroom HQ switches off straight away (parcels packed but not posted come back to the workspace's own board). OWNER or ADMIN, not while impersonating. Audited.",
+    inputSchema: { type: "object", properties: {} },
+    async handler() {
+      const res = await api(null)("/postroom/hq-request", { method: "DELETE" });
+      if (!res.ok) throw await fail(res);
+      return res.json();
+    },
+  },
+  {
+    name: "uiiq_postroom_hq_log",
+    description:
+      "This workspace's Postroom HQ log for the last 12 months: every HQ view, print and action on its parcels, every request step, and every switch of Show in Postroom HQ. Never an address. format json (default) or csv. OWNER or ADMIN.",
+    inputSchema: { type: "object", properties: { format: { type: "string", enum: ["json", "csv"] }, tenant: TENANT_PROP } },
+    async handler({ format, tenant } = {}) {
+      const res = await api(tenant)(format === "csv" ? "/postroom/hq-log?format=csv" : "/postroom/hq-log");
+      if (!res.ok) throw await fail(res);
+      return format === "csv" ? res.text() : res.json();
+    },
+  },
+  {
+    name: "uiiq_admin_postroom_hq_request_status",
+    description: "A tenant's Postroom HQ request as the shop sees it, plus groupCompany and whether it may request. Raising a request for a shop, and setting group company, are clicks in the admin UI only (/admin/tenants/<id>), never through a tool. SUPER_ADMIN, not while impersonating.",
+    inputSchema: { type: "object", required: ["tenantId"], properties: { tenantId: { type: "string", description: "Tenant id" } } },
+    async handler({ tenantId }) {
+      const res = await api(null)(`/admin/tenants/${encodeURIComponent(tenantId)}/postroom-hq-request`);
+      if (!res.ok) throw await fail(res);
+      return res.json();
+    },
+  },
+  {
+    name: "uiiq_admin_postroom_hq_request_withdraw",
+    description: "Record a withdrawal the tenant sent us (email, letter, phone, in person): the request ends and Show in Postroom HQ switches off at once. Do it within one business day of their asking. SUPER_ADMIN, not while impersonating. Audited.",
+    inputSchema: {
+      type: "object",
+      required: ["tenantId", "requester_name", "channel", "received_at", "message_ref"],
+      properties: {
+        tenantId: { type: "string", description: "Tenant id" },
+        requester_name: { type: "string" },
+        channel: { type: "string", enum: ["email", "letter", "phone", "in_person"] },
+        received_at: { type: "string", description: "ISO date-time" },
+        message_ref: { type: "string" },
+      },
+    },
+    async handler({ tenantId, requester_name, channel, received_at, message_ref }) {
+      const body = { requesterName: requester_name, channel, receivedAt: received_at, messageRef: message_ref };
+      const res = await api(null)(`/admin/tenants/${encodeURIComponent(tenantId)}/postroom-hq-request`, { method: "DELETE", body: JSON.stringify(body) });
+      if (!res.ok) throw await fail(res);
+      return res.json();
+    },
+  },
+  {
+    name: "uiiq_admin_postroom_hq_log",
+    description: "One tenant's Postroom HQ log for the last 12 months (HQ views, prints, actions, request steps, switches; never an address), to send the tenant on request. format json (default) or csv. SUPER_ADMIN, not while impersonating. The export is audited.",
+    inputSchema: { type: "object", required: ["tenantId"], properties: { tenantId: { type: "string" }, format: { type: "string", enum: ["json", "csv"] } } },
+    async handler({ tenantId, format }) {
+      const qs = format === "csv" ? "?format=csv" : "";
+      const res = await api(null)(`/admin/tenants/${encodeURIComponent(tenantId)}/postroom-hq-log${qs}`);
+      if (!res.ok) throw await fail(res);
+      return format === "csv" ? res.text() : res.json();
+    },
+  },
   // ── Postroom HQ (SUPER_ADMIN): every tenant's parcels on one board ──
-  // Only tenants with Postroom AND "Show in Postroom HQ" (feature postroom_hq,
-  // off by default; set with uiiq_tenant_features enable=postroom_hq plus
-  // instruction_ref, the tenant's documented instruction) are on
-  // it. Operator scope: never sent with a tenant context, and refused by the
+  // Only tenants with Postroom, "Show in Postroom HQ" (feature postroom_hq,
+  // off by default; ticked with uiiq_tenant_features enable=postroom_hq once
+  // the tenant has an ACTIVE Postroom HQ request) and that request are on it.
+  // Operator scope: never sent with a tenant context, and refused by the
   // API while impersonating. Every action is audit-logged.
   {
     name: "uiiq_admin_postroom_board",
     description:
-      "Postroom HQ: every tenant on Postroom HQ (Postroom + 'Show in Postroom HQ' switched on), each with its own board — parcels, pick list, postage check — as uiiq_postroom_list gives one tenant. tenantId (id or slug) narrows it to one; site (with tenantId) to one of its shops. SUPER_ADMIN, not while impersonating.",
+      "Postroom HQ: every tenant on Postroom HQ (Postroom + 'Show in Postroom HQ' switched on + an ACTIVE Postroom HQ request, whose code is on each tenant), each with its own board — parcels, pick list, postage check — as uiiq_postroom_list gives one tenant. tenantId (id or slug) narrows it to one; site (with tenantId) to one of its shops. SUPER_ADMIN, not while impersonating.",
     inputSchema: {
       type: "object",
       properties: {

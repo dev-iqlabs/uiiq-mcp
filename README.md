@@ -64,7 +64,7 @@ UIIQ is one subscription whose modules are grouped as **Sell**, **Grow** and **R
 | Knowledge and advisors | `uiiq_brains_*`, `uiiq_boardroom_*`, `uiiq_agent_*` | Ask a sector Brain, run a Boardroom session with the Mastermind team, read agent definitions |
 | Journeys | `uiiq_journey_*` | Start, advance and resume guided Make-a-Trail journeys |
 | Materials and legacy films | `uiiq_material_*`, `uiiq_legacy_*` | Discover, verify and watch materials, check whether each lead's link leads anywhere, edit or delete a material; list legacy films |
-| Postroom | `uiiq_postroom_*`, `uiiq_admin_postroom_*` | The parcels board: product ready, label printed, dispatch, corrections, add recent orders, the return address (needs the `postroom` feature). Postroom HQ: every tenant's parcels for platform admins (tenants with `postroom_hq` switched on via `uiiq_tenant_features`, which needs `instruction_ref`: the tenant's documented instruction, e.g. `IGI-PHQ-UC-2026-01`) |
+| Postroom | `uiiq_postroom_*`, `uiiq_admin_postroom_*` | The parcels board: product ready, label printed, dispatch, corrections, add recent orders, the return address (needs the `postroom` feature). Postroom HQ: every tenant's parcels for platform admins. A shop gets on it by REQUESTING it with a click in UiiQ (its owner or admin accepts the in-app terms in Postroom settings, and a code is generated), or a platform admin raises it for the shop in the admin UI with the evidence. Those are an Art 28 acceptance, so no tool can make them; `uiiq_postroom_hq_request_status` / `_withdraw` and the admin status / withdraw tools read and stop them. `postroom_hq` can then be switched on via `uiiq_tenant_features`. Per-tenant HQ log: `uiiq_postroom_hq_log`, `uiiq_admin_postroom_hq_log` |
 | Appeals | `uiiq_appeal_*`, `uiiq_admin_appeal_suspend` | Fundraising appeals on a cause: draft, publish under the Fundraising Regulator's Code, match pledges, updates emailed to supporters (needs the `appeals` feature) |
 | Auctions | `uiiq_auction_*` | The seller's side: draft, lots, publish, bids, withdraw, defaults (needs the `auctions` feature; buyers bid through the public API) |
 | NX2U live streaming | `uiiq_nx2u_*` | Channels, events, the control room (provision, running order, slate, end, replay), the video library, usage (needs the `nx2u` feature; platform switches OFF until Steve turns them on) |
@@ -141,7 +141,7 @@ Not exposed on purpose: the platform-to-platform callbacks under `/api/platform/
 | `uiiq_tenant_create` | Create a new UIIQ tenant. |
 | `uiiq_tenant_api_key` | ROTATE the UIIQ Connect API key for a tenant: issues a NEW key and returns it once. |
 | `uiiq_tenant_api_key_get` | Look up a tenant's CURRENT UIIQ Connect API key (the key the uiiq-connect WordPress plugin, IQEX and n8n send). |
-| `uiiq_tenant_features` | Get or set feature flags for a UIIQ tenant. Enabling `postroom_hq` needs `instruction_ref` (the tenant's documented instruction, e.g. `IGI-PHQ-UC-2026-01`, max 200 characters). |
+| `uiiq_tenant_features` | Get or set feature flags for a UIIQ tenant. Enabling `postroom_hq` needs the tenant's ACTIVE Postroom HQ request (409 without one); the request's code is audited. |
 | `uiiq_tenant_usage` | Get usage stats for a UIIQ tenant (sends, contacts, API calls). |
 | `uiiq_tenant_rename` | Change a UIIQ tenant's slug. |
 | `uiiq_tenant_delete` | Delete or restore a UIIQ tenant. |
@@ -1039,7 +1039,13 @@ Every product's target against its actual, by week, month or fiscal year, colour
 | `uiiq_postroom_settings_update` | Set the return address (one line per array entry, at most 7; empty = the workspace's own address) and/or the board that reorder tasks go on (taskBoardId, null = none). |
 | `uiiq_postroom_forwarding_address_update` | Edit a saved mail forwarding address (label, address lines, city, postcode, country). |
 | `uiiq_postroom_forwarding_address_delete` | Delete a saved mail forwarding address. |
-| `uiiq_admin_postroom_board` | Postroom HQ (SUPER_ADMIN): every tenant with Postroom and "Show in Postroom HQ" on, each with its own board; `tenantId` narrows to one. |
+| `uiiq_postroom_hq_request_status` | This workspace's Postroom HQ request (status, code, who accepted, re-acceptance needed), whether it may request, and the terms. Requesting is a click in UiiQ only. |
+| `uiiq_postroom_hq_request_withdraw` | Withdraw the request: it ends and Show in Postroom HQ switches off at once. OWNER/ADMIN, not while impersonating. |
+| `uiiq_postroom_hq_log` | This workspace's Postroom HQ log for 12 months (views, prints, actions, request steps; never an address), json or csv. OWNER/ADMIN. |
+| `uiiq_admin_postroom_hq_request_status` | A tenant's Postroom HQ request as the shop sees it, plus groupCompany. Raising one and setting group company are admin-UI clicks only. SUPER_ADMIN. |
+| `uiiq_admin_postroom_hq_request_withdraw` | Record a withdrawal the tenant sent us (who, channel, when, ref): HQ switches off. SUPER_ADMIN. |
+| `uiiq_admin_postroom_hq_log` | One tenant's Postroom HQ log, json or csv, to send them on request. SUPER_ADMIN. |
+| `uiiq_admin_postroom_board` | Postroom HQ (SUPER_ADMIN): every tenant with Postroom, "Show in Postroom HQ" on and an ACTIVE request (its code on each), each with its own board; `tenantId` narrows to one. |
 | `uiiq_admin_postroom_action` | Postroom HQ: product_ready / label_printed / dispatch / reopen / tell_shop / correct on any tenant's parcel, in the shipment's own tenant. Audited. |
 
 ### Appeals — `src/tools/appeals.js`
