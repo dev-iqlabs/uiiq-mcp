@@ -55,7 +55,7 @@ UIIQ is one subscription whose modules are grouped as **Sell**, **Grow** and **R
 | --- | --- | --- |
 | Tasks and boards | `uiiq_task_*`, `uiiq_board_*` | Create projects, boards and cards, assign, comment, move, tick checklists |
 | Workflows and automations | `uiiq_workflow_*`, `uiiq_automation_*` | Trigger workflows, inspect instances, toggle automations |
-| HR and payroll | `uiiq_hr_*` | Staff records, clock-ins, timesheets, leave approvals, payroll runs and exports |
+| HR and payroll | `uiiq_hr_*` | Staff records (create, edit, deactivate and reactivate), clock-ins, timesheets, leave approvals, payroll runs and exports |
 | Costs and planning | `uiiq_costs_*`, `uiiq_plan_*`, `uiiq_report_*` | Bills, allocations, recurring costs, period locks, KPI rolls; the business plan's revenue, expenses, personnel and statements; revenue and usage reports |
 | Targets board | `uiiq_targets_*` | Every product's target against its actual by week, month or year; set a line's stage and launch month, merge monthly targets, add and test where actuals come from, type figures in |
 | Billing and credits | `uiiq_billing_*`, `uiiq_credits_*` | Invoices, usage, billing overrides, the IQEX credit balance and ledger |
@@ -923,8 +923,12 @@ Every product's target against its actual, by week, month or fiscal year, colour
 
 | Tool | What it does |
 | --- | --- |
-| `uiiq_hr_staff_list` | List UIIQ staff members. |
-| `uiiq_hr_staff_get` | Get full profile for a UIIQ staff member by ID, including roles, training, and leave balance. |
+| `uiiq_hr_staff_list` | List HR staff records: id, name, job title, department, employment type, status and leaving date (no pay or contact details). status active (default), inactive or all. |
+| `uiiq_hr_staff_get` | One HR staff record in full. An owner/admin can read anyone's; anyone else only their own. |
+| `uiiq_hr_staff_create` | Add an HR staff record (firstName, lastName, email, startDate required; annualSalary in pounds). |
+| `uiiq_hr_staff_update` | Edit an HR staff record — only the fields you send change; audited, with pay, notes and personal details recorded as changed without values. |
+| `uiiq_hr_staff_deactivate` | Deactivate someone who is leaving: INACTIVE plus their leaving date; off rotas and pickers, no new work, badge invalid, login untouched; optionally disables their till PIN and hides their Venue Staff profile. |
+| `uiiq_hr_staff_reactivate` | Reactivate a deactivated staff record: ACTIVE, leaving date cleared. |
 | `uiiq_hr_timesheet_list` | List UIIQ timesheet entries. |
 | `uiiq_hr_timesheet_approve` | Approve or reject a UIIQ timesheet entry by ID. |
 | `uiiq_hr_clockin_list` | List UIIQ QR clock-in records. |
@@ -1232,8 +1236,8 @@ Every product's target against its actual, by week, month or fiscal year, colour
 | `uiiq_admin_staff_list` | The workspace's Sell staff (performers): internal staff linked to a user, and external ones, with type, role, contact details, tags, price guide and active flag. |
 | `uiiq_admin_staff_create` | Add a staff member: staffType INTERNAL (userId required — one profile per user) or EXTERNAL; name required; optional role, bio, contactEmail, contactPhone, tags, priceGuidePence, travelRadius. |
 | `uiiq_admin_staff_get` | One staff member by id, with the linked user if internal. |
-| `uiiq_admin_staff_update` | Edit a staff member: name, role, bio, contactEmail, contactPhone, tags, priceGuidePence, travelRadius, isActive — only the fields you send change (empty string clears a text field). |
-| `uiiq_admin_staff_delete` | DELETE a staff member's profile permanently (their availability goes with it; a linked user account is kept). |
+| `uiiq_admin_staff_update` | Edit a Venue Staff profile (Sell performer) — only the fields you send change. isActive false deactivates them: hidden from the calendar and session pickers, and no new session can be given to them. |
+| `uiiq_admin_staff_delete` | Remove a Venue Staff profile: hidden instead when they have sessions, bookings or availability on record; deleted only when they have none. |
 | `uiiq_admin_group_list` | The workspace's experience groups in display order, each with its non-archived experiences. |
 | `uiiq_admin_group_create` | Create an experience group: name (<= 200) and slug (lowercase, hyphens, <= 100, unique) required; optional description and imageUrl (must be on the platform's image hosts). |
 | `uiiq_admin_group_reorder` | Set the display order of experience groups: order = [{ id, position }] (up to 500; positions are whole numbers from 0). |

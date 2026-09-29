@@ -407,7 +407,7 @@ export const adminPlatformTools = [
   },
   {
     name: "uiiq_admin_staff_update",
-    description: "Edit a staff member: name, role, bio, contactEmail, contactPhone, tags, priceGuidePence, travelRadius, isActive — only the fields you send change (empty string clears a text field). OWNER/ADMIN.",
+    description: "Edit a Venue Staff profile (Sell performer): name, role, bio, contactEmail, contactPhone, tags, priceGuidePence (whole pence, or null), travelRadius — only the fields you send change (empty string clears a text field). isActive false DEACTIVATES them: hidden from Venue Staff's default list, the calendar and the session pickers, and a new session can't be given to them (409); existing sessions and bookings stay. isActive true brings them back. Audited. OWNER/ADMIN. For the HR staff record use uiiq_hr_staff_update / uiiq_hr_staff_deactivate.",
     inputSchema: {
       type: "object", required: ["id"],
       properties: { id: { type: "string" }, name: { type: "string" }, role: { type: "string" }, bio: { type: "string" }, contactEmail: { type: "string" }, contactPhone: { type: "string" }, tags: { type: "array", items: { type: "string" } }, priceGuidePence: { type: "number" }, travelRadius: { type: "string" }, isActive: { type: "boolean" }, tenant: TENANT_PROP },
@@ -418,7 +418,7 @@ export const adminPlatformTools = [
   },
   {
     name: "uiiq_admin_staff_delete",
-    description: "DELETE a staff member's profile permanently (their availability goes with it; a linked user account is kept). To hide instead, set isActive false. OWNER/ADMIN.",
+    description: "Remove a Venue Staff profile. Someone with sessions, bookings or availability on record is HIDDEN instead (isActive false; the response says deactivated: true with the reason); only a profile with none of those is deleted permanently. A linked user account is kept either way. OWNER/ADMIN.",
     inputSchema: { type: "object", required: ["id"], properties: { id: { type: "string" }, tenant: TENANT_PROP } },
     async handler({ id, tenant }) {
       return send(tenant, `/admin/staff/${enc(id)}`, "DELETE");
