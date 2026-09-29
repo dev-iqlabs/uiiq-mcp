@@ -21,7 +21,7 @@ UIIQ is one subscription whose modules are grouped as **Sell**, **Grow** and **R
 | Retail | `uiiq_retail_*` | Products, categories, suppliers, low-stock alerts, shop sync, stock reasons and reports |
 | Till and kitchen | `uiiq_till_*` | Ping a paired till, verify a staff PIN, take a sale or payment intent, redeem an IQPlant plan code |
 | Menus (food and drink) | `uiiq_menu_*` | Generate a menu kit, build the live menu, manage menu documents |
-| Classes and students | `uiiq_classes_*`, `uiiq_students_*` | Terms, course runs, enrolments (pay now or instalments), registers (attendance, scan, stars, costumes), notices, parent policies; student records, progress notes, check-in cards (medical fields only on get) |
+| Classes and students | `uiiq_classes_*`, `uiiq_students_*` | Terms, course runs, enrolments (pay now or instalments), registers (attendance, scan, stars, costumes), notices, parent policies; student records, progress notes, check-in cards (medical fields only on get), absences (illness and time off) |
 | Customer cards | `uiiq_cards_*` | Issue, reissue, revoke, hand over and print member and student cards through IQEX (QR/NFC and branding only, never a name; printing spends credits) |
 | Till back office, kitchen, tables | `uiiq_till_*` | Devices, staff, day close, daily summary, refunds, payment config, food orders and settlement, KDS tickets, tables and their QR codes (floor routes take the device token) |
 | Bookings admin | `uiiq_blockout_*`, `uiiq_checkin_*`, `uiiq_custom_field_*`, `uiiq_waiver_*`, `uiiq_ticket_type_*`, `uiiq_booking_refund`, `uiiq_promo_code_*` | Blockouts, the calendar, door check-in, custom booking fields, waivers, ticket types, refunds (real money), promo codes |
@@ -1368,7 +1368,7 @@ Every product's target against its actual, by week, month or fiscal year, colour
 | `uiiq_classes_enrolment_plan_options` | The student's guardian's ACTIVE memberships, each flagged with whether its plan covers the class — what to pass as membershipId for a PLAN enrolment. |
 | `uiiq_classes_register_day` | The day's registers (default today): every class running on that date with its students, attendance marks, check-in/out times, paid chip (PAID / OWES / DROP_IN_DUE / PLAN / PLAN_OVER / ARREARS …), stars and costume ticks; cancelled sessions listed separately. |
 | `uiiq_classes_register_students` | Names-only student search (id, name, guardian name; max 20) for adding a walk-in to a register. |
-| `uiiq_classes_register_mark` | Mark a student PRESENT, ABSENT or LATE for a class on a date. |
+| `uiiq_classes_register_mark` | Mark a student PRESENT, ABSENT or LATE for a class on a date. With student absences on, ILL too (stored as ABSENT, linked to an illness, no "Missed class" message). |
 | `uiiq_classes_register_payment` | TAKE A PAYMENT at the register against an enrolment (drop-in fee, plan excess or owed balance): raises a CASH/CARD till sale so it lands in daily takings, records it on the ledger, and with sessionDate stamps that day's attendance as paid (creating a PRESENT mark if none). |
 | `uiiq_classes_register_star` | Toggle a star for a student in a class on a date (calling again removes it; the reply says starred true/false). |
 | `uiiq_classes_register_costume` | Tick a student's costume for a show as handedOut and/or paid (send at least one). |
@@ -1580,6 +1580,9 @@ Every product's target against its actual, by week, month or fiscal year, colour
 | `uiiq_students_card_status` | Whether a child has a check-in card token, when it was issued and when it was last used. |
 | `uiiq_students_card_issue` | Mint a child's check-in token if they have none; with regenerate=true REPLACE it (card lost): the old card, printed sheet and NFC tag stop working at once and the print status goes back to NOT_SENT. |
 | `uiiq_students_scan_qr` | A child's check-in QR as an SVG (mints the token on first call). |
+| `uiiq_students_absences_list` | A student's recorded absences (illness, holiday, appointment, other) with status, whether each is excused, the classes covered and the staff note. OWNER/ADMIN; 404 unless student absences are switched on. |
+| `uiiq_students_absences_record` | Record an absence as staff: a holiday is APPROVED, illness/appointment/other REPORTED; excused at once (register badge, no "Missed class", not counted against attendance). |
+| `uiiq_students_absences_update` | Cancel (kept as history) or edit a recorded absence; shortening it unlinks register marks it no longer covers. |
 | `uiiq_students_groups` | The distinct group labels in use across active students, with a student count each (the group picker for notices, campaigns and SMS). |
 
 ### Team (Mastermind) — `src/tools/team.js`
@@ -1628,4 +1631,4 @@ Every product's target against its actual, by week, month or fiscal year, colour
 | `uiiq_workflow_order_assign` | Assign a workflow order to a user in the tenant (assignedUserId null unassigns). |
 | `uiiq_workflow_order_request_approval` | Ask the customer to approve a stage of their order: creates an approval link, moves the order to AWAITING_APPROVAL and EMAILS the customer. |
 
-1119 tools.
+1132 tools.

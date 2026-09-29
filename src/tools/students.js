@@ -176,6 +176,69 @@ export const studentsTools = [
     },
   },
 
+  // ── Absences (illness and time off) ──
+  // Behind the workspace's `student_absence` switch: every call is a 404 until
+  // it is ticked. Illness is a child's health information — the note is a
+  // short staff note, never symptoms, and never audited.
+  {
+    name: "uiiq_students_absences_list",
+    description: "A student's recorded absences (illness, holiday, appointment, other), newest first (up to 200): dates (inclusive), the classes covered (null = all), status (REPORTED / APPROVED / REQUESTED / DECLINED / CANCELLED), excused (true = left out of attendance rates, the lapse check and the \"Missed class\" message), authorised, who recorded it and the staff note. OWNER/ADMIN only; 404 unless the workspace has student absences switched on. The note is health information — don't repeat it beyond the person asking.",
+    inputSchema: { type: "object", required: ["id"], properties: { id: { type: "string", description: "Student id" }, tenant: TENANT_PROP } },
+    async handler({ id, tenant }) {
+      const res = await api(tenant)(`/students/${encodeURIComponent(id)}/absences`);
+      if (!res.ok) throw await fail(res);
+      return res.json();
+    },
+  },
+  {
+    name: "uiiq_students_absences_record",
+    description: "Record an absence for a student, as staff (a parent rang, a holiday was agreed). kind HOLIDAY is recorded APPROVED; ILLNESS, APPOINTMENT and OTHER are REPORTED (no approval step). Excused at once: the register shows it, no \"Missed class\" message is sent and it doesn't count against their attendance. startDate YYYY-MM-DD; endDate defaults to the same day (inclusive, at most 366 days); classIds limits it to those classes (omit for all); note up to 500 chars, staff only — keep it minimal, no symptoms; authorised defaults to true. Audited with the kind, never the note. OWNER/ADMIN only; 404 unless switched on.",
+    inputSchema: {
+      type: "object",
+      required: ["id", "kind", "startDate"],
+      properties: {
+        id: { type: "string", description: "Student id" },
+        kind: { type: "string", enum: ["HOLIDAY", "ILLNESS", "APPOINTMENT", "OTHER"] },
+        startDate: { type: "string", description: "YYYY-MM-DD" },
+        endDate: { type: "string", description: "YYYY-MM-DD, inclusive; default = startDate" },
+        classIds: { type: "array", items: { type: "string" }, description: "Only these classes; omit for all the student's classes" },
+        note: { type: "string", description: "Up to 500 chars, staff only" },
+        authorised: { type: "boolean", description: "Default true" },
+        tenant: TENANT_PROP,
+      },
+    },
+    async handler({ id, tenant, ...body }) {
+      const res = await send(tenant, "POST", `/students/${encodeURIComponent(id)}/absences`, body);
+      if (!res.ok) throw await fail(res);
+      return res.json();
+    },
+  },
+  {
+    name: "uiiq_students_absences_update",
+    description: "Edit or cancel a recorded absence. action=\"cancel\" withdraws it: kept as CANCELLED history, and it counts as an ordinary absence again. Otherwise send any of kind, startDate, endDate, classIds (null = all classes), note (null or \"\" clears it), authorised. Shortening the dates or narrowing the classes unlinks register marks it no longer covers; a staff absence changed to or from HOLIDAY moves between APPROVED and REPORTED. A cancelled or declined absence can't be edited (409). Audited with the field names, never the note. OWNER/ADMIN only; 404 unless switched on.",
+    inputSchema: {
+      type: "object",
+      required: ["id", "absenceId"],
+      properties: {
+        id: { type: "string", description: "Student id" },
+        absenceId: { type: "string" },
+        action: { type: "string", enum: ["cancel"], description: "Omit to edit" },
+        kind: { type: "string", enum: ["HOLIDAY", "ILLNESS", "APPOINTMENT", "OTHER"] },
+        startDate: { type: "string", description: "YYYY-MM-DD" },
+        endDate: { type: "string", description: "YYYY-MM-DD, inclusive" },
+        classIds: { type: ["array", "null"], items: { type: "string" }, description: "null = all classes" },
+        note: { type: ["string", "null"] },
+        authorised: { type: "boolean" },
+        tenant: TENANT_PROP,
+      },
+    },
+    async handler({ id, absenceId, tenant, ...body }) {
+      const res = await send(tenant, "PATCH", `/students/${encodeURIComponent(id)}/absences/${encodeURIComponent(absenceId)}`, body);
+      if (!res.ok) throw await fail(res);
+      return res.json();
+    },
+  },
+
   {
     name: "uiiq_students_groups",
     description: "The distinct group labels in use across active students, with a student count each (the group picker for notices, campaigns and SMS).",

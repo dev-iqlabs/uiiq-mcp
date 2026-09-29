@@ -374,7 +374,7 @@ export const classesTools = [
   // ── Registers ──
   {
     name: "uiiq_classes_register_day",
-    description: "The day's registers (default today): every class running on that date with its students, attendance marks, check-in/out times, paid chip (PAID / OWES / DROP_IN_DUE / PLAN / PLAN_OVER / ARREARS …), stars and costume ticks; cancelled sessions listed separately. Names + paid state only.",
+    description: "The day's registers (default today): every class running on that date with its students, attendance marks, check-in/out times, paid chip (PAID / OWES / DROP_IN_DUE / PLAN / PLAN_OVER / ARREARS …), stars and costume ticks; cancelled sessions listed separately. Names + paid state only. With student absences switched on (absencesEnabled: true), each child with a known absence covering the session carries `absence` (label such as \"Holiday\" or \"Ill (reported)\", linked = their Absent mark belongs to it); its note only for owners/admins and the class's own teachers.",
     inputSchema: { type: "object", properties: { date: { type: "string", description: "YYYY-MM-DD" }, tenant: TENANT_PROP } },
     async handler({ date, tenant } = {}) {
       const qs = date ? `?date=${encodeURIComponent(date)}` : "";
@@ -396,8 +396,8 @@ export const classesTools = [
   },
   {
     name: "uiiq_classes_register_mark",
-    description: "Mark a student PRESENT, ABSENT or LATE for a class on a date. walkIn=true enrols an unenrolled student as DROP_IN first. A mark that CHANGES to ABSENT or LATE fires the tenant's attendance automations on the guardian (may message them). 409 on a cancelled session.",
-    inputSchema: { type: "object", required: ["classId", "studentId", "sessionDate", "status"], properties: { classId: { type: "string" }, studentId: { type: "string" }, sessionDate: { type: "string", description: "YYYY-MM-DD" }, status: { type: "string", enum: ["PRESENT", "ABSENT", "LATE"] }, walkIn: { type: "boolean" }, tenant: TENANT_PROP } },
+    description: "Mark a student PRESENT, ABSENT or LATE for a class on a date. walkIn=true enrols an unenrolled student as DROP_IN first. A mark that CHANGES to ABSENT or LATE fires the tenant's attendance automations on the guardian (may message them). 409 on a cancelled session. With student absences switched on: ILL is accepted too — stored as ABSENT, linked to a one-day ILLNESS absence (or one already covering the day), and it sends no \"Missed class\" message; an ABSENT inside a recorded absence is linked the same way and sends none either; PRESENT or LATE clears the link (an ILL mark's own absence is removed). The reply then carries absenceId.",
+    inputSchema: { type: "object", required: ["classId", "studentId", "sessionDate", "status"], properties: { classId: { type: "string" }, studentId: { type: "string" }, sessionDate: { type: "string", description: "YYYY-MM-DD" }, status: { type: "string", enum: ["PRESENT", "ABSENT", "LATE", "ILL"], description: "ILL only when student absences are switched on (400 otherwise)" }, walkIn: { type: "boolean" }, tenant: TENANT_PROP } },
     async handler({ tenant, ...body }) {
       const res = await post(tenant, "/classes/registers/attendance", body);
       if (!res.ok) throw await fail(res);
