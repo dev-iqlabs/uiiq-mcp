@@ -63,30 +63,33 @@ const safe = (s) => String(s).replace(/[\\/:*?"<>|]+/g, "_");
 export const hrTools = [
   {
     name: "uiiq_hr_staff_list",
-    description: "List UIIQ staff members. Optionally filter by department or status.",
+    description: "List HR staff records: id, name, job title, department, employment type, status and leaving date (no pay or contact details). status: active (default — ACTIVE and ON_LEAVE, the people working here), inactive (deactivated leavers) or all. department and search (name) are matched here on the returned list.",
     inputSchema: {
       type: "object",
       properties: {
-        department: { type: "string" },
-        status: { type: "string", description: "active | inactive | onboarding" },
-        search: { type: "string", description: "Search by name or email" },
+        status: { type: "string", enum: ["active", "inactive", "all"], description: "Default active" },
+        department: { type: "string", description: "Exact department, case-insensitive" },
+        search: { type: "string", description: "Part of a first or last name" },
         tenant: TENANT_PROP,
       }
     },
     async handler({ department, status, search, tenant } = {}) {
-      const params = new URLSearchParams();
-      if (department) params.set("department", department);
-      if (status)     params.set("status", status);
-      if (search)     params.set("search", search);
-      const qs = params.toString() ? "?" + params : "";
-      const res = await api(tenant)(`/hr/staff${qs}`);
+      const qs = status ? "?status=" + encodeURIComponent(status) : "";
+      const res = await api(tenant)("/hr/staff" + qs);
+      if (!res.ok) throw await fail(res);
       const data = await res.json();
-      return Array.isArray(data) ? data : data.staff ?? [];
+      let rows = Array.isArray(data) ? data : data.staff ?? [];
+      if (department) rows = rows.filter((s) => (s.department ?? "").toLowerCase() === department.toLowerCase());
+      if (search) {
+        const q = search.toLowerCase();
+        rows = rows.filter((s) => `${s.firstName} ${s.lastName}`.toLowerCase().includes(q));
+      }
+      return rows;
     }
   },
   {
     name: "uiiq_hr_staff_get",
-    description: "Get full profile for a UIIQ staff member by ID, including roles, training, and leave balance.",
+    description: "One HR staff record in full (contact, employment dates, salary in pence, holiday allowance, emergency contact, notes, status). An owner/admin can read anyone's; anyone else only their own (403 otherwise).",
     inputSchema: {
       type: "object",
       required: ["id"],
@@ -95,13 +98,108 @@ export const hrTools = [
       }
     },
     async handler({ id, tenant }) {
-      const client = api(tenant);
-      const [profile, training, leave] = await Promise.all([
-        client(`/hr/staff/${id}`).then(r => r.json()),
-        client(`/hr/staff/${id}/training`).then(r => r.json()).catch(() => []),
-        client(`/hr/staff/${id}/leave-balance`).then(r => r.json()).catch(() => null),
-      ]);
-      return { ...profile, training, leaveBalance: leave };
+      const res = await api(tenant)(`/hr/staff/${encodeURIComponent(id)}`);
+      if (!res.ok) throw await fail(res);
+      return res.json();
+    }
+  },
+  {
+    name: "uiiq_hr_staff_create",
+    description: "Add an HR staff record. firstName, lastName, email (unique in the workspace) and startDate (YYYY-MM-DD) required. annualSalary is in POUNDS (stored as pence). employmentType FULL_TIME (default) | PART_TIME | CONTRACT | FREELANCE; salaryFrequency ANNUAL (default) | MONTHLY | WEEKLY | HOURLY; holidayAllowanceDays default 28. Starts the tenant's onboarding checklist when it has exactly one template (or templateId). Owner/admin only.",
+    inputSchema: {
+      type: "object",
+      required: ["firstName", "lastName", "email", "startDate"],
+      properties: {
+        firstName: { type: "string" },
+        lastName: { type: "string" },
+        email: { type: "string" },
+        startDate: { type: "string", description: "YYYY-MM-DD" },
+        phone: { type: "string" },
+        jobTitle: { type: "string" },
+        department: { type: "string" },
+        employmentType: { type: "string", enum: ["FULL_TIME", "PART_TIME", "CONTRACT", "FREELANCE"] },
+        annualSalary: { type: "number", description: "Pounds, e.g. 24500.50" },
+        salaryFrequency: { type: "string", enum: ["ANNUAL", "MONTHLY", "WEEKLY", "HOURLY"] },
+        holidayAllowanceDays: { type: "number" },
+        emergencyContactName: { type: "string" },
+        emergencyContactPhone: { type: "string" },
+        notes: { type: "string" },
+        canTeach: { type: "boolean", description: "Offer them in the class Teacher picker (default true)" },
+        userId: { type: "string", description: "Link to a platform user so they can sign in to their own record" },
+        templateId: { type: "string", description: "Onboarding template to start" },
+        tenant: TENANT_PROP,
+      },
+    },
+    async handler({ tenant, ...body }) {
+      const res = await post(tenant, "/hr/staff", body);
+      if (!res.ok) throw await fail(res);
+      return res.json();
+    }
+  },
+  {
+    name: "uiiq_hr_staff_update",
+    description: "Edit an HR staff record — only the fields you send change; an empty string clears an optional one. annualSalary is in POUNDS. endDate (YYYY-MM-DD) is a planned leaving date and does NOT deactivate them (use uiiq_hr_staff_deactivate); an inactive record's leaving date can be changed but not cleared. Email must stay unique (409). Every change is audited; salary, notes and personal details as 'changed' without values. Owner/admin only, except avatarUrl and dateOfBirth, which a person may set on their own record. Status is not edited here.",
+    inputSchema: {
+      type: "object",
+      required: ["id"],
+      properties: {
+        id: { type: "string" },
+        firstName: { type: "string" },
+        lastName: { type: "string" },
+        email: { type: "string" },
+        phone: { type: "string" },
+        jobTitle: { type: "string" },
+        department: { type: "string" },
+        employmentType: { type: "string", enum: ["FULL_TIME", "PART_TIME", "CONTRACT", "FREELANCE"] },
+        startDate: { type: "string", description: "YYYY-MM-DD" },
+        endDate: { type: "string", description: "YYYY-MM-DD, or empty to clear (active records only)" },
+        annualSalary: { type: "number", description: "Pounds; send null to clear" },
+        salaryFrequency: { type: "string", enum: ["ANNUAL", "MONTHLY", "WEEKLY", "HOURLY"] },
+        holidayAllowanceDays: { type: "number" },
+        emergencyContactName: { type: "string" },
+        emergencyContactPhone: { type: "string" },
+        notes: { type: "string" },
+        canTeach: { type: "boolean" },
+        dateOfBirth: { type: "string", description: "YYYY-MM-DD" },
+        avatarUrl: { type: "string", description: "https URL of their photo" },
+        tenant: TENANT_PROP,
+      },
+    },
+    async handler({ id, tenant, ...body }) {
+      const res = await send(tenant, `/hr/staff/${encodeURIComponent(id)}`, "PATCH", body);
+      if (!res.ok) throw await fail(res);
+      return res.json();
+    }
+  },
+  {
+    name: "uiiq_hr_staff_deactivate",
+    description: "Deactivate someone who is leaving: status INACTIVE and their leaving date (endDate YYYY-MM-DD, default today in the UK; never in the future). They drop off rotas, pickers and lists, new shifts/classes/cover/leave/workshops/timesheets for them are refused (timesheets up to the leaving date still go through — final pay), clock-in stops and their staff badge reads invalid. History and the final pay run are kept; their UIIQ login is NOT changed. By default also disables their linked till PIN and hides their Venue Staff profile (set disableTillStaff / hidePerformer false to keep those). Audited. Owner/admin only.",
+    inputSchema: {
+      type: "object",
+      required: ["id"],
+      properties: {
+        id: { type: "string" },
+        endDate: { type: "string", description: "Leaving date YYYY-MM-DD (default today)" },
+        disableTillStaff: { type: "boolean", description: "Default true" },
+        hidePerformer: { type: "boolean", description: "Default true" },
+        tenant: TENANT_PROP,
+      },
+    },
+    async handler({ id, tenant, ...rest }) {
+      // action LAST: nothing in `rest` may turn a deactivate into a reactivate.
+      const res = await post(tenant, `/hr/staff/${encodeURIComponent(id)}/status`, { ...rest, action: "deactivate" });
+      if (!res.ok) throw await fail(res);
+      return res.json();
+    }
+  },
+  {
+    name: "uiiq_hr_staff_reactivate",
+    description: "Reactivate a deactivated staff record: status ACTIVE, leaving date cleared, badge valid again. A till PIN or Venue Staff profile switched off when they left stays off — turn those back on separately (till staff, uiiq_admin_staff_update isActive). Audited. Owner/admin only.",
+    inputSchema: { type: "object", required: ["id"], properties: { id: { type: "string" }, tenant: TENANT_PROP } },
+    async handler({ id, tenant }) {
+      const res = await post(tenant, `/hr/staff/${encodeURIComponent(id)}/status`, { action: "reactivate" });
+      if (!res.ok) throw await fail(res);
+      return res.json();
     }
   },
   {
