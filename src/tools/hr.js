@@ -173,7 +173,7 @@ export const hrTools = [
   },
   {
     name: "uiiq_hr_staff_deactivate",
-    description: "Deactivate someone who is leaving: status INACTIVE and their leaving date (endDate YYYY-MM-DD, default today in the UK; never in the future). They drop off rotas, pickers and lists, new shifts/classes/cover/leave/workshops/timesheets for them are refused (timesheets up to the leaving date still go through — final pay), clock-in stops and their staff badge reads invalid. History and the final pay run are kept; their UIIQ login is NOT changed. By default also disables their linked till PIN and hides their Venue Staff profile (set disableTillStaff / hidePerformer false to keep those). Audited. Owner/admin only.",
+    description: "Deactivate someone who is leaving: status INACTIVE and their leaving date (endDate YYYY-MM-DD, default today in the UK; never in the future). They drop off rotas, pickers and lists, new shifts/classes/cover/leave/workshops/timesheets for them are refused (timesheets up to the leaving date still go through — final pay), clock-in stops and their staff badge reads invalid. History and the final pay run are kept. By default also disables their linked till PIN and hides their Venue Staff profile (set disableTillStaff / hidePerformer false to keep those). Their UIIQ login is NOT changed unless removeAccess is true: then their membership of THIS workspace only is removed (never the user, never other workspaces), their Members App devices here are signed out, and open sessions lose the workspace within seconds — refused (409) for yourself and for the workspace's last owner. The response's accessRemoved says what happened. Audited. Owner/admin only.",
     inputSchema: {
       type: "object",
       required: ["id"],
@@ -182,6 +182,7 @@ export const hrTools = [
         endDate: { type: "string", description: "Leaving date YYYY-MM-DD (default today)" },
         disableTillStaff: { type: "boolean", description: "Default true" },
         hidePerformer: { type: "boolean", description: "Default true" },
+        removeAccess: { type: "boolean", description: "Also remove their access to this workspace. Default false (the dashboard pre-ticks it for an owner or admin)." },
         tenant: TENANT_PROP,
       },
     },
