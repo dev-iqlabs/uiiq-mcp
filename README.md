@@ -1047,7 +1047,7 @@ Every product's target against its actual, by week, month or fiscal year, colour
 | `uiiq_postroom_hq_request_withdraw` | Withdraw the request: it ends and Show in Postroom HQ switches off at once. OWNER/ADMIN, not while impersonating. |
 | `uiiq_postroom_hq_log` | This workspace's Postroom HQ log for 12 months (views, prints, actions, request steps; never an address), json or csv. OWNER/ADMIN. |
 | `uiiq_admin_postroom_hq_request_status` | A tenant's Postroom HQ request as the shop sees it, plus groupCompany. Raising one and setting group company are admin-UI clicks only. SUPER_ADMIN. |
-| `uiiq_admin_postroom_hq_request_withdraw` | Record a withdrawal the tenant sent us (who, channel, when, ref): HQ switches off. SUPER_ADMIN. |
+| `uiiq_admin_postroom_hq_request_withdraw` | Record a withdrawal (Kim D.5): the tenant asked (channel email/letter/phone/in_person, with `requester_name`, `requester_role` and `message_ref`), or `our_decision` (with a `reason`); `received_at` always. HQ switches off at once and the owners are emailed. SUPER_ADMIN. |
 | `uiiq_admin_postroom_hq_log` | One tenant's Postroom HQ log, json or csv, to send them on request. SUPER_ADMIN. |
 | `uiiq_admin_postroom_board` | Postroom HQ (SUPER_ADMIN): every tenant with Postroom, "Show in Postroom HQ" on and an ACTIVE request (its code on each), each with its own board; `tenantId` narrows to one. |
 | `uiiq_admin_postroom_action` | Postroom HQ: product_ready / label_printed / dispatch / reopen / tell_shop / correct on any tenant's parcel, in the shipment's own tenant. Audited. |
