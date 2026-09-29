@@ -1478,10 +1478,10 @@ Every product's target against its actual, by week, month or fiscal year, colour
 | Tool | What it does |
 |---|---|
 | `uiiq_shop_product_list` | Products the workspace can order from active connected shops (up to 200): id, name, category, brand, retail and default price. |
-| `uiiq_shop_pricing` | The workspace's assortment as priced for it: partner price per product (with any per-tenant override), the IQEX credit price where a product can be bought with credits, and the credit balance. |
+| `uiiq_shop_pricing` | The workspace's assortment as priced for it: partner price per product (with any per-tenant override), the IQEX credit price where a product can be bought with credits, and the credit balance. A coin made from an IQEX template comes with its `design.fields` to fill in. |
 | `uiiq_shop_designs` | Approved designs the workspace may put on products: global ones plus its own tenant-only ones. |
 | `uiiq_shop_order_list` | The workspace's own shop orders (newest first) with line items, optionally filtered by status. |
-| `uiiq_shop_order_place` | Place a shop order for the workspace. |
+| `uiiq_shop_order_place` | Place a shop order for the workspace. A coin made from an IQEX template takes its template `fields` instead of `notes` on a credit line. |
 | `uiiq_shop_catalogue_sync` | Pull a workspace's own WooCommerce import source into its product cache (published products, 100 max). |
 | `uiiq_shop_assortment_list` | A tenant's assortment: the catalog products it can order, in position order, with price override and custom name. |
 | `uiiq_shop_assortment_add` | Add a catalog product to a tenant's assortment (409 if already there), optionally with a per-tenant price override in pence and a custom name. |
