@@ -155,7 +155,8 @@ export const postroomTools = [
   },
   // ── Postroom HQ (SUPER_ADMIN): every tenant's parcels on one board ──
   // Only tenants with Postroom AND "Show in Postroom HQ" (feature postroom_hq,
-  // off by default; set with uiiq_tenant_features enable=postroom_hq) are on
+  // off by default; set with uiiq_tenant_features enable=postroom_hq plus
+  // instruction_ref, the tenant's documented instruction) are on
   // it. Operator scope: never sent with a tenant context, and refused by the
   // API while impersonating. Every action is audit-logged.
   {

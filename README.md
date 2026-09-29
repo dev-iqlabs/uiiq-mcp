@@ -64,7 +64,7 @@ UIIQ is one subscription whose modules are grouped as **Sell**, **Grow** and **R
 | Knowledge and advisors | `uiiq_brains_*`, `uiiq_boardroom_*`, `uiiq_agent_*` | Ask a sector Brain, run a Boardroom session with the Mastermind team, read agent definitions |
 | Journeys | `uiiq_journey_*` | Start, advance and resume guided Make-a-Trail journeys |
 | Materials and legacy films | `uiiq_material_*`, `uiiq_legacy_*` | Discover, verify and watch materials, check whether each lead's link leads anywhere, edit or delete a material; list legacy films |
-| Postroom | `uiiq_postroom_*`, `uiiq_admin_postroom_*` | The parcels board: product ready, label printed, dispatch, corrections, add recent orders, the return address (needs the `postroom` feature). Postroom HQ: every tenant's parcels for platform admins (tenants with `postroom_hq` switched on via `uiiq_tenant_features`) |
+| Postroom | `uiiq_postroom_*`, `uiiq_admin_postroom_*` | The parcels board: product ready, label printed, dispatch, corrections, add recent orders, the return address (needs the `postroom` feature). Postroom HQ: every tenant's parcels for platform admins (tenants with `postroom_hq` switched on via `uiiq_tenant_features`, which needs `instruction_ref`: the tenant's documented instruction, e.g. `IGI-PHQ-UC-2026-01`) |
 | Appeals | `uiiq_appeal_*`, `uiiq_admin_appeal_suspend` | Fundraising appeals on a cause: draft, publish under the Fundraising Regulator's Code, match pledges, updates emailed to supporters (needs the `appeals` feature) |
 | Auctions | `uiiq_auction_*` | The seller's side: draft, lots, publish, bids, withdraw, defaults (needs the `auctions` feature; buyers bid through the public API) |
 | NX2U live streaming | `uiiq_nx2u_*` | Channels, events, the control room (provision, running order, slate, end, replay), the video library, usage (needs the `nx2u` feature; platform switches OFF until Steve turns them on) |
@@ -141,7 +141,7 @@ Not exposed on purpose: the platform-to-platform callbacks under `/api/platform/
 | `uiiq_tenant_create` | Create a new UIIQ tenant. |
 | `uiiq_tenant_api_key` | ROTATE the UIIQ Connect API key for a tenant: issues a NEW key and returns it once. |
 | `uiiq_tenant_api_key_get` | Look up a tenant's CURRENT UIIQ Connect API key (the key the uiiq-connect WordPress plugin, IQEX and n8n send). |
-| `uiiq_tenant_features` | Get or set feature flags for a UIIQ tenant. |
+| `uiiq_tenant_features` | Get or set feature flags for a UIIQ tenant. Enabling `postroom_hq` needs `instruction_ref` (the tenant's documented instruction, e.g. `IGI-PHQ-UC-2026-01`, max 200 characters). |
 | `uiiq_tenant_usage` | Get usage stats for a UIIQ tenant (sends, contacts, API calls). |
 | `uiiq_tenant_rename` | Change a UIIQ tenant's slug. |
 | `uiiq_tenant_delete` | Delete or restore a UIIQ tenant. |

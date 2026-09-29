@@ -102,20 +102,22 @@ export const tenantTools = [
   },
   {
     name: "uiiq_tenant_features",
-    description: "Get or set feature flags for a UIIQ tenant. Pass enable or disable to toggle a specific flag.",
+    description: "Get or set feature flags for a UIIQ tenant. Pass enable or disable to toggle a specific flag. Enabling postroom_hq (Show in Postroom HQ) needs instruction_ref: the tenant's documented instruction, e.g. \"IGI-PHQ-UC-2026-01\" (up to 200 characters); the API refuses it without one. Disabling never needs one.",
     inputSchema: {
       type: "object",
       required: ["id"],
       properties: {
         id: { type: "string" },
         enable: { type: "string", description: "Feature flag name to enable" },
-        disable: { type: "string", description: "Feature flag name to disable" }
+        disable: { type: "string", description: "Feature flag name to disable" },
+        instruction_ref: { type: "string", description: "With enable: the tenant's documented instruction behind the switch, e.g. \"IGI-PHQ-UC-2026-01\" (max 200 characters). Required when enabling postroom_hq; audit-logged." }
       }
     },
-    async handler({ id, enable, disable }) {
+    async handler({ id, enable, disable, instruction_ref }) {
       const api = apiClient();
       if (enable || disable) {
         const body = enable ? { [enable]: true } : { [disable]: false };
+        if (enable && instruction_ref !== undefined) body.instructionRef = instruction_ref;
         const res = await api(`/admin/tenants/${id}/features`, { method: "PATCH", body: JSON.stringify(body) });
         if (!res.ok) throw new Error(await res.text());
         return res.json();
