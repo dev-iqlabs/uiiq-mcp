@@ -153,6 +153,57 @@ export const postroomTools = [
       return res.json();
     },
   },
+  // ── Postroom HQ (SUPER_ADMIN): every tenant's parcels on one board ──
+  // Only tenants with Postroom AND "Show in Postroom HQ" (feature postroom_hq,
+  // off by default; set with uiiq_tenant_features enable=postroom_hq) are on
+  // it. Operator scope: never sent with a tenant context, and refused by the
+  // API while impersonating. Every action is audit-logged.
+  {
+    name: "uiiq_admin_postroom_board",
+    description:
+      "Postroom HQ: every tenant on Postroom HQ (Postroom + 'Show in Postroom HQ' switched on), each with its own board — parcels, pick list, postage check — as uiiq_postroom_list gives one tenant. tenantId (id or slug) narrows it to one; site (with tenantId) to one of its shops. SUPER_ADMIN, not while impersonating.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        tenantId: { type: "string", description: "Only this tenant (id or slug). It must be on Postroom HQ." },
+        site: { type: "string", description: "With tenantId: one shop's site URL, exactly as listed" },
+      },
+    },
+    async handler({ tenantId, site } = {}) {
+      const q = new URLSearchParams();
+      if (tenantId) q.set("tenant", tenantId);
+      if (tenantId && site) q.set("site", site);
+      const qs = q.toString() ? `?${q}` : "";
+      const res = await api(null)(`/admin/postroom/shipments${qs}`);
+      if (!res.ok) throw await fail(res);
+      return res.json();
+    },
+  },
+  {
+    name: "uiiq_admin_postroom_action",
+    description:
+      `Postroom HQ: work any tenant's parcel by its shipment id — the same moves as the uiiq_postroom_* tools, run in the tenant the shipment belongs to (refused with 403 if that tenant isn't on Postroom HQ). action: product_ready, label_printed, dispatch (service one of ${SERVICES.join(", ")}; a tracked one needs trackingNumber; postagePaid in pounds; may email the customer if the tenant has 'tell the shop' on), reopen, tell_shop, or correct (address / service / weightGrams / trackingNumber / postagePaid). Audited. SUPER_ADMIN, not while impersonating.`,
+    inputSchema: {
+      type: "object",
+      required: ["id", "action"],
+      properties: {
+        id: { type: "string", description: "shipment id (from uiiq_admin_postroom_board)" },
+        action: { type: "string", enum: ["product_ready", "label_printed", "dispatch", "reopen", "tell_shop", "correct"] },
+        service: { type: "string", enum: SERVICES },
+        trackingNumber: { type: "string" },
+        postagePaid: { type: "string", description: "Pounds, e.g. '3.35'" },
+        address: { type: "object", description: "correct: any of the ship* fields to change" },
+        weightGrams: { type: "number", description: "correct: parcel weight" },
+      },
+    },
+    async handler({ id, action, ...rest }) {
+      const fields = Object.fromEntries(Object.entries(rest).filter(([, v]) => v !== undefined));
+      const body = action === "correct" ? fields : { action, ...fields };
+      const res = await api(null)(`/admin/postroom/shipments/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify(body) });
+      if (!res.ok) throw await fail(res);
+      return res.json();
+    },
+  },
   // ── Mail forwarding addresses (Office → Mail; the id is what uiiq_mail_update's forwardingAddressId takes) ──
   {
     name: "uiiq_postroom_forwarding_address_update",
