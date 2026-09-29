@@ -154,40 +154,19 @@ export const postroomTools = [
     },
   },
   // ── Postroom HQ requests: the shop asks, a code is generated (Kim's in-app terms) ──
-  // A shop's OWNER or ADMIN requests Postroom HQ in its Postroom settings,
-  // accepting the terms; or a platform admin raises it on the shop's behalf
-  // with the evidence of how they asked. "Show in Postroom HQ" can be ticked
-  // on only while that request is ACTIVE. Accepting and withdrawing are
-  // refused while impersonating, so those two tools only work signed in as
-  // the shop's own owner or admin, never through a tenant argument.
+  // Requesting Postroom HQ is an Art 28 acceptance, so it is a CLICK in UiiQ
+  // only: the shop's owner or admin in its Postroom settings, or a platform
+  // admin raising it for the shop in the admin UI. The API refuses both from
+  // any API client (Lucas, UiiQ-platform #754 H1), so there is deliberately no
+  // tool to create or raise a request, or to set "group company". These tools
+  // read the status, withdraw (a shop can always stop), and export the log.
   {
     name: "uiiq_postroom_hq_request_status",
     description:
-      "This workspace's Postroom HQ request: status (not_requested, pending, active, on, withdrawn, lapsed), its code (PHQ-<SLUG>-<YYYYMMDD>-<4>), who accepted and when, whether re-acceptance is needed, whether this workspace may request at all (group companies, or once external tenants are switched on), and the terms to show: text, version, url and hash. Read this and SHOW THE TERMS TEXT to the user before uiiq_postroom_hq_request_create.",
+      "This workspace's Postroom HQ request: status (not_requested, pending, active, on, withdrawn, lapsed), its code (PHQ-<SLUG>-<YYYYMMDD>-<4>), who accepted and when, whether re-acceptance is needed, whether this workspace may request at all (group companies, or once external tenants are switched on), and the terms (text, version, url). Requesting it is a click in UiiQ only (Postroom settings), never through a tool.",
     inputSchema: { type: "object", properties: { tenant: TENANT_PROP } },
     async handler({ tenant } = {}) {
       const res = await api(tenant)("/postroom/hq-request");
-      if (!res.ok) throw await fail(res);
-      return res.json();
-    },
-  },
-  {
-    name: "uiiq_postroom_hq_request_create",
-    description:
-      "Request Postroom HQ for this workspace: the signed-in OWNER or ADMIN accepts the in-app terms (postroom-hq-terms-v1) for it, and a code is generated. accept_terms must be true, and only after the user has read the terms text from uiiq_postroom_hq_request_status and agreed: it is recorded as their acceptance, with the hash of that text. Accepting also activates a request our team raised for the shop that is pending. Refused while impersonating, for STAFF, and for a workspace Postroom HQ isn't available to yet. Audited.",
-    inputSchema: {
-      type: "object",
-      required: ["accept_terms"],
-      properties: {
-        accept_terms: { type: "boolean", description: "true: the user has read the terms and accepts them for the workspace" },
-      },
-    },
-    async handler({ accept_terms }) {
-      if (accept_terms !== true) throw new Error("accept_terms must be true: show the terms (uiiq_postroom_hq_request_status) and get the user's agreement first.");
-      const statusRes = await api(null)("/postroom/hq-request");
-      if (!statusRes.ok) throw await fail(statusRes);
-      const { terms } = await statusRes.json();
-      const res = await api(null)("/postroom/hq-request", { method: "POST", body: JSON.stringify({ acceptTerms: true, termsVersion: terms.version, termsHash: terms.hash }) });
       if (!res.ok) throw await fail(res);
       return res.json();
     },
@@ -216,43 +195,10 @@ export const postroomTools = [
   },
   {
     name: "uiiq_admin_postroom_hq_request_status",
-    description: "A tenant's Postroom HQ request as the shop sees it, plus groupCompany and whether it may request. SUPER_ADMIN, not while impersonating.",
+    description: "A tenant's Postroom HQ request as the shop sees it, plus groupCompany and whether it may request. Raising a request for a shop, and setting group company, are clicks in the admin UI only (/admin/tenants/<id>), never through a tool. SUPER_ADMIN, not while impersonating.",
     inputSchema: { type: "object", required: ["tenantId"], properties: { tenantId: { type: "string", description: "Tenant id" } } },
     async handler({ tenantId }) {
       const res = await api(null)(`/admin/tenants/${encodeURIComponent(tenantId)}/postroom-hq-request`);
-      if (!res.ok) throw await fail(res);
-      return res.json();
-    },
-  },
-  {
-    name: "uiiq_admin_postroom_hq_request_raise",
-    description:
-      "Raise a Postroom HQ request on a tenant's behalf, ONLY when the tenant asked us and you can show how. Every evidence field is required. channel email or letter with terms_agreed_in_writing true: ACTIVE at once. Phone, in_person, or not agreed in writing: PENDING written confirmation (lapses after 14 days; the tick stays locked). With a request already PENDING, written evidence (email/letter, agreed) confirms it. The evidence is kept and shown to the tenant. SUPER_ADMIN, not while impersonating. Audited.",
-    inputSchema: {
-      type: "object",
-      required: ["tenantId", "requester_name", "requester_role", "authority", "requester_email", "channel", "received_at", "message_ref", "terms_agreed_in_writing"],
-      properties: {
-        tenantId: { type: "string", description: "Tenant id" },
-        requester_name: { type: "string", description: "The person who asked" },
-        requester_role: { type: "string", description: "Their role at the tenant, e.g. Director" },
-        authority: { type: "string", enum: ["owner_admin_user", "director", "other_authorised"], description: "owner_admin_user needs authority_user_id; other_authorised needs notes" },
-        authority_user_id: { type: "string", description: "authority owner_admin_user: the tenant's OWNER/ADMIN user id" },
-        requester_email: { type: "string" },
-        channel: { type: "string", enum: ["email", "letter", "phone", "in_person"] },
-        received_at: { type: "string", description: "When they asked (ISO date-time), not when you enter it" },
-        message_ref: { type: "string", description: "Email: sender + subject (+ Message-ID). Letter: date + scan. Phone: number + time. In person: where + who else was there." },
-        terms_agreed_in_writing: { type: "boolean", description: "true only if the terms link was sent in writing and they agreed in writing" },
-        attachment_note: { type: "string", description: "Where the saved email or scan is kept (no upload in v1)" },
-        notes: { type: "string" },
-      },
-    },
-    async handler({ tenantId, ...a }) {
-      const body = {
-        requesterName: a.requester_name, requesterRole: a.requester_role, authority: a.authority, authorityUserId: a.authority_user_id,
-        requesterEmail: a.requester_email, channel: a.channel, receivedAt: a.received_at, messageRef: a.message_ref,
-        termsAgreedInWriting: a.terms_agreed_in_writing, attachmentNote: a.attachment_note, notes: a.notes,
-      };
-      const res = await api(null)(`/admin/tenants/${encodeURIComponent(tenantId)}/postroom-hq-request`, { method: "POST", body: JSON.stringify(body) });
       if (!res.ok) throw await fail(res);
       return res.json();
     },
@@ -287,16 +233,6 @@ export const postroomTools = [
       const res = await api(null)(`/admin/tenants/${encodeURIComponent(tenantId)}/postroom-hq-log${qs}`);
       if (!res.ok) throw await fail(res);
       return format === "csv" ? res.text() : res.json();
-    },
-  },
-  {
-    name: "uiiq_admin_tenant_group_company_set",
-    description: "Flag a tenant as a group company (Ultimate Image Ltd / IQLabs): it may request Postroom HQ before external tenants can. SUPER_ADMIN read live, not while impersonating. Audited (tenant.group_company).",
-    inputSchema: { type: "object", required: ["tenantId", "groupCompany"], properties: { tenantId: { type: "string" }, groupCompany: { type: "boolean" } } },
-    async handler({ tenantId, groupCompany }) {
-      const res = await api(null)(`/admin/tenants/${encodeURIComponent(tenantId)}`, { method: "PATCH", body: JSON.stringify({ groupCompany }) });
-      if (!res.ok) throw await fail(res);
-      return res.json();
     },
   },
   // ── Postroom HQ (SUPER_ADMIN): every tenant's parcels on one board ──

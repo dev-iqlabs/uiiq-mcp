@@ -102,7 +102,7 @@ export const tenantTools = [
   },
   {
     name: "uiiq_tenant_features",
-    description: "Get or set feature flags for a UIIQ tenant. Pass enable or disable to toggle a specific flag. Enabling postroom_hq (Show in Postroom HQ) needs the tenant's ACTIVE Postroom HQ request (the shop requests it in its Postroom settings, or raise one with uiiq_admin_postroom_hq_request_raise); the API answers 409 without one and records the request's code. Disabling never needs one.",
+    description: "Get or set feature flags for a UIIQ tenant. Pass enable or disable to toggle a specific flag. Enabling postroom_hq (Show in Postroom HQ) needs the tenant's ACTIVE Postroom HQ request (the shop requests it in its Postroom settings, or a platform admin raises it in the admin UI: clicks in UiiQ, never a tool); the API answers 409 without one and records the request's code. Disabling never needs one.",
     inputSchema: {
       type: "object",
       required: ["id"],
