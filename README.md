@@ -927,7 +927,7 @@ Every product's target against its actual, by week, month or fiscal year, colour
 | `uiiq_hr_staff_get` | One HR staff record in full. An owner/admin can read anyone's; anyone else only their own. |
 | `uiiq_hr_staff_create` | Add an HR staff record (firstName, lastName, email, startDate required; annualSalary in pounds). |
 | `uiiq_hr_staff_update` | Edit an HR staff record — only the fields you send change; audited, with pay, notes and personal details recorded as changed without values. |
-| `uiiq_hr_staff_deactivate` | Deactivate someone who is leaving: INACTIVE plus their leaving date; off rotas and pickers, no new work, badge invalid, login untouched; optionally disables their till PIN and hides their Venue Staff profile. |
+| `uiiq_hr_staff_deactivate` | Deactivate someone who is leaving: INACTIVE plus their leaving date; off rotas and pickers, no new work, badge invalid; optionally disables their till PIN, hides their Venue Staff profile and (removeAccess) removes their access to this workspace. |
 | `uiiq_hr_staff_reactivate` | Reactivate a deactivated staff record: ACTIVE, leaving date cleared. |
 | `uiiq_hr_timesheet_list` | List UIIQ timesheet entries. |
 | `uiiq_hr_timesheet_approve` | Approve or reject a UIIQ timesheet entry by ID. |
