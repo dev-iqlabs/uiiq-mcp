@@ -15,6 +15,14 @@ async function fail(res) {
 }
 const send = (tenant, method, path, body) => api(tenant)(path, body === undefined ? { method } : { method, body: JSON.stringify(body) });
 
+// An empty class list must never quietly mean "all classes" (Lucas, #769 L5):
+// only null or leaving it out does. The API refuses it too; this says why first.
+function noEmptyClassIds(classIds) {
+  if (Array.isArray(classIds) && classIds.length === 0) {
+    throw new Error("classIds is empty: give at least one class id, or leave it out (null) for all classes.");
+  }
+}
+
 // STUDENTS — children's records for the classes sector. Every route here is
 // OWNER/ADMIN/SUPER_ADMIN only (the API answers 403 otherwise) except
 // uiiq_students_groups, which is labels and counts. Medical, SEND, allergy
@@ -182,12 +190,28 @@ export const studentsTools = [
   // short staff note, never symptoms, and never audited.
   {
     name: "uiiq_students_absences_list",
-    description: "A student's recorded absences (illness, holiday, appointment, other), newest first (up to 200): dates (inclusive), the classes covered (null = all), status (REPORTED / APPROVED / REQUESTED / DECLINED / CANCELLED), excused (true = left out of attendance rates, the lapse check and the \"Missed class\" message), authorised, who recorded it and the staff note. OWNER/ADMIN only; 404 unless the workspace has student absences switched on. The note is health information — don't repeat it beyond the person asking.",
-    inputSchema: { type: "object", required: ["id"], properties: { id: { type: "string", description: "Student id" }, tenant: TENANT_PROP } },
-    async handler({ id, tenant }) {
+    description: "A student's recorded absences (illness, holiday, appointment, other), newest first (up to 200): dates (inclusive), the classes covered (null = all), status (REPORTED / APPROVED / REQUESTED / DECLINED / CANCELLED), excused (true = left out of attendance rates, the lapse check and the \"Missed class\" message), authorised, who recorded and reviewed it. The staff note and review note are left out (hasNote says one exists) unless includeNotes=true: they are a child's health information, so ask for them only when the person needs them, and don't repeat them beyond that person. OWNER/ADMIN only; 404 unless the workspace has student absences switched on.",
+    inputSchema: {
+      type: "object",
+      required: ["id"],
+      properties: {
+        id: { type: "string", description: "Student id" },
+        includeNotes: { type: "boolean", description: "Include each absence's staff note and review note (default false)" },
+        tenant: TENANT_PROP,
+      },
+    },
+    async handler({ id, includeNotes, tenant }) {
       const res = await api(tenant)(`/students/${encodeURIComponent(id)}/absences`);
       if (!res.ok) throw await fail(res);
-      return res.json();
+      const body = await res.json();
+      if (includeNotes === true || !Array.isArray(body?.absences)) return body;
+      // Notes are opt-in so a child's health note never lands in the model's
+      // context just because someone asked for a list (Lucas, #769 L4).
+      return {
+        ...body,
+        absences: body.absences.map(({ note, reviewNote, ...a }) => ({ ...a, hasNote: !!note || !!reviewNote })),
+        notesOmitted: true,
+      };
     },
   },
   {
@@ -201,13 +225,14 @@ export const studentsTools = [
         kind: { type: "string", enum: ["HOLIDAY", "ILLNESS", "APPOINTMENT", "OTHER"] },
         startDate: { type: "string", description: "YYYY-MM-DD" },
         endDate: { type: "string", description: "YYYY-MM-DD, inclusive; default = startDate" },
-        classIds: { type: "array", items: { type: "string" }, description: "Only these classes; omit for all the student's classes" },
+        classIds: { type: "array", minItems: 1, items: { type: "string" }, description: "Only these classes (at least one); omit for all the student's classes" },
         note: { type: "string", description: "Up to 500 chars, staff only" },
         authorised: { type: "boolean", description: "Default true" },
         tenant: TENANT_PROP,
       },
     },
     async handler({ id, tenant, ...body }) {
+      noEmptyClassIds(body.classIds);
       const res = await send(tenant, "POST", `/students/${encodeURIComponent(id)}/absences`, body);
       if (!res.ok) throw await fail(res);
       return res.json();
@@ -215,7 +240,7 @@ export const studentsTools = [
   },
   {
     name: "uiiq_students_absences_update",
-    description: "Edit or cancel a recorded absence. action=\"cancel\" withdraws it: kept as CANCELLED history, and it counts as an ordinary absence again. Otherwise send any of kind, startDate, endDate, classIds (null = all classes), note (null or \"\" clears it), authorised. Shortening the dates or narrowing the classes unlinks register marks it no longer covers; a staff absence changed to or from HOLIDAY moves between APPROVED and REPORTED. A cancelled or declined absence can't be edited (409). Audited with the field names, never the note. OWNER/ADMIN only; 404 unless switched on.",
+    description: "Edit or cancel a recorded absence. action=\"cancel\" withdraws it: kept as CANCELLED history of the dates, its note is cleared, and it counts as an ordinary absence again. Otherwise send any of kind, startDate, endDate, classIds (null = all classes; an empty list is refused), note (null or \"\" clears it), authorised. Shortening the dates or narrowing the classes unlinks register marks it no longer covers; a staff absence changed to HOLIDAY becomes APPROVED with you as the reviewer, and back to another kind becomes REPORTED. A cancelled or declined absence can't be edited (409). Audited with the field names, never the note. OWNER/ADMIN only; 404 unless switched on. To erase one recorded in error, use uiiq_students_absences_delete.",
     inputSchema: {
       type: "object",
       required: ["id", "absenceId"],
@@ -226,14 +251,29 @@ export const studentsTools = [
         kind: { type: "string", enum: ["HOLIDAY", "ILLNESS", "APPOINTMENT", "OTHER"] },
         startDate: { type: "string", description: "YYYY-MM-DD" },
         endDate: { type: "string", description: "YYYY-MM-DD, inclusive" },
-        classIds: { type: ["array", "null"], items: { type: "string" }, description: "null = all classes" },
+        classIds: { type: ["array", "null"], minItems: 1, items: { type: "string" }, description: "At least one class id; null = all classes" },
         note: { type: ["string", "null"] },
         authorised: { type: "boolean" },
         tenant: TENANT_PROP,
       },
     },
     async handler({ id, absenceId, tenant, ...body }) {
+      noEmptyClassIds(body.classIds);
       const res = await send(tenant, "PATCH", `/students/${encodeURIComponent(id)}/absences/${encodeURIComponent(absenceId)}`, body);
+      if (!res.ok) throw await fail(res);
+      return res.json();
+    },
+  },
+  {
+    name: "uiiq_students_absences_delete",
+    description: "ERASE an absence that was recorded in error (the wrong child, a mistaken illness). PERMANENT: the absence is gone, not cancelled. Any register marks linked to it stay and are unlinked. Audited with the id and kind only. Use uiiq_students_absences_update action=\"cancel\" instead for a real absence that has been withdrawn. OWNER/ADMIN only; 404 unless switched on.",
+    inputSchema: {
+      type: "object",
+      required: ["id", "absenceId"],
+      properties: { id: { type: "string", description: "Student id" }, absenceId: { type: "string" }, tenant: TENANT_PROP },
+    },
+    async handler({ id, absenceId, tenant }) {
+      const res = await send(tenant, "DELETE", `/students/${encodeURIComponent(id)}/absences/${encodeURIComponent(absenceId)}`);
       if (!res.ok) throw await fail(res);
       return res.json();
     },
