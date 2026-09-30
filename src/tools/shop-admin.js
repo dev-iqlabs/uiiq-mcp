@@ -86,7 +86,7 @@ export const shopAdminTools = [
   },
   {
     name: "uiiq_shop_pricing",
-    description: "The workspace's assortment as priced for it: partner price per product (with any per-tenant override), the IQEX credit price where a product can be bought with credits, and the credit balance.",
+    description: "The workspace's assortment as priced for it: partner price per product (with any per-tenant override), the IQEX credit price where a product can be bought with credits, and the credit balance. A coin made from an IQEX template has design.fields ({ key: { type, label, required, max_chars, options, min, max } }) to fill in when ordering it with credits; design with no fields is a fixed (Signature) design. designUnavailable means the shop couldn't be asked, so it can't be bought with credits right now.",
     inputSchema: { type: "object", properties: { tenant: TENANT_PROP } },
     async handler({ tenant } = {}) {
       const res = await api(tenant)("/shop/pricing");
@@ -118,11 +118,14 @@ export const shopAdminTools = [
   },
   {
     name: "uiiq_shop_order_place",
-    description: "Place a shop order for the workspace. Default payment goes to PENDING_REVIEW for the operator to approve and invoice. paymentMethod CREDITS CHARGES the workspace's IQEX credits at once (OWNER/ADMIN only; pass idempotencyKey to make a retry safe) and pushes the order to the source shop.",
+    description: "Place a shop order for the workspace. Default payment goes to PENDING_REVIEW for the operator to approve and invoice. paymentMethod CREDITS CHARGES the workspace's IQEX credits at once (OWNER/ADMIN only; pass idempotencyKey to make a retry safe) and pushes the order to the source shop. A credit line for a coin made from an IQEX template takes fields (its design.fields from uiiq_shop_pricing, by key) instead of notes; they are checked against the shop's copy of the template before anything is charged, and the coins then go to IQEX to be made. Up to 100 per coin line, 50 coin lines per order.",
     inputSchema: {
       type: "object", required: ["items"],
       properties: {
-        items: { type: "array", items: { type: "object", required: ["catalogProductId", "quantity"], properties: { catalogProductId: { type: "string" }, quantity: { type: "number" }, notes: { type: "string" } } } },
+        items: { type: "array", items: { type: "object", required: ["catalogProductId", "quantity"], properties: {
+          catalogProductId: { type: "string" }, quantity: { type: "number" }, notes: { type: "string" },
+          fields: { type: "object", additionalProperties: { type: "string" }, description: "Template field values by key, for a coin with design.fields (a toggle is \"yes\" or \"\")" },
+        } } },
         poReference: { type: "string" }, customerNotes: { type: "string" },
         paymentMethod: { type: "string", enum: ["CREDITS"], description: "Omit to invoice; CREDITS spends credits now" },
         idempotencyKey: { type: "string" }, tenant: TENANT_PROP,
