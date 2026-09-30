@@ -450,7 +450,7 @@ export const classesTools = [
   },
   {
     name: "uiiq_classes_register_settings",
-    description: "The register-hook settings: lapseWeeks, arrearsGraceDays, lowAttendancePct, lateGraceMins.",
+    description: "The register-hook settings: lapseWeeks, arrearsGraceDays, lowAttendancePct, lateGraceMins. With student absences switched on, also absenceApprovalRequired (\"Parents' time-off requests need approval\", default false: a parent's time off is approved at once; true: it waits for an owner or admin). The key is absent when student absences are off.",
     inputSchema: { type: "object", properties: { tenant: TENANT_PROP } },
     async handler({ tenant } = {}) {
       const res = await api(tenant)("/classes/registers/settings");
@@ -460,12 +460,52 @@ export const classesTools = [
   },
   {
     name: "uiiq_classes_register_settings_set",
-    description: "Update any of lapseWeeks (1-52), arrearsGraceDays (0-90), lowAttendancePct (1-100), lateGraceMins (0-120). OWNER/ADMIN only.",
-    inputSchema: { type: "object", properties: { lapseWeeks: { type: "number" }, arrearsGraceDays: { type: "number" }, lowAttendancePct: { type: "number" }, lateGraceMins: { type: "number" }, tenant: TENANT_PROP } },
+    description: "Update any of lapseWeeks (1-52), arrearsGraceDays (0-90), lowAttendancePct (1-100), lateGraceMins (0-120), and, only while student absences are switched on, absenceApprovalRequired (true = parents' time-off requests wait for approval; false = approved at once; illness never waits; the change is audited). OWNER/ADMIN only.",
+    inputSchema: { type: "object", properties: { lapseWeeks: { type: "number" }, arrearsGraceDays: { type: "number" }, lowAttendancePct: { type: "number" }, lateGraceMins: { type: "number" }, absenceApprovalRequired: { type: "boolean", description: "Student absences on only: parents' time-off requests need approval" }, tenant: TENANT_PROP } },
     async handler({ tenant, ...body }) {
       const res = await send(tenant, "PATCH", "/classes/registers/settings", body);
       if (!res.ok) throw await fail(res);
       return res.json();
+    },
+  },
+
+  // ── Absences (student absences switched on only; 404 otherwise) ──
+  {
+    name: "uiiq_classes_absences_list",
+    description: "Every student's absences in the workspace, for the Absences page (Classes -> Absences): parents' time-off requests waiting for a decision, who is away, and history. Filters: status (any of REQUESTED, APPROVED, REPORTED, DECLINED, CANCELLED), from (still running on or after this day), to (starting on or before this day), order (asc|desc by start, default desc), limit (1-100, default 50); pass nextCursor back as cursor for the next page. Owners/admins see everything plus `waiting` (requests to decide) and viewer.canReview; anyone else sees only excused absences, with the kind and note on the classes they teach and \"Away (known)\" (kind ABSENCE) everywhere else. Notes are a child's health information: left out (hasNote says one exists) unless includeNotes=true. To decide a request use uiiq_students_absences_approve / _decline with its studentId and id.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        status: { type: "array", items: { type: "string", enum: ["REQUESTED", "APPROVED", "REPORTED", "DECLINED", "CANCELLED"] }, description: "Default all" },
+        from: { type: "string", description: "YYYY-MM-DD: absences ending on or after this day" },
+        to: { type: "string", description: "YYYY-MM-DD: absences starting on or before this day" },
+        order: { type: "string", enum: ["asc", "desc"] },
+        limit: { type: "number", description: "1-100, default 50" },
+        cursor: { type: "string", description: "nextCursor from the previous page" },
+        includeNotes: { type: "boolean", description: "Include notes and the school's messages (default false)" },
+        tenant: TENANT_PROP,
+      },
+    },
+    async handler({ status, from, to, order, limit, cursor, includeNotes, tenant } = {}) {
+      const q = new URLSearchParams();
+      if (Array.isArray(status) && status.length) q.set("status", status.join(","));
+      if (from) q.set("from", from);
+      if (to) q.set("to", to);
+      if (order) q.set("order", order);
+      if (limit !== undefined) q.set("limit", String(limit));
+      if (cursor) q.set("cursor", cursor);
+      const qs = q.toString();
+      const res = await api(tenant)(`/classes/absences${qs ? `?${qs}` : ""}`);
+      if (!res.ok) throw await fail(res);
+      const body = await res.json();
+      if (includeNotes === true || !Array.isArray(body?.absences)) return body;
+      // Notes are opt-in so a child's health note never lands in the model's
+      // context just because someone asked who is away (Lucas, #769 L4).
+      return {
+        ...body,
+        absences: body.absences.map(({ note, reviewNote, ...a }) => ({ ...a, hasNote: !!note || !!reviewNote })),
+        notesOmitted: true,
+      };
     },
   },
 

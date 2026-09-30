@@ -1373,8 +1373,9 @@ Every product's target against its actual, by week, month or fiscal year, colour
 | `uiiq_classes_register_star` | Toggle a star for a student in a class on a date (calling again removes it; the reply says starred true/false). |
 | `uiiq_classes_register_costume` | Tick a student's costume for a show as handedOut and/or paid (send at least one). |
 | `uiiq_classes_attendance_report` | Attendance rate by class and by student over a date range (inclusive; default the last 8 weeks), flagging students under the tenant's low-attendance threshold. |
-| `uiiq_classes_register_settings` | The register-hook settings: lapseWeeks, arrearsGraceDays, lowAttendancePct, lateGraceMins. |
-| `uiiq_classes_register_settings_set` | Update any of lapseWeeks (1-52), arrearsGraceDays (0-90), lowAttendancePct (1-100), lateGraceMins (0-120). |
+| `uiiq_classes_absences_list` | Every student's absences (student absences on): requests waiting, who is away, history; filters status/from/to/order, paged by cursor. Owners/admins see all plus the waiting count; others only excused absences, with detail on their own classes. Notes only with includeNotes=true. |
+| `uiiq_classes_register_settings` | The register-hook settings: lapseWeeks, arrearsGraceDays, lowAttendancePct, lateGraceMins; with student absences on, absenceApprovalRequired (parents' time off waits for approval; default false). |
+| `uiiq_classes_register_settings_set` | Update any of lapseWeeks (1-52), arrearsGraceDays (0-90), lowAttendancePct (1-100), lateGraceMins (0-120), and (student absences on) absenceApprovalRequired. OWNER/ADMIN. |
 | `uiiq_classes_register_scan` | Record ONE scan of a child's check-in card/QR/NFC tag (token = the scanned URL or token) for a date, as the signed-in staff member would from the scanner: checks the child in to the class running now (or classId), or signs them out on a second scan where the class requires it. |
 | `uiiq_classes_register_scan_sync` | Drain an offline scan queue: up to 100 scans [{ clientId, token, sessionDate, classId?, signedOutBy?, scannedAt }] processed in order, idempotently; results keyed by clientId. |
 | `uiiq_classes_scan_cards` | The printable check-in card sheet for a class: each enrolled child's QR (data URI; max 120) with their name as a SEPARATE field and their printed-card status. |
@@ -1583,6 +1584,8 @@ Every product's target against its actual, by week, month or fiscal year, colour
 | `uiiq_students_absences_list` | A student's recorded absences (illness, holiday, appointment, other) with status, whether each is excused and the classes covered. Staff notes only with includeNotes=true (health information). OWNER/ADMIN; 404 unless student absences are switched on. |
 | `uiiq_students_absences_record` | Record an absence as staff: a holiday is APPROVED, illness/appointment/other REPORTED; excused at once (register badge, no "Missed class", not counted against attendance). |
 | `uiiq_students_absences_update` | Cancel (kept as history, note cleared) or edit a recorded absence; shortening it unlinks register marks it no longer covers. An empty class list is refused. |
+| `uiiq_students_absences_approve` | Approve a parent's waiting time-off request (REQUESTED only): APPROVED, authorised, excused; the optional message is shown to the parent. OWNER/ADMIN. |
+| `uiiq_students_absences_decline` | Decline a parent's waiting time-off request (REQUESTED only): DECLINED, unauthorised, final; the optional message is shown to the parent. OWNER/ADMIN. |
 | `uiiq_students_absences_delete` | ERASE an absence recorded in error (permanent; linked register marks stay, unlinked). Audited with the id and kind only. OWNER/ADMIN. |
 | `uiiq_students_groups` | The distinct group labels in use across active students, with a student count each (the group picker for notices, campaigns and SMS). |
 
@@ -1632,4 +1635,4 @@ Every product's target against its actual, by week, month or fiscal year, colour
 | `uiiq_workflow_order_assign` | Assign a workflow order to a user in the tenant (assignedUserId null unassigns). |
 | `uiiq_workflow_order_request_approval` | Ask the customer to approve a stage of their order: creates an approval link, moves the order to AWAITING_APPROVAL and EMAILS the customer. |
 
-1133 tools.
+1136 tools.
