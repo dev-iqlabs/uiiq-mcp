@@ -374,7 +374,7 @@ export const classesTools = [
   // ── Registers ──
   {
     name: "uiiq_classes_register_day",
-    description: "The day's registers (default today): every class running on that date with its students, attendance marks, check-in/out times, paid chip (PAID / OWES / DROP_IN_DUE / PLAN / PLAN_OVER / ARREARS …), stars and costume ticks; cancelled sessions listed separately. Names + paid state only.",
+    description: "The day's registers (default today): every class running on that date with its students, attendance marks, check-in/out times, paid chip (PAID / OWES / DROP_IN_DUE / PLAN / PLAN_OVER / ARREARS …), stars and costume ticks; cancelled sessions listed separately. Names + paid state only. With student absences switched on (absencesEnabled: true), each child with a known absence covering the session carries `absence` (linked = their Absent mark belongs to it). Its kind, label (such as \"Holiday\" or \"Ill (reported)\") and note go only to owners/admins, that class's own teachers and whoever covers the session; anyone else sees the neutral \"Away (known)\" (kind ABSENCE) and nothing about why. Each class says canMarkIll: whether you may mark ILL there on that date.",
     inputSchema: { type: "object", properties: { date: { type: "string", description: "YYYY-MM-DD" }, tenant: TENANT_PROP } },
     async handler({ date, tenant } = {}) {
       const qs = date ? `?date=${encodeURIComponent(date)}` : "";
@@ -396,8 +396,8 @@ export const classesTools = [
   },
   {
     name: "uiiq_classes_register_mark",
-    description: "Mark a student PRESENT, ABSENT or LATE for a class on a date. walkIn=true enrols an unenrolled student as DROP_IN first. A mark that CHANGES to ABSENT or LATE fires the tenant's attendance automations on the guardian (may message them). 409 on a cancelled session.",
-    inputSchema: { type: "object", required: ["classId", "studentId", "sessionDate", "status"], properties: { classId: { type: "string" }, studentId: { type: "string" }, sessionDate: { type: "string", description: "YYYY-MM-DD" }, status: { type: "string", enum: ["PRESENT", "ABSENT", "LATE"] }, walkIn: { type: "boolean" }, tenant: TENANT_PROP } },
+    description: "Mark a student PRESENT, ABSENT or LATE for a class on a date. walkIn=true enrols an unenrolled student as DROP_IN first. A mark that CHANGES to ABSENT or LATE fires the tenant's attendance automations on the guardian (may message them). 409 on a cancelled session. With student absences switched on: ILL is accepted too — stored as ABSENT, linked to a one-day ILLNESS absence (or one already covering the day), and it sends no \"Missed class\" message; instead a new ILL mark fires the tenant's \"absence_marked_ill\" automation (a neutral \"noted as unwell\" notice; its template ships as a draft). ILL is only for that class's teachers, whoever covers the session, and owners/admins (403 otherwise: mark ABSENT instead), only for a child on the class's register (an ACTIVE/TRIAL enrolment or a mark already saved), and only for today or earlier (UK). An ABSENT inside a recorded absence is linked the same way and sends no \"Missed class\" either. Changing an ILL mark to anything else removes the illness that tap made (only that one; an absence recorded elsewhere is just unlinked). The reply then carries absenceId.",
+    inputSchema: { type: "object", required: ["classId", "studentId", "sessionDate", "status"], properties: { classId: { type: "string" }, studentId: { type: "string" }, sessionDate: { type: "string", description: "YYYY-MM-DD" }, status: { type: "string", enum: ["PRESENT", "ABSENT", "LATE", "ILL"], description: "ILL only when student absences are switched on (400 otherwise), by the class's teachers, cover or owners/admins (403 otherwise)" }, walkIn: { type: "boolean" }, tenant: TENANT_PROP } },
     async handler({ tenant, ...body }) {
       const res = await post(tenant, "/classes/registers/attendance", body);
       if (!res.ok) throw await fail(res);
