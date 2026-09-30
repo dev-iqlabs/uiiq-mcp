@@ -216,7 +216,7 @@ export const studentsTools = [
   },
   {
     name: "uiiq_students_absences_record",
-    description: "Record an absence for a student, as staff (a parent rang, a holiday was agreed). kind HOLIDAY is recorded APPROVED; ILLNESS, APPOINTMENT and OTHER are REPORTED (no approval step). Excused at once: the register shows it, no \"Missed class\" message is sent and it doesn't count against their attendance. startDate YYYY-MM-DD; endDate defaults to the same day (inclusive, at most 366 days); classIds limits it to those classes (omit for all); note up to 500 chars, staff only — keep it minimal, no symptoms; authorised defaults to true. Audited with the kind, never the note. OWNER/ADMIN only; 404 unless switched on.",
+    description: "Record an absence for a student, as staff (a parent rang, a holiday was agreed). kind HOLIDAY is recorded APPROVED; ILLNESS, APPOINTMENT and OTHER are REPORTED (no approval step). Excused at once: the register shows it, no \"Missed class\" message is sent and it doesn't count against their attendance, and any Absent mark it covers is linked to it. Overlapping one of the child's live absences (waiting, approved or reported) on a shared class and day is a 409 naming it (overlapsWith): edit that one instead. startDate YYYY-MM-DD; endDate defaults to the same day (inclusive, at most 366 days); classIds limits it to those classes (omit for all); note up to 500 chars, staff only — keep it minimal, no symptoms; authorised defaults to true. Audited with the kind, never the note. OWNER/ADMIN only; 404 unless switched on.",
     inputSchema: {
       type: "object",
       required: ["id", "kind", "startDate"],
@@ -240,7 +240,7 @@ export const studentsTools = [
   },
   {
     name: "uiiq_students_absences_update",
-    description: "Edit or cancel a recorded absence. action=\"cancel\" withdraws it: kept as CANCELLED history of the dates, its note is cleared, and it counts as an ordinary absence again. Otherwise send any of kind, startDate, endDate, classIds (null = all classes; an empty list is refused), note (null or \"\" clears it), authorised. Shortening the dates or narrowing the classes unlinks register marks it no longer covers; a staff absence changed to HOLIDAY becomes APPROVED with you as the reviewer, and back to another kind becomes REPORTED. A cancelled or declined absence can't be edited (409). Audited with the field names, never the note. OWNER/ADMIN only; 404 unless switched on. To erase one recorded in error, use uiiq_students_absences_delete.",
+    description: "Edit or cancel a recorded absence. action=\"cancel\" withdraws it: kept as CANCELLED history of the dates, its note is cleared, and it counts as an ordinary absence again. Otherwise send any of kind, startDate, endDate, classIds (null = all classes; an empty list is refused), note (null or \"\" clears it), authorised. Shortening the dates or narrowing the classes unlinks register marks it no longer covers; a staff absence changed to HOLIDAY becomes APPROVED with you as the reviewer, and back to another kind becomes REPORTED. A cancelled or declined absence can't be edited (409), nor moved onto another live absence of the child's (409, overlapsWith). Audited with the field names, never the note. OWNER/ADMIN only; 404 unless switched on. To erase one recorded in error, use uiiq_students_absences_delete.",
     inputSchema: {
       type: "object",
       required: ["id", "absenceId"],
@@ -274,6 +274,45 @@ export const studentsTools = [
     },
     async handler({ id, absenceId, tenant }) {
       const res = await send(tenant, "DELETE", `/students/${encodeURIComponent(id)}/absences/${encodeURIComponent(absenceId)}`);
+      if (!res.ok) throw await fail(res);
+      return res.json();
+    },
+  },
+
+  {
+    name: "uiiq_students_absences_approve",
+    description: "Approve a parent's time-off request that is waiting (status REQUESTED; 409 for any other status, or if it changed meanwhile). You are stamped as the reviewer; it becomes APPROVED and authorised, excuses the child at once and links any Absent marks it covers. `message` (optional, up to 500 chars) is SHOWN TO THE PARENT on their child's page as a message from the school, so write it to them, never an internal note. No email or notification is sent yet (phase 2b). OWNER/ADMIN only; 404 unless student absences are switched on. Find waiting requests with uiiq_classes_absences_list status=[\"REQUESTED\"].",
+    inputSchema: {
+      type: "object",
+      required: ["id", "absenceId"],
+      properties: {
+        id: { type: "string", description: "Student id" },
+        absenceId: { type: "string" },
+        message: { type: "string", description: "Up to 500 chars; the parent sees it" },
+        tenant: TENANT_PROP,
+      },
+    },
+    async handler({ id, absenceId, message, tenant }) {
+      const res = await send(tenant, "PATCH", `/students/${encodeURIComponent(id)}/absences/${encodeURIComponent(absenceId)}`, { action: "approve", message });
+      if (!res.ok) throw await fail(res);
+      return res.json();
+    },
+  },
+  {
+    name: "uiiq_students_absences_decline",
+    description: "Decline a parent's time-off request that is waiting (status REQUESTED; 409 otherwise). You are stamped as the reviewer; it becomes DECLINED and unauthorised, so it excuses nothing (if the child stays away anyway, that counts as an ordinary absence). Final: a declined request can't be reopened. `message` (optional, up to 500 chars) is SHOWN TO THE PARENT as the school's reason, so write it to them. No email or notification is sent yet (phase 2b). OWNER/ADMIN only; 404 unless student absences are switched on.",
+    inputSchema: {
+      type: "object",
+      required: ["id", "absenceId"],
+      properties: {
+        id: { type: "string", description: "Student id" },
+        absenceId: { type: "string" },
+        message: { type: "string", description: "Up to 500 chars; the parent sees it" },
+        tenant: TENANT_PROP,
+      },
+    },
+    async handler({ id, absenceId, message, tenant }) {
+      const res = await send(tenant, "PATCH", `/students/${encodeURIComponent(id)}/absences/${encodeURIComponent(absenceId)}`, { action: "decline", message });
       if (!res.ok) throw await fail(res);
       return res.json();
     },
