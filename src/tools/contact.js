@@ -52,6 +52,34 @@ export const contactTools = [
     }
   },
   {
+    name: "uiiq_contact_create",
+    description:
+      "Add one contact by hand. It starts UNSUBSCRIBED from email and SMS. subscribed / smsSubscribed true records their yes on their behalf: owner/admin only, subscribedReason required (audited), and email is refused (422) when the address is on the do-not-email list. 409 with existingId when the email is already a contact (use uiiq_contact_update on that one). Recorded with metadata.source \"manual\".",
+    inputSchema: {
+      type: "object",
+      required: ["email"],
+      properties: {
+        email: { type: "string", description: "Required; must be valid and not already a contact in the tenant" },
+        name: { type: "string" },
+        phone: { type: "string" },
+        tags: { type: "array", items: { type: "string" } },
+        subscribed: { type: "boolean", description: "Email marketing opt-in (default false). true: owner/admin + subscribedReason" },
+        smsSubscribed: { type: "boolean", description: "SMS marketing opt-in (default false). true: owner/admin + subscribedReason" },
+        subscribedReason: { type: "string", description: "Why they can be sent marketing — required when either opt-in is true (logged)" },
+        tenant: TENANT_PROP,
+      },
+    },
+    async handler({ tenant, ...fields }) {
+      const body = Object.fromEntries(Object.entries(fields).filter(([, v]) => v !== undefined));
+      const res = await api(tenant)("/contacts", {
+        method: "POST",
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      return res.json(); // the created contact
+    },
+  },
+  {
     name: "uiiq_contact_update",
     description:
       "Edit one contact, or archive / restore it. Only the fields you send change. tags replaces the whole list. email must be valid and unique in the tenant (409 otherwise). archived: false restores a removed contact.",
@@ -70,8 +98,11 @@ export const contactTools = [
             "Email marketing opt-in. false puts their address on the workspace's do-not-email list. " +
             "true for someone not subscribed overrides their no: owner/admin only, and subscribedReason is required (logged).",
         },
-        subscribedReason: { type: "string", description: "Why they can be emailed again — required when setting subscribed true on someone not subscribed" },
-        smsSubscribed: { type: "boolean", description: "SMS marketing opt-in" },
+        subscribedReason: { type: "string", description: "Why they can be sent marketing again — required when setting subscribed or smsSubscribed true on someone not subscribed" },
+        smsSubscribed: {
+          type: "boolean",
+          description: "SMS marketing opt-in. true for someone not subscribed overrides their STOP: owner/admin only, subscribedReason required (logged).",
+        },
         archived: { type: "boolean" },
         tenant: TENANT_PROP,
       },
