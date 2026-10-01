@@ -1461,8 +1461,8 @@ Every product's target against its actual, by week, month or fiscal year, colour
 | `uiiq_integrations_list` | The tenant's connected import sources: id, provider (WOOCOMMERCE \| API \| XERO…), name, status, lastSyncedAt, lastSyncCount and non-secret config. |
 | `uiiq_integrations_add` | Add an import source with its credentials (encrypted at rest). |
 | `uiiq_integrations_delete` | DELETE an import source and its stored credentials. |
-| `uiiq_integrations_sync` | Pull contacts from an import source into the tenant's contact list (new emails only, tagged by provider, subscribed=true): WooCommerce customers, a generic API list, or Xero customers. |
-| `uiiq_integrations_posm_sync` | Sync the tenant's own Sell bookings and memberships into contacts: creates missing contacts (subscribed=true) and adds posm/booking/member/plan tags to existing ones. |
+| `uiiq_integrations_sync` | Pull contacts from an import source into the tenant's contact list (new emails only, tagged by provider, UNSUBSCRIBED from email and SMS — a customer list is not marketing consent; existing contacts keep their subscription): WooCommerce customers, a generic API list, or Xero customers. |
+| `uiiq_integrations_posm_sync` | Sync the tenant's own Sell bookings and memberships into contacts: creates missing contacts UNSUBSCRIBED from email and SMS (existing contacts keep their subscription) and adds posm/booking/member/plan tags to existing ones. |
 | `uiiq_integrations_xero_accounts` | The REVENUE accounts in the Xero organisation behind a XERO import source (sourceId from uiiq_integrations_list) — pick one for uiiq_integrations_xero_config_set. |
 | `uiiq_integrations_xero_config_set` | Set the Xero sales account code that UIIQ sales invoices post to, on a XERO import source. |
 | `uiiq_integrations_xero_financials` | Xero headline financials for a period (default: this month to date): income, expenses, net profit from the P&L report, plus the 20 most recently updated paid/authorised sales invoices. |
