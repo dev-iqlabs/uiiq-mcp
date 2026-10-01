@@ -1,7 +1,7 @@
 import { apiClient, withTenant } from "../auth.js";
 
 const TENANT_SUMMARY = [
-  "id", "name", "slug", "status", "tier", "industry", "isInternal", "iqexOrgId", "createdAt",
+  "id", "name", "slug", "status", "launchStage", "tier", "industry", "isInternal", "iqexOrgId", "createdAt",
 ];
 
 export const tenantTools = [
@@ -30,7 +30,7 @@ export const tenantTools = [
   },
   {
     name: "uiiq_tenant_get",
-    description: "Get full detail for a UIIQ tenant by ID.",
+    description: "Get full detail for a UIIQ tenant by ID, including its launchStage (DORMANT, DEVELOPMENT, ROLLOUT or LIVE) and launchTestRecipients.",
     inputSchema: {
       type: "object",
       required: ["id"],
@@ -158,6 +158,37 @@ export const tenantTools = [
       });
       if (!res.ok) throw new Error(await res.text());
       return res.json();
+    },
+  },
+  {
+    name: "uiiq_tenant_launch_stage_set",
+    description:
+      "Set a tenant's launch stage and/or its test list. SUPER_ADMIN (read live), audited as tenant.launch_stage. DORMANT = while we set it up: no contact email/SMS, crons and automations skip it, public pages show coming soon, checkout refused, no write-backs to its shops. DEVELOPMENT = our own internal test workspaces only (400 for a customer tenant): everything works, but email/SMS only reach the tenant's own logins and its test list. ROLLOUT = while we configure a customer: same as DEVELOPMENT. LIVE = in use, everything on (contact comms still need COMMS_LAUNCHED platform-wide). Transactional sends (sign-in codes, resets, receipts) are never gated by stage. testRecipients replaces the test list: emails or phone numbers, max 100.",
+    inputSchema: {
+      type: "object",
+      required: ["id"],
+      properties: {
+        id: { type: "string", description: "Tenant ID" },
+        stage: { type: "string", enum: ["DORMANT", "DEVELOPMENT", "ROLLOUT", "LIVE"], description: "The new launch stage" },
+        testRecipients: {
+          type: "array",
+          items: { type: "string" },
+          description: "Replaces the DEVELOPMENT/ROLLOUT test list: email addresses or phone numbers. [] clears it.",
+        },
+      },
+    },
+    async handler({ id, stage, testRecipients }) {
+      if (stage === undefined && testRecipients === undefined) throw new Error("Pass stage, testRecipients, or both.");
+      const res = await apiClient()(`/admin/tenants/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify({
+          ...(stage !== undefined ? { launchStage: stage } : {}),
+          ...(testRecipients !== undefined ? { launchTestRecipients: testRecipients } : {}),
+        }),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      const t = await res.json();
+      return { id: t.id, slug: t.slug, launchStage: t.launchStage, launchTestRecipients: t.launchTestRecipients, isInternal: t.isInternal };
     },
   },
   {

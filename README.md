@@ -85,7 +85,7 @@ UIIQ is one subscription whose modules are grouped as **Sell**, **Grow** and **R
 
 | Feature | Tool prefix | You can |
 | --- | --- | --- |
-| Tenants and organisations | `uiiq_tenant_*`, `uiiq_org_*` | Create, rename, delete or restore tenants, set features, read usage |
+| Tenants and organisations | `uiiq_tenant_*`, `uiiq_org_*` | Create, rename, delete or restore tenants, set features and launch stage, read usage |
 | Health | `uiiq_status`, `uiiq_system_health` | API health and latency, infrastructure, alarms and AWS cost against budget |
 | Platform admin | `uiiq_admin_*` | Tenant control plane (IQEX link and keys, members, users, products, settings, Stripe fee), API keys, features, VAT, audit log, staff, groups, sites, locations, venues, booking emails, briefing, credit costs, ads tiers and gates, add-ons; secrets are shown once |
 | Shop admin, print, designs, suppliers | `uiiq_shop_*`, `uiiq_print_*`, `uiiq_design_*`, `uiiq_supplier_*` | The shop catalogue and its pushes to WooCommerce, connected shops, shop orders, print products, techniques and tiers, the print queue, designs and proofs, suppliers and their syncs |
@@ -137,13 +137,14 @@ Not exposed on purpose: the platform-to-platform callbacks under `/api/platform/
 | Tool | What it does |
 | --- | --- |
 | `uiiq_tenant_list` | List UIIQ tenants (summary rows). |
-| `uiiq_tenant_get` | Get full detail for a UIIQ tenant by ID. |
+| `uiiq_tenant_get` | Get full detail for a UIIQ tenant by ID, including its launchStage (DORMANT, DEVELOPMENT, ROLLOUT or LIVE) and launchTestRecipients. |
 | `uiiq_tenant_create` | Create a new UIIQ tenant. |
 | `uiiq_tenant_api_key` | ROTATE the UIIQ Connect API key for a tenant: issues a NEW key and returns it once. |
 | `uiiq_tenant_api_key_get` | Look up a tenant's CURRENT UIIQ Connect API key (the key the uiiq-connect WordPress plugin, IQEX and n8n send). |
 | `uiiq_tenant_features` | Get or set feature flags for a UIIQ tenant. Enabling `postroom_hq` needs the tenant's ACTIVE Postroom HQ request (409 without one); the request's code is audited. |
 | `uiiq_tenant_usage` | Get usage stats for a UIIQ tenant (sends, contacts, API calls). |
 | `uiiq_tenant_rename` | Change a UIIQ tenant's slug. |
+| `uiiq_tenant_launch_stage_set` | Set a tenant's launch stage and/or its test list. |
 | `uiiq_tenant_delete` | Delete or restore a UIIQ tenant. |
 | `uiiq_tenant_settings_update` | Update a tenant's own settings — patch semantics, only the fields you send change. |
 
@@ -1637,4 +1638,4 @@ Every product's target against its actual, by week, month or fiscal year, colour
 | `uiiq_workflow_order_assign` | Assign a workflow order to a user in the tenant (assignedUserId null unassigns). |
 | `uiiq_workflow_order_request_approval` | Ask the customer to approve a stage of their order: creates an approval link, moves the order to AWAITING_APPROVAL and EMAILS the customer. |
 
-1138 tools.
+1139 tools.
