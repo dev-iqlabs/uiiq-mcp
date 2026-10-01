@@ -14,7 +14,7 @@ UIIQ is one subscription whose modules are grouped as **Sell**, **Grow** and **R
 | Staff, resources, service areas | `uiiq_sell_staff_availability_*`, `uiiq_sell_resource_*`, `uiiq_sell_service_area_*` | Block and unblock staff, manage rooms and equipment, set the areas a field service covers |
 | Field visits and visit subscriptions | `uiiq_sell_field_visit_*`, `uiiq_sell_visit_subscription_*`, `uiiq_sell_visit_reminder_status` | Track recurring visits and their reminders |
 | Pricing and promotions | `uiiq_sell_pricing_rule_*`, `uiiq_sell_pricing_intelligence_recommend`, `uiiq_sell_promo_create` | Quote a price under the rules, ask for a recommended price, issue promo codes |
-| Gift cards, vouchers, memberships | `uiiq_sell_gift_card_*`, `uiiq_sell_voucher_*`, `uiiq_sell_membership_plan_*`, `uiiq_sell_subscription_list` | Issue and bulk-issue gift cards, resend or regenerate vouchers, manage membership plans |
+| Gift cards, vouchers, memberships | `uiiq_sell_gift_card_*`, `uiiq_sell_voucher_*`, `uiiq_sell_membership_plan_*`, `uiiq_sell_subscription_*` | Issue and bulk-issue gift cards, resend or regenerate vouchers, manage membership plans, review and cancel members |
 | Tickets | `uiiq_ticket_*` | Issue tickets, scan them at the door, see scan stats, forward tickets |
 | Donations | `uiiq_donations_*` | Run causes, report on giving, export Gift Aid |
 | Orders and commerce | `uiiq_order_*`, `uiiq_commerce_*`, `uiiq_channels_*`, `uiiq_merch_set_*` | Hold and annotate orders, provision hosted shops, set fee rates, settle payouts, sync marketplace channels |
@@ -285,6 +285,7 @@ Not exposed on purpose: the platform-to-platform callbacks under `/api/platform/
 | `uiiq_sell_subscription_list` | List UIIQ membership subscribers (members), newest first. |
 | `uiiq_sell_subscription_get` | One membership subscriber by id: plan, status, member code, address, residency-check outcome and who verified it. |
 | `uiiq_sell_subscription_review` | Residency review for a residents-only pass. |
+| `uiiq_sell_subscription_cancel` | Cancel a member (owner/admin). |
 | `uiiq_sell_promo_create` | Create a UIIQ promo discount code. |
 | `uiiq_sell_gift_card_issue` | Issue a UIIQ gift card / voucher. |
 | `uiiq_sell_gift_card_bulk_issue` | Bulk-issue vouchers (max 500). |
@@ -1636,4 +1637,4 @@ Every product's target against its actual, by week, month or fiscal year, colour
 | `uiiq_workflow_order_assign` | Assign a workflow order to a user in the tenant (assignedUserId null unassigns). |
 | `uiiq_workflow_order_request_approval` | Ask the customer to approve a stage of their order: creates an approval link, moves the order to AWAITING_APPROVAL and EMAILS the customer. |
 
-1137 tools.
+1138 tools.

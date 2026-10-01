@@ -109,6 +109,29 @@ export const sellTools = [
     }
   },
   {
+    name: "uiiq_sell_subscription_cancel",
+    description:
+      "Cancel a member (owner/admin). History is kept: check-ins, payments and the member code stay; status goes to CANCELLED. " +
+      "Stripe-paid: the subscription stops renewing (cancel_at_period_end on the venue's connected account), the member keeps access until cancelsAt, and the row turns CANCELLED when Stripe ends it — returns mode period_end. " +
+      "Anything else (one-off pass, added by hand) cancels now — mode immediate, and the desk refuses their code at once. " +
+      "If Stripe refuses, nothing is changed and the error is returned. No refund is made. " +
+      "undo=true turns renewal back on for a member still waiting to cancel at period end.",
+    inputSchema: {
+      type: "object",
+      required: ["id"],
+      properties: {
+        id: { type: "string", description: "Membership (subscriber) id — see uiiq_sell_subscription_list" },
+        undo: { type: "boolean", description: "Undo a pending period-end cancel instead (Stripe renews again)" },
+        tenant: TENANT_PROP,
+      }
+    },
+    async handler({ id, undo, tenant }) {
+      const res = await api(tenant)(`/admin/memberships/subscribers/${encodeURIComponent(id)}/cancel`, { method: undo ? "DELETE" : "POST" });
+      if (!res.ok) throw new Error(`${res.status} ${await res.text()}`);
+      return res.json();
+    }
+  },
+  {
     name: "uiiq_sell_promo_create",
     description: "Create a UIIQ promo discount code.",
     inputSchema: {
