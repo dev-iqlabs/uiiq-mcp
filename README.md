@@ -137,7 +137,7 @@ Not exposed on purpose: the platform-to-platform callbacks under `/api/platform/
 | Tool | What it does |
 | --- | --- |
 | `uiiq_tenant_list` | List UIIQ tenants (summary rows). |
-| `uiiq_tenant_get` | Get full detail for a UIIQ tenant by ID, including its launchStage (DORMANT, DEVELOPMENT, ROLLOUT or LIVE) and launchTestRecipients. |
+| `uiiq_tenant_get` | Get full detail for a UIIQ tenant by ID, including its launchStage (DORMANT, ONBOARDING, DEVELOPMENT, DEMO, ROLLOUT or LIVE) and launchTestRecipients. |
 | `uiiq_tenant_create` | Create a new UIIQ tenant. |
 | `uiiq_tenant_api_key` | ROTATE the UIIQ Connect API key for a tenant: issues a NEW key and returns it once. |
 | `uiiq_tenant_api_key_get` | Look up a tenant's CURRENT UIIQ Connect API key (the key the uiiq-connect WordPress plugin, IQEX and n8n send). |
