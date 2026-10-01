@@ -30,7 +30,7 @@ export const tenantTools = [
   },
   {
     name: "uiiq_tenant_get",
-    description: "Get full detail for a UIIQ tenant by ID, including its launchStage (DORMANT, DEVELOPMENT, ROLLOUT or LIVE) and launchTestRecipients.",
+    description: "Get full detail for a UIIQ tenant by ID, including its launchStage (DORMANT, ONBOARDING, DEVELOPMENT, DEMO, ROLLOUT or LIVE) and launchTestRecipients.",
     inputSchema: {
       type: "object",
       required: ["id"],
@@ -163,17 +163,17 @@ export const tenantTools = [
   {
     name: "uiiq_tenant_launch_stage_set",
     description:
-      "Set a tenant's launch stage and/or its test list. SUPER_ADMIN (read live), audited as tenant.launch_stage. DORMANT = while we set it up: no contact email/SMS, crons and automations skip it, public pages show coming soon, checkout refused, no write-backs to its shops. DEVELOPMENT = our own internal test workspaces only (400 for a customer tenant): everything works, but email/SMS only reach the tenant's own logins and its test list. ROLLOUT = while we configure a customer: same as DEVELOPMENT. LIVE = in use, everything on (contact comms still need COMMS_LAUNCHED platform-wide). Transactional sends (sign-in codes, resets, receipts) are never gated by stage. testRecipients replaces the test list: emails or phone numbers, max 100.",
+      "Set a tenant's launch stage and/or its test list. SUPER_ADMIN (read live), audited as tenant.launch_stage. DORMANT = while we set it up: no contact email/SMS, crons and automations skip it, public pages show coming soon, checkout refused, no write-backs to its shops. ONBOARDING = the customer is setting up with us: email/SMS only reach the tenant's own logins and its test list; still no public pages (coming soon), checkout, automations or write-backs. DEVELOPMENT = our own internal test workspaces only (400 for a customer tenant): everything works, but email/SMS only reach the tenant's own logins and its test list. DEMO = our demo workspaces shown to prospects, internal only (400 for a customer tenant): everything works for show and email/SMS only reach the logins and test list, but checkout is refused and nothing is written back to a shop. ROLLOUT = while we configure a customer: same as DEVELOPMENT. LIVE = in use, everything on (contact comms still need COMMS_LAUNCHED platform-wide). Transactional sends (sign-in codes, resets, receipts) are never gated by stage. testRecipients replaces the test list: emails or phone numbers, max 100.",
     inputSchema: {
       type: "object",
       required: ["id"],
       properties: {
         id: { type: "string", description: "Tenant ID" },
-        stage: { type: "string", enum: ["DORMANT", "DEVELOPMENT", "ROLLOUT", "LIVE"], description: "The new launch stage" },
+        stage: { type: "string", enum: ["DORMANT", "ONBOARDING", "DEVELOPMENT", "DEMO", "ROLLOUT", "LIVE"], description: "The new launch stage" },
         testRecipients: {
           type: "array",
           items: { type: "string" },
-          description: "Replaces the DEVELOPMENT/ROLLOUT test list: email addresses or phone numbers. [] clears it.",
+          description: "Replaces the test list (ONBOARDING, DEVELOPMENT, DEMO, ROLLOUT): email addresses or phone numbers. [] clears it.",
         },
       },
     },
