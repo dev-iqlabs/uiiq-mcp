@@ -31,7 +31,7 @@ UIIQ is one subscription whose modules are grouped as **Sell**, **Grow** and **R
 
 | Feature | Tool prefix | You can |
 | --- | --- | --- |
-| Contacts and segments | `uiiq_contact_*`, `uiiq_segment_*` | List, edit, archive or convert contacts into businesses; preview segments |
+| Contacts and segments | `uiiq_contact_*`, `uiiq_segment_*` | List, add, edit, archive or convert contacts into businesses; preview segments |
 | CRM pipeline | `uiiq_prospect_list/get/create/update`, `uiiq_interaction_*`, `uiiq_followups_due` | Move prospects, suppliers and partners along the pipeline, log and edit interactions, see what follow-ups are due |
 | Find Prospects | `uiiq_prospect_search_*`, `uiiq_prospect_preset_*`, `uiiq_prospect_sweep_start`, `uiiq_prospect_source_*` | Start a search in businesses, acts, tenders or funding mode, save briefs as presets, sweep town by town, review candidates, read the funnel, manage the source registry |
 | Bids and outreach | `uiiq_prospect_job_*`, `uiiq_prospect_video_invite_*`, `uiiq_prospect_ingest` | Adopt tenders and funding calls as bids, send a personalised video hello, bulk-ingest enquiries |
@@ -164,6 +164,7 @@ Not exposed on purpose: the platform-to-platform callbacks under `/api/platform/
 | --- | --- |
 | `uiiq_contact_list` | List UIIQ contacts. |
 | `uiiq_contact_get` | Get a UIIQ contact by ID. |
+| `uiiq_contact_create` | Add one contact by hand. |
 | `uiiq_contact_update` | Edit one contact, or archive / restore it. |
 | `uiiq_contact_delete` | Remove a contact — SOFT: it is archived, leaving every list and every campaign audience, but its send history, donations and student links survive so past campaign stats stay honest. |
 | `uiiq_contact_convert` | Move marketing Contacts into the relationship layer as Businesses (PROSPECT / CUSTOMER / SUPPLIER / PARTNER) — for the Xero-export-landed-in-the-mailing-list case. |
@@ -1635,4 +1636,4 @@ Every product's target against its actual, by week, month or fiscal year, colour
 | `uiiq_workflow_order_assign` | Assign a workflow order to a user in the tenant (assignedUserId null unassigns). |
 | `uiiq_workflow_order_request_approval` | Ask the customer to approve a stage of their order: creates an approval link, moves the order to AWAITING_APPROVAL and EMAILS the customer. |
 
-1136 tools.
+1137 tools.
