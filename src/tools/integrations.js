@@ -57,13 +57,13 @@ export const integrationsTools = [
   },
   {
     name: "uiiq_integrations_sync",
-    description: "Pull contacts from an import source into the tenant's contact list (new emails only, tagged by provider, subscribed=true): WooCommerce customers, a generic API list, or Xero customers. Returns { imported, skipped }. 422 for a provider with no sync.",
+    description: "Pull contacts from an import source into the tenant's contact list (new emails only, tagged by provider, UNSUBSCRIBED from email and SMS — a customer list is not marketing consent; existing contacts keep their subscription): WooCommerce customers, a generic API list, or Xero customers. Returns { imported, skipped }. 422 for a provider with no sync.",
     inputSchema: { type: "object", required: ["id"], properties: { id: { type: "string" }, tenant: TENANT_PROP } },
     handler: ({ id, tenant }) => send(tenant, `/integrations/${encodeURIComponent(id)}/sync`, "POST"),
   },
   {
     name: "uiiq_integrations_posm_sync",
-    description: "Sync the tenant's own Sell bookings and memberships into contacts: creates missing contacts (subscribed=true) and adds posm/booking/member/plan tags to existing ones. Returns { imported, updated, skipped, total, sources }.",
+    description: "Sync the tenant's own Sell bookings and memberships into contacts: creates missing contacts UNSUBSCRIBED from email and SMS (existing contacts keep their subscription) and adds posm/booking/member/plan tags to existing ones. Returns { imported, updated, skipped, total, sources }.",
     inputSchema: { type: "object", properties: { tenant: TENANT_PROP } },
     handler: ({ tenant } = {}) => send(tenant, "/integrations/posm/sync", "POST"),
   },
