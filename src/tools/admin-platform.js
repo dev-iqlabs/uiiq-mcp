@@ -198,12 +198,12 @@ export const adminPlatformTools = [
   },
   {
     name: "uiiq_admin_tenant_website_pages_set",
-    description: "A tenant's Website Pages generation settings and internal flag: websitePagesModel (HAIKU_4_5, SONNET_4_6, OPUS_4_7), websitePagesBackend (DIRECT or IQEX), selfApproveWebsitePages, isInternal. Only the fields you send change. SUPER_ADMIN.",
+    description: "A tenant's Website Pages generation settings: websitePagesModel (HAIKU_4_5, SONNET_4_6, OPUS_4_7), websitePagesBackend (DIRECT or IQEX), selfApproveWebsitePages. Only the fields you send change. SUPER_ADMIN. (The internal flag is set only by a click in UIIQ.)",
     inputSchema: {
       type: "object", required: ["tenantId"],
       properties: {
         tenantId: TENANT_ID, websitePagesModel: { type: "string", enum: ["HAIKU_4_5", "SONNET_4_6", "OPUS_4_7"] },
-        websitePagesBackend: { type: "string", enum: ["DIRECT", "IQEX"] }, selfApproveWebsitePages: { type: "boolean" }, isInternal: { type: "boolean" },
+        websitePagesBackend: { type: "string", enum: ["DIRECT", "IQEX"] }, selfApproveWebsitePages: { type: "boolean" },
       },
     },
     async handler({ tenantId, ...body }) {

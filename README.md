@@ -1217,7 +1217,7 @@ Every product's target against its actual, by week, month or fiscal year, colour
 | `uiiq_admin_product_set` | Set a tenant's entitlement to a product (GROW, RUN, SELL, UIIQ, AI): status ACTIVE, TRIAL, SUSPENDED or CANCELLED — or omit status to remove the product row entirely. |
 | `uiiq_admin_tenant_settings_set` | The operator-side settings on a tenant (distinct from uiiq_tenant_settings_update, which is the tenant's own profile): giftCardMaxPence (cap, <= 1,000,000), allowedBookingModes (non-empty subset of the booking modes), iqplantSettings { giftEnabled, giftValues: [{ valuePence, feePence }] } (legacy — prefer the gift programme tools). |
 | `uiiq_admin_tenant_stripe_set` | Set the platform fee on a tenant's connected payment account: applicationFeePercent (0–50) and/or passFeesToCustomer. |
-| `uiiq_admin_tenant_website_pages_set` | A tenant's Website Pages generation settings and internal flag: websitePagesModel (HAIKU_4_5, SONNET_4_6, OPUS_4_7), websitePagesBackend (DIRECT or IQEX), selfApproveWebsitePages, isInternal. |
+| `uiiq_admin_tenant_website_pages_set` | A tenant's Website Pages generation settings: websitePagesModel (HAIKU_4_5, SONNET_4_6, OPUS_4_7), websitePagesBackend (DIRECT or IQEX), selfApproveWebsitePages. (The internal flag is set only by a click in UIIQ.) |
 | `uiiq_admin_user_list` | The user accounts in a tenant (id, name, email, role), sorted by name. |
 | `uiiq_admin_user_create` | Create a user anywhere on the platform, or with promote:true change an existing user's role (and tenant). |
 | `uiiq_admin_user_update` | Change a user's role (OWNER, ADMIN, STAFF, SUPER_ADMIN), status (ACTIVE or SUSPENDED) or name. |
