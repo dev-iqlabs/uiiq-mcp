@@ -768,6 +768,7 @@ Dashboard → Ads → Competitors. Needs the `ads_search` feature and the ads ti
 | `uiiq_display_create` | Register a display (screen). |
 | `uiiq_display_update` | Edit a display. |
 | `uiiq_display_delete` | Delete a display by id. |
+| `uiiq_display_health` | What a display has reported about itself (last 14 days): player boot/health/errors/stalls, kiosk-app storage, memory, crashes, black screens. `problems` skips routine check-ins. |
 | `uiiq_display_channel_list` | List channels (playlists), each with its ordered items. |
 | `uiiq_display_channel_create` | Create a channel (playlist). |
 | `uiiq_display_channel_update` | Edit a channel. |
@@ -1638,4 +1639,4 @@ Every product's target against its actual, by week, month or fiscal year, colour
 | `uiiq_workflow_order_assign` | Assign a workflow order to a user in the tenant (assignedUserId null unassigns). |
 | `uiiq_workflow_order_request_approval` | Ask the customer to approve a stage of their order: creates an approval link, moves the order to AWAITING_APPROVAL and EMAILS the customer. |
 
-1139 tools.
+1140 tools.
