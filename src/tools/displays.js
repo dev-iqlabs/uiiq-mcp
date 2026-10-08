@@ -86,6 +86,29 @@ export const displayTools = [
     },
   },
   {
+    name: "uiiq_display_health",
+    description: "What a display (screen) has reported about itself in the last 14 days, newest first: the web player's boot, health snapshots, script errors, stalls and reloads, and the Android kiosk app's boot (storage, memory, WebView caches), previous-exit reason, renderer crashes/hangs and black screens caught and recovered. problems=true leaves out the routine check-ins.",
+    inputSchema: {
+      type: "object",
+      required: ["id"],
+      properties: {
+        id: { type: "number", description: "Display id (uiiq_display_list)" },
+        problems: { type: "boolean", description: "Only problems — no boot / health / app_health check-ins" },
+        limit: { type: "number", description: "Max events (default 200, max 500)" },
+        tenant: TENANT_PROP,
+      },
+    },
+    async handler({ id, problems, limit, tenant } = {}) {
+      const q = new URLSearchParams();
+      if (problems) q.set("problems", "1");
+      if (limit) q.set("limit", String(limit));
+      const qs = q.size ? `?${q}` : "";
+      const res = await api(tenant)(`/displays/${id}/health${qs}`);
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    },
+  },
+  {
     name: "uiiq_display_channel_list",
     description: "List channels (playlists), each with its ordered items.",
     inputSchema: { type: "object", properties: { tenant: TENANT_PROP } },
