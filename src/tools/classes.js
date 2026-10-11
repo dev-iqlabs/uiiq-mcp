@@ -304,6 +304,28 @@ export const classesTools = [
     },
   },
 
+  // ── Family registration form ──
+  {
+    name: "uiiq_classes_registration_form_get",
+    description: "The school's public \"Register your family\" IQForm, which the Register button on the class enrol pages opens: { enabled, iqformId, url }. enabled=false (and nothing else) when the workspace doesn't have family registration switched on. iqformId and url are null until one is set. Any signed-in user of the workspace.",
+    inputSchema: { type: "object", properties: { tenant: TENANT_PROP } },
+    async handler({ tenant } = {}) {
+      const res = await api(tenant)("/classes/registration-form");
+      if (!res.ok) throw await fail(res);
+      return res.json();
+    },
+  },
+  {
+    name: "uiiq_classes_registration_form_set",
+    description: "Set or clear the school's public \"Register your family\" IQForm. ref is the IQForm's id or a link with form-id= in it; it must exist, be Public and belong to the venue's own IQEX org (400 with the reason otherwise). ref null or \"\" clears it, which takes the Register button off the enrol pages. Returns { ok, iqformId, title, url }. Children registered through it wait under uiiq_students_registrations_list. OWNER/ADMIN only; 404 unless the workspace has family registration switched on.",
+    inputSchema: { type: "object", required: ["ref"], properties: { ref: { type: ["string", "number", "null"], description: "IQForm id or link with form-id=; null or \"\" clears it" }, tenant: TENANT_PROP } },
+    async handler({ ref, tenant }) {
+      const res = await send(tenant, "PUT", "/classes/registration-form", { ref: ref ?? null });
+      if (!res.ok) throw await fail(res);
+      return res.json();
+    },
+  },
+
   // ── Enrolments ──
   {
     name: "uiiq_classes_enrolments_list",

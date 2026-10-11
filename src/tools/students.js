@@ -48,7 +48,7 @@ const STUDENT_FIELDS = {
 export const studentsTools = [
   {
     name: "uiiq_students_list",
-    description: "The student directory grouped by guardian (name, email, phone, owed balance) with each child's dob, groups, photo consent, active enrolments, owed balance and printed-card status. `q` matches child or guardian name/email. No medical data. OWNER/ADMIN only.",
+    description: "The student directory grouped by guardian (name, email, phone, owed balance) with each child's dob, groups, photo consent, active enrolments, owed balance and printed-card status. `q` matches child or guardian name/email. No medical data. Children a parent registered who are still waiting for the office's check are not here (see uiiq_students_registrations_list). OWNER/ADMIN only.",
     inputSchema: { type: "object", properties: { q: { type: "string" }, includeInactive: { type: "boolean" }, tenant: TENANT_PROP } },
     async handler({ q, includeInactive, tenant } = {}) {
       const params = new URLSearchParams();
@@ -82,7 +82,7 @@ export const studentsTools = [
   },
   {
     name: "uiiq_students_update",
-    description: "Partial update of a student: any of the record fields, plus active (false = the child has left; keeps every register), tshirtSize and costumes (full replace of the per-show ledger). OWNER/ADMIN only.",
+    description: "Partial update of a student: any of the record fields, plus active (false = the child has left; keeps every register), tshirtSize and costumes (full replace of the per-show ledger). Sending active for a child whose registration is waiting for the office's check is a 409: approve it with uiiq_students_registration_approve instead. OWNER/ADMIN only.",
     inputSchema: { type: "object", required: ["id"], properties: { id: { type: "string" }, ...STUDENT_FIELDS, active: { type: "boolean" }, tshirtSize: { type: ["string", "null"] }, costumes: { type: "array", items: { type: "object" } }, tenant: TENANT_PROP } },
     async handler({ id, tenant, ...body }) {
       const res = await send(tenant, "PATCH", `/students/${encodeURIComponent(id)}`, body);
@@ -314,6 +314,48 @@ export const studentsTools = [
     async handler({ id, absenceId, message, tenant }) {
       const res = await send(tenant, "PATCH", `/students/${encodeURIComponent(id)}/absences/${encodeURIComponent(absenceId)}`, { action: "decline", message });
       if (!res.ok) throw await fail(res);
+      return res.json();
+    },
+  },
+
+  // ── Family registration ("Awaiting check") ──
+  // Behind the workspace's `family_registration` switch: every call is a 404
+  // until it is ticked. A child a parent registered on the school's form is
+  // PENDING until the office approves it, and is left out of the directory,
+  // enrolments, registers and absences until then.
+  {
+    name: "uiiq_students_registrations_list",
+    description: "The children parents registered that are waiting for the office to check them (\"Awaiting check\"), oldest first: the child (name, dob, age), the class they asked about, medical notes, SEND needs, allergies, emergency contact, photo consent, the guardian contact (and what the form said about the parent when it differs from the contact on file), any existing family it matched, the consents given, how it came in (form_register = the public Register form, form_add_child = the Members App's Add another child form) and when. It carries children's health information on purpose, because that is what the office checks: show it only to the person doing the check. Approve or decline each with uiiq_students_registration_approve / _decline. Until approved a child is not in uiiq_students_list and can't be enrolled, marked on a register or given absences. OWNER/ADMIN only (403 otherwise); 404 unless the workspace has family registration switched on.",
+    inputSchema: { type: "object", properties: { tenant: TENANT_PROP } },
+    async handler({ tenant } = {}) {
+      const res = await api(tenant)("/students/registrations");
+      if (!res.ok) throw await fail(res);
+      return res.json();
+    },
+  },
+  {
+    name: "uiiq_students_registration_approve",
+    description: "Approve a child a parent registered (from uiiq_students_registrations_list): the child goes on the roll as an active student, and you are stamped as the reviewer. Nothing is sent to the parent. 409 if the registration has already been checked (approved or declined meanwhile); 404 if the child isn't found or family registration is switched off. OWNER/ADMIN only. Audited without the child's details.",
+    inputSchema: { type: "object", required: ["id"], properties: { id: { type: "string", description: "Student id (a PENDING registration)" }, tenant: TENANT_PROP } },
+    async handler({ id, tenant }) {
+      const res = await send(tenant, "POST", `/students/${encodeURIComponent(id)}/registration`, { action: "approve" });
+      if (!res.ok) throw await fail(res);
+      return res.json();
+    },
+  },
+  {
+    name: "uiiq_students_registration_decline",
+    description: "DECLINE a child a parent registered — PERMANENT: the child's record is DELETED (data minimisation), and so is the guardian contact when this registration created it and nothing else now hangs off it (guardianContactRemoved says which). Nothing is sent to the parent. 409 if it has already been checked; 409 with `blockers` if the child already has history here (enrolments, payments…), in which case approve it instead (and set active=false with uiiq_students_update if the child won't be coming). 404 if not found or family registration is switched off. OWNER/ADMIN only. Audited without the child's details. Confirm with the person before calling.",
+    inputSchema: { type: "object", required: ["id"], properties: { id: { type: "string", description: "Student id (a PENDING registration)" }, tenant: TENANT_PROP } },
+    async handler({ id, tenant }) {
+      const res = await send(tenant, "POST", `/students/${encodeURIComponent(id)}/registration`, { action: "decline" });
+      if (!res.ok) {
+        const text = await res.text();
+        let j = null;
+        try { j = JSON.parse(text); } catch { /* not JSON */ }
+        if (Array.isArray(j?.blockers)) throw new Error(`${j.error} Blockers: ${j.blockers.join("; ")}`);
+        throw new Error(j?.error || text || `HTTP ${res.status}`);
+      }
       return res.json();
     },
   },
