@@ -395,13 +395,13 @@ Not exposed on purpose: the platform-to-platform callbacks under `/api/platform/
 | `uiiq_social_accounts` | List connected social media accounts. |
 | `uiiq_social_template_list` | List the tenant's IQEX Design Studio social templates (each with field_config so a personalise form can be built). |
 | `uiiq_social_template_render` | Render an IQEX Design Studio social template with the tenant's field values (IQEX charges the org pool), then create a DRAFT SocialPost carrying the rendered PNG so it can be scheduled/published through the channels. |
-| `uiiq_social_post_create` | Create a social post as a DRAFT (or SCHEDULED with scheduledAt); nothing is published. |
+| `uiiq_social_post_create` | Creates a DRAFT only. It is never published or scheduled by this tool; a person reviews and publishes it in UiiQ. |
 | `uiiq_social_post_get` | One social post with its targets (account, platform, status, permalink, error). |
 | `uiiq_social_post_update` | Partial update of a DRAFT, QUEUED or SCHEDULED post: content, hashtags, scheduledAt (ISO, null to unschedule), status. |
 | `uiiq_social_post_save` | The full composer save of a DRAFT, QUEUED or SCHEDULED post: content (required), mediaUrls, hashtags, targetAccountIds (at least one connected account; Instagram needs a media URL), status DRAFT \| QUEUED \| SCHEDULED (+ scheduledAt). |
 | `uiiq_social_post_delete` | DELETE a social post and its targets. |
 | `uiiq_social_post_duplicate` | Copy a post (content, media, hashtags, same target accounts) as a new DRAFT. |
-| `uiiq_social_post_publish` | PUBLISH a DRAFT, QUEUED or SCHEDULED post to every PENDING target now — Facebook/Instagram through IQEX, LinkedIn direct. |
+| `uiiq_social_post_publish` | PUBLISH a post now (irreversible). A dry run unless `confirm: true`: shows the post and where it would go. |
 | `uiiq_social_account_remove` | REMOVE a connected social account (Facebook/Instagram disconnected in IQEX and kept inactive for history). |
 | `uiiq_social_hashtag_groups` | The workspace's saved hashtag groups (name + hashtags). |
 | `uiiq_social_hashtag_group_create` | Save a named hashtag group (leading # optional, at least one tag). |
@@ -410,7 +410,7 @@ Not exposed on purpose: the platform-to-platform callbacks under `/api/platform/
 | `uiiq_social_inbox` | Comments and messages received on the connected accounts (newest 100): filter unread (default) \| read \| archived \| all. |
 | `uiiq_social_inbox_update` | Mark an inbox message read/unread and/or archived/unarchived. |
 | `uiiq_social_settings` | The workspace's publishing mode: autoPublish (does a post go out by itself at its scheduled time, or wait for Publish — off by default) and minGapMinutes between automatic posts. |
-| `uiiq_social_settings_update` | Set autoPublish and/or minGapMinutes (0-1440). |
+| `uiiq_social_settings_update` | Set autoPublish / minGapMinutes. Turning autoPublish ON needs `confirm: true`. |
 | `uiiq_social_ai_config` | The IQEX form behind 'Write with AI' in the composer: formKey, formId, formUrl, label, the tenant, canGenerate, and — for an owner/admin who may write — a signed ctx token (1 hour) that lets IQEX generate and bill a post for this org. |
 
 ### Communications (press releases, journalists) — `src/tools/communications.js`

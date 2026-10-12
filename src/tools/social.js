@@ -77,9 +77,16 @@ export const socialTools = [
   // ── Posts (one) ──
   {
     name: "uiiq_social_post_create",
-    description: "Create a social post as a DRAFT (or SCHEDULED when scheduledAt is given): content (required), targetAccountIds (at least one, ids from uiiq_social_accounts), optional mediaUrls (public URLs; Instagram needs at least one) and hashtags. Nothing is published — publish with uiiq_social_post_publish, or let auto-publish take a SCHEDULED post when the workspace has it on. Returns the post with its targets.",
-    inputSchema: { type: "object", required: ["content", "targetAccountIds"], properties: { content: { type: "string" }, targetAccountIds: { type: "array", items: { type: "string" } }, mediaUrls: { type: "array", items: { type: "string" } }, hashtags: { type: "array", items: { type: "string" } }, scheduledAt: { type: "string", description: "ISO datetime; makes the post SCHEDULED" }, tenant: TENANT_PROP } },
-    async handler({ tenant, ...body }) {
+    description: "Creates a DRAFT only. It is never published or scheduled by this tool; a person reviews and publishes it in UiiQ. Takes content and targetAccountIds (at least one, ids from uiiq_social_accounts), plus optional mediaUrls (public URLs; Instagram needs at least one) and hashtags. Returns the draft with its targets.",
+    inputSchema: { type: "object", required: ["content", "targetAccountIds"], properties: { content: { type: "string" }, targetAccountIds: { type: "array", items: { type: "string" } }, mediaUrls: { type: "array", items: { type: "string" } }, hashtags: { type: "array", items: { type: "string" } }, tenant: TENANT_PROP } },
+    // Only these four reach the API. The route makes a post with scheduledAt
+    // SCHEDULED, which the cron publishes on an auto-publish workspace, so
+    // forwarding "...body" would let a stray key schedule a post (Lucas,
+    // uiiq-mcp #80 H1).
+    async handler({ tenant, content, targetAccountIds, mediaUrls, hashtags }) {
+      const body = { content, targetAccountIds };
+      if (mediaUrls !== undefined) body.mediaUrls = mediaUrls;
+      if (hashtags !== undefined) body.hashtags = hashtags;
       const res = await send(tenant, "/socials/posts", "POST", body);
       if (!res.ok) throw await fail(res);
       return res.json();
@@ -137,9 +144,22 @@ export const socialTools = [
   },
   {
     name: "uiiq_social_post_publish",
-    description: "PUBLISH a DRAFT, QUEUED or SCHEDULED post to every PENDING target now — Facebook/Instagram through IQEX, LinkedIn direct. Goes public and cannot be recalled. Returns { post, published, failed }; a target that fails is marked FAILED with the reason and the post ends PUBLISHED, PARTIALLY_PUBLISHED or FAILED.",
-    inputSchema: { type: "object", required: ["id"], properties: { id: { type: "string" }, tenant: TENANT_PROP } },
-    async handler({ id, tenant }) {
+    description: "PUBLISH a DRAFT, QUEUED or SCHEDULED post to every PENDING target now — Facebook/Instagram through IQEX, LinkedIn direct. Goes public and cannot be recalled. Without confirm: true this is a DRY RUN: it returns the post and the accounts it would go to, and publishes nothing. Only pass confirm: true when the person responsible has seen this exact post and said to publish it. Returns { post, published, failed }; a target that fails is marked FAILED with the reason and the post ends PUBLISHED, PARTIALLY_PUBLISHED or FAILED.",
+    inputSchema: { type: "object", required: ["id"], properties: { id: { type: "string" }, confirm: { type: "boolean", description: "true to really publish; anything else is a dry run" }, tenant: TENANT_PROP } },
+    async handler({ id, tenant, confirm }) {
+      if (confirm !== true) {
+        const preview = await api(tenant)(`/socials/posts/${encodeURIComponent(id)}`);
+        if (!preview.ok) throw await fail(preview);
+        const post = await preview.json();
+        return {
+          dryRun: true,
+          message: "Nothing was published. Pass confirm: true to publish, only once the person responsible has seen this post.",
+          post: { id: post.id, status: post.status, content: post.content, mediaUrls: post.mediaUrls, hashtags: post.hashtags },
+          wouldPublishTo: (post.targets ?? [])
+            .filter((t) => t.status === "PENDING")
+            .map((t) => ({ platform: t.platform, account: t.socialAccount?.accountName ?? t.socialAccountId })),
+        };
+      }
       const res = await send(tenant, `/socials/posts/${encodeURIComponent(id)}/publish`, "POST");
       if (!res.ok) throw await fail(res);
       return res.json();
@@ -236,9 +256,21 @@ export const socialTools = [
   },
   {
     name: "uiiq_social_settings_update",
-    description: "Set autoPublish and/or minGapMinutes (0-1440). Turning autoPublish on lets the 5-minute cron PUBLISH every scheduled post that is already due — the reply's dueNow says how many go out at once.",
-    inputSchema: { type: "object", properties: { autoPublish: { type: "boolean" }, minGapMinutes: { type: "integer", minimum: 0, maximum: 1440 }, tenant: TENANT_PROP } },
-    async handler({ tenant, ...body } = {}) {
+    description: "Set autoPublish and/or minGapMinutes (0-1440). Turning autoPublish on lets the 5-minute cron PUBLISH every scheduled post that is already due — the reply's dueNow says how many go out at once. Turning it ON needs confirm: true; without it nothing changes and the reply says what would happen. Only confirm when the workspace owner has asked for automatic publishing.",
+    inputSchema: { type: "object", properties: { autoPublish: { type: "boolean" }, minGapMinutes: { type: "integer", minimum: 0, maximum: 1440 }, confirm: { type: "boolean", description: "Required (true) to turn autoPublish on" }, tenant: TENANT_PROP } },
+    async handler({ tenant, confirm, autoPublish, minGapMinutes } = {}) {
+      if (autoPublish === true && confirm !== true) {
+        const cur = await api(tenant)("/socials/settings");
+        if (!cur.ok) throw await fail(cur);
+        return {
+          dryRun: true,
+          message: "Auto-publish was NOT turned on. With it on, the cron publishes every SCHEDULED post as it falls due, with nobody pressing Publish. Pass confirm: true only if the workspace owner asked for that.",
+          current: await cur.json(),
+        };
+      }
+      const body = {};
+      if (autoPublish !== undefined) body.autoPublish = autoPublish;
+      if (minGapMinutes !== undefined) body.minGapMinutes = minGapMinutes;
       const res = await send(tenant, "/socials/settings", "PATCH", body);
       if (!res.ok) throw await fail(res);
       return res.json();
