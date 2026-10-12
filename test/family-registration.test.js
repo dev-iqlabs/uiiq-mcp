@@ -76,6 +76,8 @@ test("remove-parent deletes the registered parent and returns contactRemoved", a
 test("remove-parent says only a Yes to news in the app keeps the contact", () => {
   assert.match(tools.uiiq_students_registered_parent_remove.description, /SAID YES TO NEWS IN THE APP/);
   assert.match(tools.uiiq_students_registered_parent_remove.description, /they said yes to news in the app/);
+  assert.match(tools.uiiq_students_registered_parent_remove.description, /asked in the Members App whether they'd like news by email, and only a Yes there subscribes them/);
+  assert.doesNotMatch(tools.uiiq_students_registered_parent_remove.description, /Keep this/);
 });
 
 test("approve, decline and remove-parent tell the model to confirm first", () => {
