@@ -453,9 +453,9 @@ Not exposed on purpose: the platform-to-platform callbacks under `/api/platform/
 | Tool | What it does |
 | --- | --- |
 | `uiiq_seo_audits` | List SEO audits for the tenant. |
-| `uiiq_seo_audit` | Run an SEO audit for a URL. |
-| `uiiq_seo_pagespeed` | Run a PageSpeed check for a URL. |
-| `uiiq_seo_fix` | Apply/suggest a fix for an SEO audit finding. |
+| `uiiq_seo_audit_get` | One SEO audit in full: scores, AIO scores and the issue list (title, fix, page per issue). |
+| `uiiq_seo_pagespeed` | Run a PageSpeed check (mobile + desktop); pass auditId to fold the score into that audit. |
+| `uiiq_seo_fix` | Turn one audit issue into a DRAFT Website Pages change request (nothing goes live). |
 | `uiiq_seo_crawl` | Crawl the tenant's website and save an SEO + AIO audit (scores, issues, pages crawled). |
 
 ### Competitors — `src/tools/competitor.js`
