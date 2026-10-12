@@ -4,6 +4,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { adminPlatformTools } from "../src/tools/admin-platform.js";
 import { integrationsTools } from "../src/tools/integrations.js";
+import { shopAdminTools } from "../src/tools/shop-admin.js";
 
 const describe = (tools, name) => tools.find((t) => t.name === name).description;
 
@@ -24,4 +25,8 @@ test("integration writes and Xero reads are OWNER/ADMIN only", () => {
   for (const name of ["uiiq_integrations_add", "uiiq_integrations_delete", "uiiq_integrations_sync", "uiiq_integrations_posm_sync", "uiiq_integrations_xero_accounts", "uiiq_integrations_xero_financials"]) {
     assert.match(describe(integrationsTools, name), /OWNER\/ADMIN only/, name);
   }
+});
+
+test("catalogue sync is OWNER/ADMIN only (UiiQ-platform #882)", () => {
+  assert.match(describe(shopAdminTools, "uiiq_shop_catalogue_sync"), /OWNER\/ADMIN only; STAFF and read-only impersonation get 403/);
 });

@@ -1489,7 +1489,7 @@ Every product's target against its actual, by week, month or fiscal year, colour
 | `uiiq_shop_designs` | Approved designs the workspace may put on products: global ones plus its own tenant-only ones. |
 | `uiiq_shop_order_list` | The workspace's own shop orders (newest first) with line items, optionally filtered by status. |
 | `uiiq_shop_order_place` | Place a shop order for the workspace. A coin made from an IQEX template takes its template `fields` instead of `notes` on a credit line. |
-| `uiiq_shop_catalogue_sync` | Pull a workspace's own WooCommerce import source into its product cache (published products, 100 max). |
+| `uiiq_shop_catalogue_sync` | Pull a workspace's own WooCommerce import source into its product cache (published products, 100 max). OWNER/ADMIN only. |
 | `uiiq_shop_assortment_list` | A tenant's assortment: the catalog products it can order, in position order, with price override and custom name. |
 | `uiiq_shop_assortment_add` | Add a catalog product to a tenant's assortment (409 if already there), optionally with a per-tenant price override in pence and a custom name. |
 | `uiiq_shop_assortment_remove` | Remove an assortment row (by its assortment id, not the product id). |
