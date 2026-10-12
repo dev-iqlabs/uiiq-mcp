@@ -76,6 +76,16 @@ export const socialTools = [
 
   // ── Posts (one) ──
   {
+    name: "uiiq_social_post_create",
+    description: "Create a social post as a DRAFT (or SCHEDULED when scheduledAt is given): content (required), targetAccountIds (at least one, ids from uiiq_social_accounts), optional mediaUrls (public URLs; Instagram needs at least one) and hashtags. Nothing is published — publish with uiiq_social_post_publish, or let auto-publish take a SCHEDULED post when the workspace has it on. Returns the post with its targets.",
+    inputSchema: { type: "object", required: ["content", "targetAccountIds"], properties: { content: { type: "string" }, targetAccountIds: { type: "array", items: { type: "string" } }, mediaUrls: { type: "array", items: { type: "string" } }, hashtags: { type: "array", items: { type: "string" } }, scheduledAt: { type: "string", description: "ISO datetime; makes the post SCHEDULED" }, tenant: TENANT_PROP } },
+    async handler({ tenant, ...body }) {
+      const res = await send(tenant, "/socials/posts", "POST", body);
+      if (!res.ok) throw await fail(res);
+      return res.json();
+    },
+  },
+  {
     name: "uiiq_social_post_get",
     description: "One social post with its targets (account, platform, status, permalink, error).",
     inputSchema: { type: "object", required: ["id"], properties: { id: { type: "string" }, tenant: TENANT_PROP } },
@@ -139,7 +149,7 @@ export const socialTools = [
   // ── Accounts ──
   {
     name: "uiiq_social_account_remove",
-    description: "REMOVE a connected social account from the workspace (its stored tokens go with it; posts targeting it lose that target). Reconnecting means going through Connect again.",
+    description: "REMOVE a connected social account from the workspace. Facebook/Instagram are disconnected in IQEX, which holds the connection (a Page takes its Instagram account with it; nothing is revoked at Meta), and stay in UiiQ as inactive so post history is kept. LinkedIn/TikTok rows and their tokens are deleted. Reconnecting means going through Connect again. Before UiiQ-platform #885 is live, Facebook/Instagram only disappear until the next accounts read.",
     inputSchema: { type: "object", required: ["id"], properties: { id: { type: "string" }, tenant: TENANT_PROP } },
     async handler({ id, tenant }) {
       const res = await send(tenant, `/socials/accounts/${encodeURIComponent(id)}`, "DELETE");

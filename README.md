@@ -395,13 +395,14 @@ Not exposed on purpose: the platform-to-platform callbacks under `/api/platform/
 | `uiiq_social_accounts` | List connected social media accounts. |
 | `uiiq_social_template_list` | List the tenant's IQEX Design Studio social templates (each with field_config so a personalise form can be built). |
 | `uiiq_social_template_render` | Render an IQEX Design Studio social template with the tenant's field values (IQEX charges the org pool), then create a DRAFT SocialPost carrying the rendered PNG so it can be scheduled/published through the channels. |
+| `uiiq_social_post_create` | Create a social post as a DRAFT (or SCHEDULED with scheduledAt); nothing is published. |
 | `uiiq_social_post_get` | One social post with its targets (account, platform, status, permalink, error). |
 | `uiiq_social_post_update` | Partial update of a DRAFT, QUEUED or SCHEDULED post: content, hashtags, scheduledAt (ISO, null to unschedule), status. |
 | `uiiq_social_post_save` | The full composer save of a DRAFT, QUEUED or SCHEDULED post: content (required), mediaUrls, hashtags, targetAccountIds (at least one connected account; Instagram needs a media URL), status DRAFT \| QUEUED \| SCHEDULED (+ scheduledAt). |
 | `uiiq_social_post_delete` | DELETE a social post and its targets. |
 | `uiiq_social_post_duplicate` | Copy a post (content, media, hashtags, same target accounts) as a new DRAFT. |
 | `uiiq_social_post_publish` | PUBLISH a DRAFT, QUEUED or SCHEDULED post to every PENDING target now — Facebook/Instagram through IQEX, LinkedIn direct. |
-| `uiiq_social_account_remove` | REMOVE a connected social account from the workspace (its stored tokens go with it; posts targeting it lose that target). |
+| `uiiq_social_account_remove` | REMOVE a connected social account (Facebook/Instagram disconnected in IQEX and kept inactive for history). |
 | `uiiq_social_hashtag_groups` | The workspace's saved hashtag groups (name + hashtags). |
 | `uiiq_social_hashtag_group_create` | Save a named hashtag group (leading # optional, at least one tag). |
 | `uiiq_social_hashtag_group_update` | Rename a hashtag group or replace its hashtags. |
@@ -1648,4 +1649,4 @@ Every product's target against its actual, by week, month or fiscal year, colour
 | `uiiq_workflow_order_assign` | Assign a workflow order to a user in the tenant (assignedUserId null unassigns). |
 | `uiiq_workflow_order_request_approval` | Ask the customer to approve a stage of their order: creates an approval link, moves the order to AWAITING_APPROVAL and EMAILS the customer. |
 
-1149 tools.
+1150 tools.
