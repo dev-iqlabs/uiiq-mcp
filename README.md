@@ -370,11 +370,11 @@ Needs the workspace's `sister_organisations` feature (404 when off). Changes are
 | --- | --- |
 | `uiiq_billing_org_list` | The workspace's own (MAIN) and sister organisations, each with its payment account's status, VAT and charity status and whether it is on; `canManage` and the monthly add-on price (0 = no charge). OWNER or ADMIN. |
 | `uiiq_billing_org_create` | Owner only: add a sister organisation (legalName required; displayName, statementDescriptor, vatNumber, isCharity, charityNumber). Dry run without `confirm: true`. |
-| `uiiq_billing_org_update` | Owner only: change an organisation's names or statement descriptor (kept in step with its payment account); a sister's VAT, charity status, or `active` (switch off/on). The workspace's own legal name changes are logged. |
+| `uiiq_billing_org_update` | Owner only: change an organisation's names or statement descriptor (kept in step with its payment account); a sister's VAT, charity status, or `active` (switch off/on; one switched off by UiiQ stays off). The workspace's own legal name changes are logged. |
 | `uiiq_billing_org_delete` | Owner only: remove a sister with no payment account (409 if it has one: switch it off instead). Dry run without `confirm: true`. |
 | `uiiq_billing_org_connect_start` | Owner only: create a sister's own Stripe connected account (keyed on the organisation) and return its onboardingUrl. Refuses a Stripe account attached to another organisation. Dry run without `confirm: true`. |
 | `uiiq_admin_billing_org_list` | Platform admin: a workspace's organisations with their accounts' fee terms, and whether the feature is on. |
-| `uiiq_admin_billing_org_update` | Platform admin: turn a sister off or on, verify the owner's charity / not-for-profit claim (only a verified claim takes the reduced fee), or set the fee terms on its payment account (applicationFeePercent 0–50, passFeesToCustomer). Never while impersonating; audited. |
+| `uiiq_admin_billing_org_update` | Platform admin: turn a sister off (with a reason the owner sees; the owner can't switch it back on) or on, verify the owner's charity / not-for-profit claim (only a verified claim takes the reduced fee; 409 if the claim changed since it was read), or set the fee terms on its payment account (applicationFeePercent 0–50, passFeesToCustomer). Verifying and fee changes are a dry run without `confirm: true`. Never while impersonating; audited. |
 
 ### Campaigns — `src/tools/campaign.js`
 

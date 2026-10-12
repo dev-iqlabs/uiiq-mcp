@@ -43,6 +43,25 @@ test("charity: the owner claims, a platform admin verifies (only then the reduce
   assert.match(tool("uiiq_billing_org_create").inputSchema.properties.isCharity.description, /only once a platform admin verifies it/);
 });
 
+test("admin: verifying charity or changing fee terms is a dry run without confirm: true, and calls nothing (Lucas #899 L2)", async () => {
+  const admin = tool("uiiq_admin_billing_org_update");
+  for (const change of [{ charityVerified: true }, { applicationFeePercent: 1.5 }, { passFeesToCustomer: false }, { active: true, applicationFeePercent: 0 }]) {
+    const out = await admin.handler({ tenantId: "sbda", orgId: "bo_college", ...change });
+    assert.equal(out.dryRun, true, JSON.stringify(change));
+    assert.equal(out.changed, false);
+    assert.deepEqual(out.change, change);
+  }
+  assert.ok("confirm" in admin.inputSchema.properties);
+  assert.match(admin.description, /without confirm: true a call with any of them is ALWAYS a dry run/);
+});
+
+test("admin: switching off takes a reason the owner sees, and only an admin switches it back on", () => {
+  const admin = tool("uiiq_admin_billing_org_update");
+  assert.ok("reason" in admin.inputSchema.properties);
+  assert.match(admin.description, /the owner can't switch it back on/);
+  assert.match(tool("uiiq_billing_org_update").description, /switched off by UiiQ .* can't be switched back on here \(409/);
+});
+
 test("the platform admin tools are SUPER_ADMIN and say so", () => {
   for (const name of ["uiiq_admin_billing_org_list", "uiiq_admin_billing_org_update"]) {
     assert.match(tool(name).description, /SUPER_ADMIN/, name);
