@@ -395,7 +395,7 @@ Not exposed on purpose: the platform-to-platform callbacks under `/api/platform/
 | `uiiq_social_accounts` | List connected social media accounts. |
 | `uiiq_social_template_list` | List the tenant's IQEX Design Studio social templates (each with field_config so a personalise form can be built). |
 | `uiiq_social_template_render` | Render an IQEX Design Studio social template with the tenant's field values (IQEX charges the org pool), then create a DRAFT SocialPost carrying the rendered PNG so it can be scheduled/published through the channels. |
-| `uiiq_social_post_create` | Creates a DRAFT only. It is never published or scheduled by this tool; a person reviews and publishes it in UiiQ. |
+| `uiiq_social_post_create` | Creates a DRAFT only. It is never published or scheduled by this tool; a person reviews and publishes it in UiiQ. Optional `platformContent` gives a platform its own text. |
 | `uiiq_social_post_get` | One social post with its targets (account, platform, status, permalink, error). |
 | `uiiq_social_post_update` | Partial update of a DRAFT, QUEUED or SCHEDULED post: content, hashtags, scheduledAt (ISO, null to unschedule), status. |
 | `uiiq_social_post_save` | The full composer save of a DRAFT, QUEUED or SCHEDULED post: content (required), mediaUrls, hashtags, targetAccountIds (at least one connected account; Instagram needs a media URL), status DRAFT \| QUEUED \| SCHEDULED (+ scheduledAt). |

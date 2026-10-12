@@ -16,6 +16,16 @@ async function fail(res) {
 }
 const send = (tenant, path, method, body) => api(tenant)(path, body === undefined ? { method } : { method, body: JSON.stringify(body) });
 const POST_STATUS = ["DRAFT", "QUEUED", "SCHEDULED"];
+// Per-platform text (UiiQ-platform #890): replaces the main content for that
+// platform's targets, e.g. Instagram "Tap the link in our bio" while Facebook
+// carries the URL. null (or "") clears a platform; a platform left out keeps
+// its text. UiiQ shows each platform's exact caption before anything goes out.
+const PLATFORM_CONTENT_PROP = {
+  type: ["object", "null"],
+  description: "Per-platform text, keyed FACEBOOK | INSTAGRAM | TWITTER | LINKEDIN | TIKTOK; replaces the main content for that platform. null/\"\" clears one platform; null for the whole field clears all. Needs UiiQ-platform #890.",
+  properties: Object.fromEntries(["FACEBOOK", "INSTAGRAM", "TWITTER", "LINKEDIN", "TIKTOK"].map((p) => [p, { type: ["string", "null"] }])),
+  additionalProperties: false,
+};
 
 
 export const socialTools = [
@@ -77,16 +87,17 @@ export const socialTools = [
   // ── Posts (one) ──
   {
     name: "uiiq_social_post_create",
-    description: "Creates a DRAFT only. It is never published or scheduled by this tool; a person reviews and publishes it in UiiQ. Takes content and targetAccountIds (at least one, ids from uiiq_social_accounts), plus optional mediaUrls (public URLs; Instagram needs at least one) and hashtags. Returns the draft with its targets.",
-    inputSchema: { type: "object", required: ["content", "targetAccountIds"], properties: { content: { type: "string" }, targetAccountIds: { type: "array", items: { type: "string" } }, mediaUrls: { type: "array", items: { type: "string" } }, hashtags: { type: "array", items: { type: "string" } }, tenant: TENANT_PROP } },
-    // Only these four reach the API. The route makes a post with scheduledAt
+    description: "Creates a DRAFT only. It is never published or scheduled by this tool; a person reviews and publishes it in UiiQ. Takes content and targetAccountIds (at least one, ids from uiiq_social_accounts), plus optional mediaUrls (public URLs; Instagram needs at least one), hashtags (stored without '#'; published as #tags) and platformContent (different text per platform). Returns the draft with its targets.",
+    inputSchema: { type: "object", required: ["content", "targetAccountIds"], properties: { content: { type: "string" }, targetAccountIds: { type: "array", items: { type: "string" } }, mediaUrls: { type: "array", items: { type: "string" } }, hashtags: { type: "array", items: { type: "string" } }, platformContent: PLATFORM_CONTENT_PROP, tenant: TENANT_PROP } },
+    // Only these fields reach the API. The route makes a post with scheduledAt
     // SCHEDULED, which the cron publishes on an auto-publish workspace, so
     // forwarding "...body" would let a stray key schedule a post (Lucas,
     // uiiq-mcp #80 H1).
-    async handler({ tenant, content, targetAccountIds, mediaUrls, hashtags }) {
+    async handler({ tenant, content, targetAccountIds, mediaUrls, hashtags, platformContent }) {
       const body = { content, targetAccountIds };
       if (mediaUrls !== undefined) body.mediaUrls = mediaUrls;
       if (hashtags !== undefined) body.hashtags = hashtags;
+      if (platformContent !== undefined) body.platformContent = platformContent;
       const res = await send(tenant, "/socials/posts", "POST", body);
       if (!res.ok) throw await fail(res);
       return res.json();
@@ -104,8 +115,8 @@ export const socialTools = [
   },
   {
     name: "uiiq_social_post_update",
-    description: "Partial update of a DRAFT, QUEUED or SCHEDULED post: content, hashtags, scheduledAt (ISO, null to unschedule), status. Published posts are refused (409). Targets are not changed here — use uiiq_social_post_save for that.",
-    inputSchema: { type: "object", required: ["id"], properties: { id: { type: "string" }, content: { type: "string" }, hashtags: { type: "array", items: { type: "string" } }, scheduledAt: { type: ["string", "null"] }, status: { type: "string", enum: POST_STATUS }, tenant: TENANT_PROP } },
+    description: "Partial update of a DRAFT, QUEUED or SCHEDULED post: content, hashtags, platformContent (per-platform text, PENDING targets only), scheduledAt (ISO, null to unschedule), status. Published posts are refused (409). Which accounts it targets is not changed here — use uiiq_social_post_save for that.",
+    inputSchema: { type: "object", required: ["id"], properties: { id: { type: "string" }, content: { type: "string" }, hashtags: { type: "array", items: { type: "string" } }, platformContent: PLATFORM_CONTENT_PROP, scheduledAt: { type: ["string", "null"] }, status: { type: "string", enum: POST_STATUS }, tenant: TENANT_PROP } },
     async handler({ id, tenant, ...body }) {
       const res = await send(tenant, `/socials/posts/${encodeURIComponent(id)}`, "PATCH", body);
       if (!res.ok) throw await fail(res);
@@ -114,8 +125,8 @@ export const socialTools = [
   },
   {
     name: "uiiq_social_post_save",
-    description: "The full composer save of a DRAFT, QUEUED or SCHEDULED post: content (required), mediaUrls, hashtags, targetAccountIds (at least one connected account; Instagram needs a media URL), status DRAFT | QUEUED | SCHEDULED (+ scheduledAt). PENDING targets are replaced to match the selection; published/failed ones are history and kept.",
-    inputSchema: { type: "object", required: ["id", "content", "targetAccountIds"], properties: { id: { type: "string" }, content: { type: "string" }, mediaUrls: { type: "array", items: { type: "string" } }, hashtags: { type: "array", items: { type: "string" } }, targetAccountIds: { type: "array", items: { type: "string" } }, status: { type: "string", enum: POST_STATUS }, scheduledAt: { type: "string", description: "ISO datetime, with status SCHEDULED" }, tenant: TENANT_PROP } },
+    description: "The full composer save of a DRAFT, QUEUED or SCHEDULED post: content (required), mediaUrls, hashtags, targetAccountIds (at least one connected account; Instagram needs a media URL), status DRAFT | QUEUED | SCHEDULED (+ scheduledAt), platformContent (per-platform text). PENDING targets are replaced to match the selection; published/failed ones are history and kept.",
+    inputSchema: { type: "object", required: ["id", "content", "targetAccountIds"], properties: { id: { type: "string" }, content: { type: "string" }, mediaUrls: { type: "array", items: { type: "string" } }, hashtags: { type: "array", items: { type: "string" } }, platformContent: PLATFORM_CONTENT_PROP, targetAccountIds: { type: "array", items: { type: "string" } }, status: { type: "string", enum: POST_STATUS }, scheduledAt: { type: "string", description: "ISO datetime, with status SCHEDULED" }, tenant: TENANT_PROP } },
     async handler({ id, tenant, ...body }) {
       const res = await send(tenant, `/socials/posts/${encodeURIComponent(id)}`, "PUT", body);
       if (!res.ok) throw await fail(res);
