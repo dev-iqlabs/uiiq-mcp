@@ -93,6 +93,29 @@ export const classesTools = [
     },
   },
   {
+    name: "uiiq_classes_billing_set",
+    description: "Owner or admin only: a class's billing (UiiQ-platform sister organisations 3/7). runForBillingOrganisationId: null = the workspace's own class, or one of its SISTER organisations (funded: families don't pay, plans don't cover it; switching clears its term fee, drop-in price, instalments and plan cover). Switching to funded is REFUSED (409, with the paying families) while it has paid enrolments, instalments or plan cover. costumePricePence / costumePayBy (YYYY-MM-DD): this routine's costume price and pay-by date, overriding its show's. Without confirm: true it is ALWAYS a dry run that changes nothing. Acts in your own signed-in workspace (no tenant: changes are refused while impersonating).",
+    inputSchema: {
+      type: "object",
+      required: ["id"],
+      properties: {
+        id: { type: "string" },
+        runForBillingOrganisationId: { type: ["string", "null"] },
+        costumePricePence: { type: ["integer", "null"] },
+        costumePayBy: { type: ["string", "null"] },
+        confirm: { type: "boolean", description: "true = do it; omit for the dry run" },
+      },
+    },
+    async handler({ id, confirm, ...fields }) {
+      const body = Object.fromEntries(Object.entries(fields).filter(([, v]) => v !== undefined));
+      if (!Object.keys(body).length) throw new Error("Send runForBillingOrganisationId, costumePricePence or costumePayBy");
+      if (confirm !== true) return { dryRun: true, changed: false, wouldDo: "set_class_billing", id, ...body, note: "Nothing was changed. Check this with the workspace owner, then call again with confirm: true." };
+      const res = await send(undefined, "PATCH", `/classes/${encodeURIComponent(id)}/billing`, body);
+      if (!res.ok) throw await fail(res);
+      return res.json();
+    },
+  },
+  {
     name: "uiiq_classes_delete",
     description: "DELETE a class outright. Refused (409) when it has any enrolments — set active=false with uiiq_classes_update instead so history is kept.",
     inputSchema: { type: "object", required: ["id"], properties: { id: { type: "string" }, tenant: TENANT_PROP } },
@@ -448,8 +471,8 @@ export const classesTools = [
   },
   {
     name: "uiiq_classes_register_costume",
-    description: "Tick a student's costume for a show as handedOut and/or paid (send at least one). Stamped with who did it.",
-    inputSchema: { type: "object", required: ["studentId", "showEventId"], properties: { studentId: { type: "string" }, showEventId: { type: "string" }, handedOut: { type: "boolean" }, paid: { type: "boolean" }, tenant: TENANT_PROP } },
+    description: "Tick a student's costume for a show as handedOut and/or paid (send at least one). Stamped with who did it. With classId, paid is THAT ROUTINE's costume paid at the office: a costume sale is recorded at the routine's price (the class's override, else the show's) in the show's billing organisation; 409 with no price set; a costume paid online can't be unticked here. Without classId, paid is the older per-show tick.",
+    inputSchema: { type: "object", required: ["studentId", "showEventId"], properties: { studentId: { type: "string" }, showEventId: { type: "string" }, classId: { type: "string", description: "The routine (class performing in the show) for a per-routine paid tick" }, handedOut: { type: "boolean" }, paid: { type: "boolean" }, tenant: TENANT_PROP } },
     async handler({ tenant, ...body }) {
       const res = await post(tenant, "/classes/registers/costume", body);
       if (!res.ok) throw await fail(res);

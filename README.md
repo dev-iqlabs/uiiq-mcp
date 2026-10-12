@@ -1395,6 +1395,7 @@ Every product's target against its actual, by week, month or fiscal year, colour
 | `uiiq_classes_register_payment` | TAKE A PAYMENT at the register against an enrolment (drop-in fee, plan excess or owed balance): raises a CASH/CARD till sale so it lands in daily takings, records it on the ledger, and with sessionDate stamps that day's attendance as paid (creating a PRESENT mark if none). |
 | `uiiq_classes_register_star` | Toggle a star for a student in a class on a date (calling again removes it; the reply says starred true/false). |
 | `uiiq_classes_register_costume` | Tick a student's costume for a show as handedOut and/or paid (send at least one). |
+| `uiiq_classes_billing_set` | Owner or admin only: Run for the workspace or a sister organisation (funded; refused while families still pay) and this routine's costume price and pay-by date. Dry run without `confirm: true`. |
 | `uiiq_classes_attendance_report` | Attendance rate by class and by student over a date range (inclusive; default the last 8 weeks), flagging students under the tenant's low-attendance threshold. |
 | `uiiq_classes_absences_list` | Every student's absences (student absences on): requests waiting, who is away, history; filters status/from/to/order, paged by cursor. Owners/admins see all plus the waiting count; others only excused absences, with detail on their own classes. Notes only with includeNotes=true. |
 | `uiiq_classes_register_settings` | The register-hook settings: lapseWeeks, arrearsGraceDays, lowAttendancePct, lateGraceMins; with student absences on, absenceApprovalRequired (parents' time off waits for approval; default false). |
@@ -1426,6 +1427,7 @@ Every product's target against its actual, by week, month or fiscal year, colour
 | `uiiq_event_create` | Create an event (slug derived from the name, unique per workspace). |
 | `uiiq_event_get` | One event with its linked experience (id, name, slug, status). |
 | `uiiq_event_update` | Edit an event: name, tagline, description, imageUrl, venueNote, startsAt, endsAt (null clears), status DRAFT\|PUBLISHED\|ARCHIVED, experienceId (null unlinks). |
+| `uiiq_event_billing_set` | Owner or admin only: what the event is billed through (the workspace or a sister organisation; its ticket types and show costumes inherit it) and the show's default costume price and pay-by date. Dry run without `confirm: true`. |
 | `uiiq_event_delete` | DELETE an event and its unapproved generated drafts (draft social posts, draft campaign, draft press release); approved pieces stay in their own systems and the event's display board token is revoked so screens go dark. |
 | `uiiq_event_generate` | Generate the event's marketing in one go: social posts + email campaign drafted by Anthropic, a press release via the IQEX Chris pipeline, and a display board slide. |
 | `uiiq_event_content` | The event's generated marketing, assembled live: social posts (with platforms + approved), the email campaign, the press release, the display board (with its /board URL) and how many social accounts are connected. |
