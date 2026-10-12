@@ -139,7 +139,7 @@ export const shopAdminTools = [
   },
   {
     name: "uiiq_shop_catalogue_sync",
-    description: "Pull a workspace's own WooCommerce import source into its product cache (published products, 100 max). Rate limited to once per 5 minutes per source.",
+    description: "Pull a workspace's own WooCommerce import source into its product cache (published products, 100 max). OWNER/ADMIN only; STAFF and read-only impersonation get 403. Rate limited to once per 5 minutes per source.",
     inputSchema: { type: "object", required: ["importSourceId"], properties: { importSourceId: { type: "string" }, tenant: TENANT_PROP } },
     async handler({ tenant, importSourceId }) {
       const res = await post(tenant, "/catalogue/sync", { importSourceId });
