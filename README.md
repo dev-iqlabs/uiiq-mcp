@@ -46,7 +46,7 @@ UIIQ is one subscription whose modules are grouped as **Sell**, **Grow** and **R
 | Businesses | `uiiq_business_*` | People on a business, templated emails to it (real sends), what deleting it would affect |
 | Events | `uiiq_event_*` | Events with AI-generated content fanned out to socials (needs `events`; generate spends credits; approve queues the posts) |
 | Brand website pages | `uiiq_brand_*` | Change requests on the customer's website: chat, stage, publish to the live site (owner/admin), staging sync |
-| Smart pages | `uiiq_smart_pages_*` | Approve or send back pages, moderate messages (needs `smart_pages`, linked to IQEX) |
+| Smart pages | `uiiq_smart_pages_*` | Approve or send back pages, moderate messages, take live pages down and put them back (needs `smart_pages`, linked to IQEX) |
 | Social inbox, hashtags, settings | `uiiq_social_*` | Posts (edit, duplicate, publish), the inbox, hashtag groups, auto-publish settings, account removal |
 
 ### Run — operations, finance, people and knowledge
@@ -1567,9 +1567,12 @@ Every product's target against its actual, by week, month or fiscal year, colour
 | Tool | What it does |
 |---|---|
 | `uiiq_smart_pages_approvals` | Smart pages and guestbook messages waiting for approval — this workspace's, or every workspace's with staff:true. |
-| `uiiq_smart_pages_page_approve` | APPROVE a smart page by slug — it goes PUBLIC. |
+| `uiiq_smart_pages_page_approve` | APPROVE a smart page by slug — it goes PUBLIC. Pass the row's `version`: a page changed since answers 409 "The page changed since you checked it". |
 | `uiiq_smart_pages_page_send_back` | Send a smart page back to its author with a note saying what needs changing (it stays unpublished). |
 | `uiiq_smart_pages_message_moderate` | Approve or reject a guestbook message on a smart page (numeric message id). |
+| `uiiq_smart_pages_live_pages` | Smart pages by status (default published; taken_down for those taken down), this workspace's or every workspace's with staff:true. |
+| `uiiq_smart_pages_page_take_down` | TAKE DOWN a published page with a required reason the organisation sees; a staff take-down only staff can put back. Confirm first. |
+| `uiiq_smart_pages_page_put_back` | Put a taken-down page back; a page taken down by support answers 403 to a workspace. |
 
 ### Students — `src/tools/students.js`
 
@@ -1645,4 +1648,4 @@ Every product's target against its actual, by week, month or fiscal year, colour
 | `uiiq_workflow_order_assign` | Assign a workflow order to a user in the tenant (assignedUserId null unassigns). |
 | `uiiq_workflow_order_request_approval` | Ask the customer to approve a stage of their order: creates an approval link, moves the order to AWAITING_APPROVAL and EMAILS the customer. |
 
-1146 tools.
+1149 tools.
