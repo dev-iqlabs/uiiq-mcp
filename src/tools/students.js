@@ -319,13 +319,15 @@ export const studentsTools = [
   },
 
   // ── Family registration ("Awaiting check") ──
-  // Behind the workspace's `family_registration` switch: every call is a 404
-  // until it is ticked. A child a parent registered on the school's form is
-  // PENDING until the office approves it, and is left out of the directory,
-  // enrolments, registers and absences until then.
+  // A parent registers on the school's public form (parent only), then adds
+  // each child from the Members App. A child added that way is PENDING until
+  // the office approves it, and is left out of the directory, enrolments,
+  // registers and absences until then. Approving needs the workspace's
+  // `family_registration` switch; listing, declining and removing a parent
+  // work with it off too, so leftovers can be cleared.
   {
     name: "uiiq_students_registrations_list",
-    description: "The children parents registered that are waiting for the office to check them (\"Awaiting check\"), oldest first: the child (name, dob, age), the class they asked about, medical notes, SEND needs, allergies, emergency contact, photo consent, the guardian contact (and what the form said about the parent when it differs from the contact on file), any existing family it matched, the consents given, how it came in (form_register = the public Register form, form_add_child = the Members App's Add another child form) and when. It carries children's health information on purpose, because that is what the office checks: show it only to the person doing the check. Approve or decline each with uiiq_students_registration_approve / _decline. Until approved a child is not in uiiq_students_list and can't be enrolled, marked on a register or given absences. OWNER/ADMIN only (403 otherwise); 404 unless the workspace has family registration switched on.",
+    description: "The office's \"Awaiting check\": { enabled, registrations, parents }. registrations = children parents added that wait for the office's check, oldest first: the child (name, dob, age), the class they asked about, medical notes, SEND needs, allergies, emergency contact, photo consent, the guardian contact (and what the form said about the parent when it differs from the contact on file), any existing family it matched, the consents given, how it came in (form_add_child = the Members App's Add a child form, form_register = an older registration) and when. parents = parents who registered and have added no child yet (contactId, name, email, phone, registeredAt, classInterest, and signedIn: whether they have signed in to the Members App since, which proves the address; false = not signed in yet). enabled = whether family registration is switched on: with it off both lists still come back so leftovers can be declined or removed, but nothing can be approved. It carries children's health information on purpose, because that is what the office checks: show it only to the person doing the check. Act on it with uiiq_students_registration_approve / _decline (children) and uiiq_students_registered_parent_remove (parents). Until approved a child is not in uiiq_students_list and can't be enrolled, marked on a register or given absences. OWNER/ADMIN only (403 otherwise).",
     inputSchema: { type: "object", properties: { tenant: TENANT_PROP } },
     async handler({ tenant } = {}) {
       const res = await api(tenant)("/students/registrations");
@@ -335,7 +337,7 @@ export const studentsTools = [
   },
   {
     name: "uiiq_students_registration_approve",
-    description: "Approve a child a parent registered (from uiiq_students_registrations_list): the child goes on the roll as an active student, and you are stamped as the reviewer. Nothing is sent to the parent. 409 if the registration has already been checked (approved or declined meanwhile); 404 if the child isn't found or family registration is switched off. OWNER/ADMIN only. Audited without the child's details.",
+    description: "Approve a child a parent added (from uiiq_students_registrations_list): the child goes on the roll as an active student (so they can be enrolled, put on registers and given absences), and you are stamped as the reviewer. Approving only puts the child on the roll: it no longer subscribes anyone to marketing (that is the parent's own tick when they register), and nothing is sent to the parent. Confirm with the person before calling. 409 if the registration has already been checked (approved or declined meanwhile); 404 if the child isn't found or family registration is switched off. OWNER/ADMIN only. Audited without the child's details.",
     inputSchema: { type: "object", required: ["id"], properties: { id: { type: "string", description: "Student id (a PENDING registration)" }, tenant: TENANT_PROP } },
     async handler({ id, tenant }) {
       const res = await send(tenant, "POST", `/students/${encodeURIComponent(id)}/registration`, { action: "approve" });
@@ -345,10 +347,10 @@ export const studentsTools = [
   },
   {
     name: "uiiq_students_registration_decline",
-    description: "DECLINE a child a parent registered — PERMANENT: the child's record is DELETED (data minimisation), and so is the guardian contact when this registration created it and nothing else now hangs off it (guardianContactRemoved says which). Nothing is sent to the parent. 409 if it has already been checked; 409 with `blockers` if the child already has history here (enrolments, payments…), in which case approve it instead (and set active=false with uiiq_students_update if the child won't be coming). 404 if not found or family registration is switched off. OWNER/ADMIN only. Audited without the child's details. Confirm with the person before calling.",
-    inputSchema: { type: "object", required: ["id"], properties: { id: { type: "string", description: "Student id (a PENDING registration)" }, tenant: TENANT_PROP } },
-    async handler({ id, tenant }) {
-      const res = await send(tenant, "POST", `/students/${encodeURIComponent(id)}/registration`, { action: "decline" });
+    description: "DECLINE a child a parent added. This deletes a family's data and can't be undone: the child's record is DELETED (data minimisation), and so is the guardian contact when a registration created it, the parent has no registration of their own left, and nothing else hangs off it (guardianContactRemoved says which). A parent who registered keeps their registration: remove them with uiiq_students_registered_parent_remove. `reason` (optional, at most 200 characters, longer or not text is a 400, cleaned to one line; a short code or a few words, never anything about the child) is kept for 30 days on a refusal record with only the guardian's email and the date, then deleted; the audit log records only whether a reason was given. Nothing is sent to the parent. Confirm with the person before calling. Works with family registration switched off, so leftovers can be cleared. 409 if it has already been checked; 409 with `blockers` if the child already has history here (enrolments, payments…), in which case approve it instead (and set active=false with uiiq_students_update if the child won't be coming). 404 if not found. OWNER/ADMIN only. Audited without the child's details.",
+    inputSchema: { type: "object", required: ["id"], properties: { id: { type: "string", description: "Student id (a PENDING registration)" }, reason: { type: "string", maxLength: 200, description: "Optional, at most 200 characters, one line; kept 30 days on a refusal record (guardian email, date, reason), nothing about the child" }, tenant: TENANT_PROP } },
+    async handler({ id, reason, tenant }) {
+      const res = await send(tenant, "POST", `/students/${encodeURIComponent(id)}/registration`, reason === undefined ? { action: "decline" } : { action: "decline", reason });
       if (!res.ok) {
         const text = await res.text();
         let j = null;
@@ -356,6 +358,16 @@ export const studentsTools = [
         if (Array.isArray(j?.blockers)) throw new Error(`${j.error} Blockers: ${j.blockers.join("; ")}`);
         throw new Error(j?.error || text || `HTTP ${res.status}`);
       }
+      return res.json();
+    },
+  },
+  {
+    name: "uiiq_students_registered_parent_remove",
+    description: "REMOVE a parent who registered on the school's form and has added no child (a parent from the `parents` list of uiiq_students_registrations_list): the office's decline for a parent. This deletes a family's data and can't be undone: their registrations are deleted, so they can no longer sign in to the Members App on the strength of one, and the contact is DELETED too, but only when a registration created it, nothing else is attached to it, and the parent did not opt in to marketing (or is no longer subscribed). Marketing opt-ins are kept: a parent who asked for news stays as a contact. Otherwise the contact is kept and only the registration goes. Returns { ok, contactRemoved }; contactRemoved false = the contact was kept (they asked for news, it was there before the registration, or something else uses it). Nothing is sent to the parent. Confirm with the person before calling. 409 if the parent has a child here (decline the child with uiiq_students_registration_decline instead); 404 if the contact isn't a registered parent here. Works with family registration switched off, so leftovers can be cleared. OWNER/ADMIN only. Audited without personal details.",
+    inputSchema: { type: "object", required: ["contactId"], properties: { contactId: { type: "string", description: "The parent's contact id (parents[].contactId)" }, tenant: TENANT_PROP } },
+    async handler({ contactId, tenant }) {
+      const res = await send(tenant, "DELETE", `/students/registered-parents/${encodeURIComponent(contactId)}`);
+      if (!res.ok) throw await fail(res);
       return res.json();
     },
   },
