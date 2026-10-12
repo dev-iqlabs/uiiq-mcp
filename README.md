@@ -374,7 +374,7 @@ Needs the workspace's `sister_organisations` feature (404 when off). Changes are
 | `uiiq_billing_org_delete` | Owner only: remove a sister with no payment account (409 if it has one: switch it off instead). Dry run without `confirm: true`. |
 | `uiiq_billing_org_connect_start` | Owner only: create a sister's own Stripe connected account (keyed on the organisation) and return its onboardingUrl. Refuses a Stripe account attached to another organisation. Dry run without `confirm: true`. |
 | `uiiq_admin_billing_org_list` | Platform admin: a workspace's organisations with their accounts' fee terms, and whether the feature is on. |
-| `uiiq_admin_billing_org_update` | Platform admin: turn a sister off or on, or set the fee terms on its payment account (applicationFeePercent 0–50, passFeesToCustomer). Never while impersonating; audited. |
+| `uiiq_admin_billing_org_update` | Platform admin: turn a sister off or on, verify the owner's charity / not-for-profit claim (only a verified claim takes the reduced fee), or set the fee terms on its payment account (applicationFeePercent 0–50, passFeesToCustomer). Never while impersonating; audited. |
 
 ### Campaigns — `src/tools/campaign.js`
 

@@ -36,6 +36,13 @@ test("create, connect and remove are dry runs without confirm: true, and call no
   }
 });
 
+test("charity: the owner claims, a platform admin verifies (only then the reduced fee)", () => {
+  assert.match(tool("uiiq_admin_billing_org_update").description, /VERIFY the owner's charity/);
+  assert.ok("charityVerified" in tool("uiiq_admin_billing_org_update").inputSchema.properties);
+  assert.equal("charityVerified" in tool("uiiq_billing_org_update").inputSchema.properties, false);
+  assert.match(tool("uiiq_billing_org_create").inputSchema.properties.isCharity.description, /only once a platform admin verifies it/);
+});
+
 test("the platform admin tools are SUPER_ADMIN and say so", () => {
   for (const name of ["uiiq_admin_billing_org_list", "uiiq_admin_billing_org_update"]) {
     assert.match(tool(name).description, /SUPER_ADMIN/, name);

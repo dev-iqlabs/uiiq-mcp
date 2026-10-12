@@ -41,11 +41,11 @@ const dryRun = (wouldDo, details) => ({
 const ORG_FIELDS = {
   legalName: { type: "string", description: "The organisation's legal name" },
   displayName: { type: ["string", "null"], description: "The name on receipts; null = the legal name" },
-  statementDescriptor: { type: ["string", "null"], description: "What a payer's bank statement shows: up to 22 characters, at least one letter, none of < > \\ ' \" *" },
+  statementDescriptor: { type: ["string", "null"], description: "What a payer's bank statement shows after the account's short name: up to 18 characters, Latin characters only, at least one letter, none of < > \\ ' \" *" },
 };
 const SISTER_FIELDS = {
   vatNumber: { type: ["string", "null"], description: "Only if the sister is VAT-registered: no VAT is charged on its sales otherwise" },
-  isCharity: { type: "boolean", description: "Charity or not-for-profit: takes the reduced Charity / NFP sister platform fee" },
+  isCharity: { type: "boolean", description: "The owner's claim: charity or not-for-profit. The reduced Charity / NFP sister fee applies only once a platform admin verifies it (uiiq_admin_billing_org_update charityVerified); unticking it or changing the charity number clears the verification" },
   charityNumber: { type: ["string", "null"] },
 };
 
@@ -118,15 +118,15 @@ export const billingOrganisationsTools = [
   },
   {
     name: "uiiq_admin_billing_org_update",
-    description: "Platform admin: turn a workspace's SISTER organisation off or on (active), or set the fee terms on its payment account (applicationFeePercent 0–50, passFeesToCustomer), as uiiq_admin_tenant_stripe_set does for the workspace's own account. Turning a sister on needs the workspace's sister_organisations feature; the feature can't be switched off while any sister is on. SUPER_ADMIN, read live, never while impersonating; audited.",
+    description: "Platform admin: turn a workspace's SISTER organisation off or on (active); VERIFY the owner's charity / not-for-profit claim (charityVerified: true records who and when, and only then the reduced Charity / NFP sister fee applies; 409 if the owner hasn't claimed it; false clears it); or set the fee terms on its payment account (applicationFeePercent 0–50, passFeesToCustomer), as uiiq_admin_tenant_stripe_set does for the workspace's own account. Turning a sister on needs the workspace's sister_organisations feature; the feature can't be switched off while any sister is on. SUPER_ADMIN, read live, never while impersonating; audited.",
     inputSchema: {
       type: "object",
       required: ["tenantId", "orgId"],
-      properties: { tenantId: TENANT_ID, orgId: { type: "string" }, active: { type: "boolean" }, applicationFeePercent: { type: "number" }, passFeesToCustomer: { type: "boolean" } },
+      properties: { tenantId: TENANT_ID, orgId: { type: "string" }, active: { type: "boolean" }, charityVerified: { type: "boolean" }, applicationFeePercent: { type: "number" }, passFeesToCustomer: { type: "boolean" } },
     },
     async handler({ tenantId, orgId, ...body }) {
       const data = defined(body);
-      if (!Object.keys(data).length) throw new Error("Send active, applicationFeePercent or passFeesToCustomer");
+      if (!Object.keys(data).length) throw new Error("Send active, charityVerified, applicationFeePercent or passFeesToCustomer");
       return send(null, `/admin/tenants/${enc(tenantId)}/billing-organisations/${enc(orgId)}`, "PATCH", data);
     },
   },
