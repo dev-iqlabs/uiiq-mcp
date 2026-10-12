@@ -1258,9 +1258,9 @@ Every product's target against its actual, by week, month or fiscal year, colour
 | `uiiq_admin_booking_email_list` | The workspace's booking email templates (confirmation, reminder, followup, cancellation, deposit_reminder, gift_card, membership): subject, HTML body, enabled, send offset. |
 | `uiiq_admin_booking_email_set` | Create or replace one booking email template by type: subject and bodyHtml required; enabled (default true); sendOffsetHours for timed ones (reminder/followup). |
 | `uiiq_admin_ota_channels` | The OTA distribution channels (Beyonk, Airbnb Experiences, Viator, FareHarbor) and their connection state. |
-| `uiiq_admin_payments_connect_get` | The workspace's connected payment account (Stripe or PayPal): provider, account id, charges/payouts enabled (refreshed from the provider), platform fee, statement descriptor, payout schedule. |
-| `uiiq_admin_payments_connect_start` | Start payment onboarding: CREATES a connected account at the provider (STRIPE default, or PAYPAL) if the workspace has none, then returns an onboardingUrl for the owner to complete in a browser. |
-| `uiiq_admin_payments_connect_update` | Change the workspace's statementDescriptor (<= 22 chars) or payoutSchedule. |
+| `uiiq_admin_payments_connect_get` | The workspace's connected payment account (Stripe or PayPal): the full account for OWNER/ADMIN, only chargesEnabled/payoutsEnabled and canManage:false for STAFF. |
+| `uiiq_admin_payments_connect_start` | Start payment onboarding: CREATES a connected account at the provider (STRIPE default, or PAYPAL) if the workspace has none, then returns an onboardingUrl for the owner to complete in a browser. OWNER/ADMIN only. |
+| `uiiq_admin_payments_connect_update` | Change the workspace's statementDescriptor (<= 22 chars) or payoutSchedule. OWNER/ADMIN only. |
 | `uiiq_admin_site_list` | The platform's websites (umbrella and shop sites): slug, name, kind, domain, active, staging/live URLs, connected shop, and whether a WP bridge secret is set (never the secret). |
 | `uiiq_admin_site_create` | Register a website: slug, name, domain required (normalised); kind (default UMBRELLA), stagingUrl, liveUrl, ownerTenantId, wpBridgeSecret (a secret: stored, never shown again). |
 | `uiiq_admin_site_update` | Edit a website: slug, name, domain, kind, active, acceptsCustomerDesigns, stagingUrl, liveUrl, ownerTenantId, wpBridgeSecret (a secret; never shown), stackcpPackageId (a numeric 20i package id, "auto" to look it up from the live URL, or empty to clear). |
@@ -1463,13 +1463,13 @@ Every product's target against its actual, by week, month or fiscal year, colour
 | Tool | What it does |
 |---|---|
 | `uiiq_integrations_list` | The tenant's connected import sources: id, provider (WOOCOMMERCE \| API \| XERO…), name, status, lastSyncedAt, lastSyncCount and non-secret config. |
-| `uiiq_integrations_add` | Add an import source with its credentials (encrypted at rest). |
-| `uiiq_integrations_delete` | DELETE an import source and its stored credentials. |
+| `uiiq_integrations_add` | Add an import source with its credentials (encrypted at rest). OWNER/ADMIN only. |
+| `uiiq_integrations_delete` | DELETE an import source and its stored credentials. OWNER/ADMIN only. |
 | `uiiq_integrations_sync` | Pull contacts from an import source into the tenant's contact list (new emails only, tagged by provider, UNSUBSCRIBED from email and SMS — a customer list is not marketing consent; existing contacts keep their subscription): WooCommerce customers, a generic API list, or Xero customers. |
 | `uiiq_integrations_posm_sync` | Sync the tenant's own Sell bookings and memberships into contacts: creates missing contacts UNSUBSCRIBED from email and SMS (existing contacts keep their subscription) and adds posm/booking/member/plan tags to existing ones. |
 | `uiiq_integrations_xero_accounts` | The REVENUE accounts in the Xero organisation behind a XERO import source (sourceId from uiiq_integrations_list) — pick one for uiiq_integrations_xero_config_set. |
 | `uiiq_integrations_xero_config_set` | Set the Xero sales account code that UIIQ sales invoices post to, on a XERO import source. |
-| `uiiq_integrations_xero_financials` | Xero headline financials for a period (default: this month to date): income, expenses, net profit from the P&L report, plus the 20 most recently updated paid/authorised sales invoices. |
+| `uiiq_integrations_xero_financials` | OWNER/ADMIN only. Xero headline financials for a period (default: this month to date): income, expenses, net profit from the P&L report, plus the 20 most recently updated paid/authorised sales invoices. |
 
 ### Mail (Office) — `src/tools/mail.js`
 
