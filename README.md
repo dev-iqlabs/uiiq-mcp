@@ -1567,12 +1567,12 @@ Every product's target against its actual, by week, month or fiscal year, colour
 | Tool | What it does |
 |---|---|
 | `uiiq_smart_pages_approvals` | Smart pages and guestbook messages waiting for approval — this workspace's, or every workspace's with staff:true. |
-| `uiiq_smart_pages_page_approve` | APPROVE a smart page by slug — it goes PUBLIC. Pass the row's `version`: a page changed since answers 409 "The page changed since you checked it". |
+| `uiiq_smart_pages_page_approve` | APPROVE a smart page by slug — it goes PUBLIC. `version` from uiiq_smart_pages_approvals is required whenever that row has one; a page changed since answers 409: re-list and check it again. |
 | `uiiq_smart_pages_page_send_back` | Send a smart page back to its author with a note saying what needs changing (it stays unpublished). |
 | `uiiq_smart_pages_message_moderate` | Approve or reject a guestbook message on a smart page (numeric message id). |
 | `uiiq_smart_pages_live_pages` | Smart pages by status (default published; taken_down for those taken down), this workspace's or every workspace's with staff:true. |
-| `uiiq_smart_pages_page_take_down` | TAKE DOWN a published page with a required reason the organisation sees; a staff take-down only staff can put back. Confirm first. |
-| `uiiq_smart_pages_page_put_back` | Put a taken-down page back; a page taken down by support answers 403 to a workspace. |
+| `uiiq_smart_pages_page_take_down` | TAKE DOWN a published page with a required reason the organisation sees; a staff take-down only staff can put back. Without `confirm: true` it is a dry run that shows the page and changes nothing. |
+| `uiiq_smart_pages_page_put_back` | Put a taken-down page back; a page taken down by support answers 403 to a workspace. Without `confirm: true` it is a dry run. |
 
 ### Students — `src/tools/students.js`
 
