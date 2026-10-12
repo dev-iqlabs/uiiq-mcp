@@ -16,6 +16,27 @@ async function fail(res) {
 }
 const send = (tenant, path, method, body) => api(tenant)(path, body === undefined ? { method } : { method, body: JSON.stringify(body) });
 const POST_STATUS = ["DRAFT", "QUEUED", "SCHEDULED"];
+
+// Scheduling is a publish path: on a workspace with auto-publish on, the
+// 5-minute cron publishes a SCHEDULED post once it is due (a past scheduledAt
+// means at once), with nobody pressing Publish. So setting SCHEDULED or a
+// scheduledAt needs confirm: true, like publishing does (Lucas, after #80).
+const CONFIRM_SCHEDULE_PROP = { type: "boolean", description: "Required (true) when setting status SCHEDULED or a scheduledAt; without it nothing is saved and a dry run is returned" };
+async function scheduleDryRun(tenant, id, body, confirm) {
+  const scheduling = body.status === "SCHEDULED" || (body.scheduledAt !== undefined && body.scheduledAt !== null);
+  if (!scheduling || confirm === true) return null;
+  const settings = await api(tenant)("/socials/settings");
+  if (!settings.ok) throw await fail(settings);
+  const { autoPublish } = await settings.json();
+  return {
+    dryRun: true,
+    message: autoPublish
+      ? "Nothing was saved. Auto-publish is ON for this workspace, so a SCHEDULED post is published by the cron when it falls due, with nobody pressing Publish. Pass confirm: true only once the person responsible has seen this post."
+      : "Nothing was saved. Auto-publish is off here, so a SCHEDULED post waits for someone to press Publish; it is still a scheduling step, so pass confirm: true to go ahead.",
+    autoPublish: !!autoPublish,
+    wouldSet: { id, status: body.status, scheduledAt: body.scheduledAt },
+  };
+}
 // Per-platform text (UiiQ-platform #890): replaces the main content for that
 // platform's targets, e.g. Instagram "Tap the link in our bio" while Facebook
 // carries the URL. null (or "") clears a platform; a platform left out keeps
@@ -115,9 +136,11 @@ export const socialTools = [
   },
   {
     name: "uiiq_social_post_update",
-    description: "Partial update of a DRAFT, QUEUED or SCHEDULED post: content, hashtags, platformContent (per-platform text, PENDING targets only), scheduledAt (ISO, null to unschedule), status. Published posts are refused (409). Which accounts it targets is not changed here — use uiiq_social_post_save for that.",
-    inputSchema: { type: "object", required: ["id"], properties: { id: { type: "string" }, content: { type: "string" }, hashtags: { type: "array", items: { type: "string" } }, platformContent: PLATFORM_CONTENT_PROP, scheduledAt: { type: ["string", "null"] }, status: { type: "string", enum: POST_STATUS }, tenant: TENANT_PROP } },
-    async handler({ id, tenant, ...body }) {
+    description: "Partial update of a DRAFT, QUEUED or SCHEDULED post: content, hashtags, platformContent (per-platform text, PENDING targets only), scheduledAt (ISO, null to unschedule), status. Published posts are refused (409). Which accounts it targets is not changed here — use uiiq_social_post_save for that. Setting status SCHEDULED or a scheduledAt needs confirm: true (on an auto-publish workspace the cron then publishes it when due); without it this is a dry run and nothing is saved.",
+    inputSchema: { type: "object", required: ["id"], properties: { id: { type: "string" }, content: { type: "string" }, hashtags: { type: "array", items: { type: "string" } }, platformContent: PLATFORM_CONTENT_PROP, scheduledAt: { type: ["string", "null"] }, status: { type: "string", enum: POST_STATUS }, confirm: CONFIRM_SCHEDULE_PROP, tenant: TENANT_PROP } },
+    async handler({ id, tenant, confirm, ...body }) {
+      const dry = await scheduleDryRun(tenant, id, body, confirm);
+      if (dry) return dry;
       const res = await send(tenant, `/socials/posts/${encodeURIComponent(id)}`, "PATCH", body);
       if (!res.ok) throw await fail(res);
       return res.json();
@@ -125,9 +148,11 @@ export const socialTools = [
   },
   {
     name: "uiiq_social_post_save",
-    description: "The full composer save of a DRAFT, QUEUED or SCHEDULED post: content (required), mediaUrls, hashtags, targetAccountIds (at least one connected account; Instagram needs a media URL), status DRAFT | QUEUED | SCHEDULED (+ scheduledAt), platformContent (per-platform text). PENDING targets are replaced to match the selection; published/failed ones are history and kept.",
-    inputSchema: { type: "object", required: ["id", "content", "targetAccountIds"], properties: { id: { type: "string" }, content: { type: "string" }, mediaUrls: { type: "array", items: { type: "string" } }, hashtags: { type: "array", items: { type: "string" } }, platformContent: PLATFORM_CONTENT_PROP, targetAccountIds: { type: "array", items: { type: "string" } }, status: { type: "string", enum: POST_STATUS }, scheduledAt: { type: "string", description: "ISO datetime, with status SCHEDULED" }, tenant: TENANT_PROP } },
-    async handler({ id, tenant, ...body }) {
+    description: "The full composer save of a DRAFT, QUEUED or SCHEDULED post: content (required), mediaUrls, hashtags, targetAccountIds (at least one connected account; Instagram needs a media URL), status DRAFT | QUEUED | SCHEDULED (+ scheduledAt), platformContent (per-platform text). PENDING targets are replaced to match the selection; published/failed ones are history and kept. Setting status SCHEDULED or a scheduledAt needs confirm: true (on an auto-publish workspace the cron then publishes it when due); without it this is a dry run and nothing is saved.",
+    inputSchema: { type: "object", required: ["id", "content", "targetAccountIds"], properties: { id: { type: "string" }, content: { type: "string" }, mediaUrls: { type: "array", items: { type: "string" } }, hashtags: { type: "array", items: { type: "string" } }, platformContent: PLATFORM_CONTENT_PROP, targetAccountIds: { type: "array", items: { type: "string" } }, status: { type: "string", enum: POST_STATUS }, scheduledAt: { type: "string", description: "ISO datetime, with status SCHEDULED" }, confirm: CONFIRM_SCHEDULE_PROP, tenant: TENANT_PROP } },
+    async handler({ id, tenant, confirm, ...body }) {
+      const dry = await scheduleDryRun(tenant, id, body, confirm);
+      if (dry) return dry;
       const res = await send(tenant, `/socials/posts/${encodeURIComponent(id)}`, "PUT", body);
       if (!res.ok) throw await fail(res);
       return res.json();
