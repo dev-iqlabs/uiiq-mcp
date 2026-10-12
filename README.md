@@ -1025,7 +1025,7 @@ Every product's target against its actual, by week, month or fiscal year, colour
 | `uiiq_ads_video_thumbnails_generate` | Start generating thumbnail variants for a video from its brief. |
 | `uiiq_ads_video_thumbnail_status` | Poll one thumbnail generation: { status, urls }. |
 | `uiiq_ads_video_thumbnails_set` | Save the chosen thumbnail variants on a video (the array from generate/status, edited). |
-| `uiiq_ads_video_approve` | Approve a video (queues organic posts on the given platforms, or the brief's) or reject it with a note. |
+| `uiiq_ads_video_approve` | Approve (schedules posts dated now: needs `confirm: true`, else a dry run) or reject a video. |
 | `uiiq_ads_video_publish` | Publish an approved video as organic posts. A dry run unless `confirm: true`. |
 | `uiiq_ads_video_publish_paid` | Submit a video to the paid campaign managers. A dry run unless `confirm: true`. |
 | `uiiq_ads_google_campaign_control` | Pause or enable a Google Ads campaign, or set its daily budget (budgetMicros = pounds × 1,000,000). |

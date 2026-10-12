@@ -349,9 +349,12 @@ export const adsTools = [
   },
   {
     name: "uiiq_ads_video_approve",
-    description: "Approve a video (queues organic posts on the given platforms, or the brief's) or reject it with a note.",
-    inputSchema: { type: "object", required: ["id", "action"], properties: { id: { type: "string" }, action: { type: "string", enum: ["approve", "reject"] }, platforms: { type: "array", items: { type: "string", enum: PLATFORMS } }, note: { type: "string" }, tenant: TENANT_PROP } },
-    async handler({ id, tenant, ...body }) {
+    description: "Approve a video or reject it with a note. Approving creates SCHEDULED organic posts dated now on the given platforms (or the brief's), which the cron publishes within minutes on an auto-publish workspace, so approve needs confirm: true (else a dry run). Reject needs no confirm.",
+    inputSchema: { type: "object", required: ["id", "action"], properties: { id: { type: "string" }, action: { type: "string", enum: ["approve", "reject"] }, platforms: { type: "array", items: { type: "string", enum: PLATFORMS } }, note: { type: "string" }, confirm: { type: "boolean", description: "Required (true) to approve" }, tenant: TENANT_PROP } },
+    async handler({ id, tenant, confirm, ...body }) {
+      if (body.action === "approve" && confirm !== true) {
+        return videoDryRun(tenant, id, body.platforms ?? ["the brief's platforms"], "approved and scheduled (published within minutes on an auto-publish workspace) on");
+      }
       const res = await post(tenant, `/ads/video/${encodeURIComponent(id)}/approve`, body);
       if (!res.ok) throw await fail(res);
       return res.json();
