@@ -36,7 +36,7 @@ export const integrationsTools = [
   },
   {
     name: "uiiq_integrations_add",
-    description: "Add an import source with its credentials (encrypted at rest). WOOCOMMERCE: { siteUrl, consumerKey, consumerSecret }. API: { url, apiKey?, emailField?, nameField? }. Xero is connected through the browser OAuth flow at /dashboard/integrations, not here.",
+    description: "Add an import source with its credentials (encrypted at rest). WOOCOMMERCE: { siteUrl, consumerKey, consumerSecret }. API: { url, apiKey?, emailField?, nameField? }. Xero is connected through the browser OAuth flow at /dashboard/integrations, not here. OWNER/ADMIN only; STAFF and read-only impersonation get 403.",
     inputSchema: {
       type: "object",
       required: ["provider", "name"],
@@ -51,19 +51,19 @@ export const integrationsTools = [
   },
   {
     name: "uiiq_integrations_delete",
-    description: "DELETE an import source and its stored credentials. Contacts and bills already imported from it are kept. Removing a XERO source disconnects Xero for cost import and funding invoices too.",
+    description: "DELETE an import source and its stored credentials. Contacts and bills already imported from it are kept. Removing a XERO source disconnects Xero for cost import and funding invoices too. OWNER/ADMIN only; STAFF and read-only impersonation get 403.",
     inputSchema: { type: "object", required: ["id"], properties: { id: { type: "string" }, tenant: TENANT_PROP } },
     handler: ({ id, tenant }) => send(tenant, `/integrations/${encodeURIComponent(id)}`, "DELETE"),
   },
   {
     name: "uiiq_integrations_sync",
-    description: "Pull contacts from an import source into the tenant's contact list (new emails only, tagged by provider, UNSUBSCRIBED from email and SMS — a customer list is not marketing consent; existing contacts keep their subscription): WooCommerce customers, a generic API list, or Xero customers. Returns { imported, skipped }. 422 for a provider with no sync.",
+    description: "Pull contacts from an import source into the tenant's contact list (new emails only, tagged by provider, UNSUBSCRIBED from email and SMS — a customer list is not marketing consent; existing contacts keep their subscription): WooCommerce customers, a generic API list, or Xero customers. Returns { imported, skipped }. 422 for a provider with no sync. OWNER/ADMIN only; STAFF and read-only impersonation get 403.",
     inputSchema: { type: "object", required: ["id"], properties: { id: { type: "string" }, tenant: TENANT_PROP } },
     handler: ({ id, tenant }) => send(tenant, `/integrations/${encodeURIComponent(id)}/sync`, "POST"),
   },
   {
     name: "uiiq_integrations_posm_sync",
-    description: "Sync the tenant's own Sell bookings and memberships into contacts: creates missing contacts UNSUBSCRIBED from email and SMS (existing contacts keep their subscription) and adds posm/booking/member/plan tags to existing ones. Returns { imported, updated, skipped, total, sources }.",
+    description: "Sync the tenant's own Sell bookings and memberships into contacts: creates missing contacts UNSUBSCRIBED from email and SMS (existing contacts keep their subscription) and adds posm/booking/member/plan tags to existing ones. Returns { imported, updated, skipped, total, sources }. OWNER/ADMIN only; STAFF and read-only impersonation get 403.",
     inputSchema: { type: "object", properties: { tenant: TENANT_PROP } },
     handler: ({ tenant } = {}) => send(tenant, "/integrations/posm/sync", "POST"),
   },
@@ -71,7 +71,7 @@ export const integrationsTools = [
   // ── Xero (sales side) ──
   {
     name: "uiiq_integrations_xero_accounts",
-    description: "The REVENUE accounts in the Xero organisation behind a XERO import source (sourceId from uiiq_integrations_list) — pick one for uiiq_integrations_xero_config_set.",
+    description: "The REVENUE accounts in the Xero organisation behind a XERO import source (sourceId from uiiq_integrations_list) — pick one for uiiq_integrations_xero_config_set. OWNER/ADMIN only (STAFF get 403).",
     inputSchema: { type: "object", required: ["sourceId"], properties: { sourceId: { type: "string" }, tenant: TENANT_PROP } },
     handler: ({ sourceId, tenant }) => send(tenant, `/integrations/xero/accounts?sourceId=${encodeURIComponent(sourceId)}`, "GET"),
   },
@@ -83,7 +83,7 @@ export const integrationsTools = [
   },
   {
     name: "uiiq_integrations_xero_financials",
-    description: "Xero headline financials for a period (default: this month to date): income, expenses, net profit from the P&L report, plus the 20 most recently updated paid/authorised sales invoices. 404 when Xero isn't connected.",
+    description: "Xero headline financials for a period (default: this month to date): income, expenses, net profit from the P&L report, plus the 20 most recently updated paid/authorised sales invoices. 404 when Xero isn't connected. OWNER/ADMIN only (STAFF get 403).",
     inputSchema: { type: "object", properties: { from: { type: "string", description: "YYYY-MM-DD" }, to: { type: "string", description: "YYYY-MM-DD" }, tenant: TENANT_PROP } },
     async handler({ from, to, tenant } = {}) {
       const p = new URLSearchParams();

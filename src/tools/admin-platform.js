@@ -557,7 +557,7 @@ export const adminPlatformTools = [
   // ── Payments (tenant-scoped) ──
   {
     name: "uiiq_admin_payments_connect_get",
-    description: "The workspace's connected payment account (Stripe or PayPal): provider, account id, charges/payouts enabled (refreshed from the provider), platform fee, statement descriptor, payout schedule. connected:false when none.",
+    description: "The workspace's connected payment account (Stripe or PayPal). OWNER/ADMIN get provider, account id, charges/payouts enabled (refreshed from the provider), platform fee, statement descriptor and payout schedule; STAFF get only chargesEnabled and payoutsEnabled. canManage says whether this session may start or change it (false for STAFF and read-only impersonation). connected:false when none.",
     inputSchema: { type: "object", properties: { tenant: TENANT_PROP } },
     async handler({ tenant } = {}) {
       return send(tenant, "/admin/payments/connect", "GET");
@@ -565,7 +565,7 @@ export const adminPlatformTools = [
   },
   {
     name: "uiiq_admin_payments_connect_start",
-    description: "Start payment onboarding: CREATES a connected account at the provider (STRIPE default, or PAYPAL) if the workspace has none, then returns an onboardingUrl for the owner to complete in a browser. Idempotent per tenant. Refused under read-only impersonation.",
+    description: "Start payment onboarding: CREATES a connected account at the provider (STRIPE default, or PAYPAL) if the workspace has none, then returns an onboardingUrl for the owner to complete in a browser. Idempotent per tenant. OWNER/ADMIN only; STAFF and read-only impersonation get 403.",
     inputSchema: { type: "object", properties: { email: { type: "string", description: "Account email; defaults to the session user's" }, provider: { type: "string", enum: ["STRIPE", "PAYPAL"] }, tenant: TENANT_PROP } },
     async handler({ tenant, ...body } = {}) {
       return send(tenant, "/admin/payments/connect", "POST", defined(body));
@@ -573,7 +573,7 @@ export const adminPlatformTools = [
   },
   {
     name: "uiiq_admin_payments_connect_update",
-    description: "Change the workspace's statementDescriptor (<= 22 chars) or payoutSchedule. The platform fee cannot be changed here (403) — that is uiiq_admin_tenant_stripe_set.",
+    description: "Change the workspace's statementDescriptor (<= 22 chars) or payoutSchedule. OWNER/ADMIN only; STAFF and read-only impersonation get 403. The platform fee cannot be changed here (403) — that is uiiq_admin_tenant_stripe_set.",
     inputSchema: { type: "object", properties: { statementDescriptor: { type: ["string", "null"] }, payoutSchedule: { type: "string" }, tenant: TENANT_PROP } },
     async handler({ tenant, ...body } = {}) {
       return send(tenant, "/admin/payments/connect", "PATCH", defined(body));

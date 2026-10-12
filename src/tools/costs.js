@@ -570,7 +570,7 @@ export const costsTools = [
   },
   {
     name: "uiiq_costs_xero_accounts",
-    description: "The Xero EXPENSE accounts alongside the tenant's cost categories/centres and the current account→category mapping. 404 when Xero is not connected. Needs `cost_tracking`.",
+    description: "The Xero EXPENSE accounts alongside the tenant's cost categories/centres and the current account→category mapping. 404 when Xero is not connected. Needs `cost_tracking`. OWNER/ADMIN only (STAFF get 403).",
     inputSchema: { type: "object", properties: { tenant: TENANT_PROP } },
     async handler({ tenant } = {}) {
       const res = await api(tenant)("/costs/xero/accounts");
@@ -599,7 +599,7 @@ export const costsTools = [
   },
   {
     name: "uiiq_costs_xero_pull_preview",
-    description: "PREVIEW the Xero ACCPAY bills in a range (default last 90 days) without writing: each candidate flagged alreadyImported / possibleManualDuplicate / unmapped, plus a summary. Needs `cost_tracking`.",
+    description: "PREVIEW the Xero ACCPAY bills in a range (default last 90 days) without writing: each candidate flagged alreadyImported / possibleManualDuplicate / unmapped, plus a summary. Needs `cost_tracking`. OWNER/ADMIN only (STAFF get 403).",
     inputSchema: { type: "object", properties: { from: { type: "string", description: "YYYY-MM-DD" }, to: { type: "string", description: "YYYY-MM-DD" }, tenant: TENANT_PROP } },
     async handler({ from, to, tenant } = {}) {
       const p = new URLSearchParams();
