@@ -73,9 +73,9 @@ test("remove-parent deletes the registered parent and returns contactRemoved", a
   assert.deepEqual(r.result, { ok: true, contactRemoved: true });
 });
 
-test("remove-parent says marketing opt-ins are kept", () => {
-  assert.match(tools.uiiq_students_registered_parent_remove.description, /Marketing opt-ins are kept/);
-  assert.match(tools.uiiq_students_registered_parent_remove.description, /they asked for news/);
+test("remove-parent says only a Yes to news in the app keeps the contact", () => {
+  assert.match(tools.uiiq_students_registered_parent_remove.description, /SAID YES TO NEWS IN THE APP/);
+  assert.match(tools.uiiq_students_registered_parent_remove.description, /they said yes to news in the app/);
 });
 
 test("approve, decline and remove-parent tell the model to confirm first", () => {
