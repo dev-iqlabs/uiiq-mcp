@@ -17,6 +17,7 @@ UIIQ is one subscription whose modules are grouped as **Sell**, **Grow** and **R
 | Gift cards, vouchers, memberships | `uiiq_sell_gift_card_*`, `uiiq_sell_voucher_*`, `uiiq_sell_membership_plan_*`, `uiiq_sell_subscription_*` | Issue and bulk-issue gift cards, resend or regenerate vouchers, manage membership plans, review and cancel members |
 | Tickets | `uiiq_ticket_*` | Issue tickets, scan them at the door, see scan stats, forward tickets |
 | Donations | `uiiq_donations_*` | Run causes, report on giving, export Gift Aid |
+| Sister organisations | `uiiq_billing_org_*`, `uiiq_admin_billing_org_*` | With the `sister_organisations` feature: list the workspace's own and sister organisations; the owner adds, edits, connects Stripe for, switches off or removes a sister (create, connect and remove are dry runs without `confirm: true`); a platform admin turns sisters off and sets their fee terms |
 | Orders and commerce | `uiiq_order_*`, `uiiq_commerce_*`, `uiiq_channels_*`, `uiiq_merch_set_*` | Hold and annotate orders, provision hosted shops, set fee rates, settle payouts, sync marketplace channels |
 | Retail | `uiiq_retail_*` | Products, categories, suppliers, low-stock alerts, shop sync, stock reasons and reports |
 | Till and kitchen | `uiiq_till_*` | Ping a paired till, verify a staff PIN, take a sale or payment intent, redeem an IQPlant plan code |
@@ -360,6 +361,20 @@ Not exposed on purpose: the platform-to-platform callbacks under `/api/platform/
 | `uiiq_donations_report` | The charity's donation dashboard (tenant-scoped, owners/admins only): all-time and this-month totals, per-cause breakdown, recurring-donor count, Gift-Aid totals (incl. |
 | `uiiq_donations_gift_aid_export` | Download the HMRC-ready Gift Aid CSV of eligible SUCCEEDED donations (donor name, address, postcode, amount, date). |
 | `uiiq_donations_subscription_cancel` | Cancel a recurring (monthly) donation by its Stripe subscription ID. |
+
+### Sister organisations — `src/tools/billing-organisations.js`
+
+Needs the workspace's `sister_organisations` feature (404 when off). Changes are for the workspace owner only, read live, never while impersonating, so the changing tools act in your own signed-in workspace and take no `tenant`.
+
+| Tool | What it does |
+| --- | --- |
+| `uiiq_billing_org_list` | The workspace's own (MAIN) and sister organisations, each with its payment account's status, VAT and charity status and whether it is on; `canManage` and the monthly add-on price (0 = no charge). OWNER or ADMIN. |
+| `uiiq_billing_org_create` | Owner only: add a sister organisation (legalName required; displayName, statementDescriptor, vatNumber, isCharity, charityNumber). Dry run without `confirm: true`. |
+| `uiiq_billing_org_update` | Owner only: change an organisation's names or statement descriptor (kept in step with its payment account); a sister's VAT, charity status, or `active` (switch off/on). The workspace's own legal name changes are logged. |
+| `uiiq_billing_org_delete` | Owner only: remove a sister with no payment account (409 if it has one: switch it off instead). Dry run without `confirm: true`. |
+| `uiiq_billing_org_connect_start` | Owner only: create a sister's own Stripe connected account (keyed on the organisation) and return its onboardingUrl. Refuses a Stripe account attached to another organisation. Dry run without `confirm: true`. |
+| `uiiq_admin_billing_org_list` | Platform admin: a workspace's organisations with their accounts' fee terms, and whether the feature is on. |
+| `uiiq_admin_billing_org_update` | Platform admin: turn a sister off or on, or set the fee terms on its payment account (applicationFeePercent 0–50, passFeesToCustomer). Never while impersonating; audited. |
 
 ### Campaigns — `src/tools/campaign.js`
 
