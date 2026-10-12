@@ -79,6 +79,7 @@ import { studentsTools } from "./tools/students.js";
 import { teamTools } from "./tools/team.js";
 import { virtualOfficeTools } from "./tools/virtual-office.js";
 import { workflowTools } from "./tools/workflow.js";
+import { billingOrganisationsTools } from "./tools/billing-organisations.js";
 
 const ALL_TOOLS = [
   ...statusTools,
@@ -156,6 +157,7 @@ const ALL_TOOLS = [
   ...teamTools,
   ...virtualOfficeTools,
   ...workflowTools,
+  ...billingOrganisationsTools,
 ];
 
 const TOOL_MAP = Object.fromEntries(ALL_TOOLS.map(t => [t.name, t]));
