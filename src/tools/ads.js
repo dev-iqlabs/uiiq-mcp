@@ -13,6 +13,21 @@ async function fail(res) {
 }
 const post = (tenant, path, body) => api(tenant)(path, { method: "POST", body: JSON.stringify(body) });
 
+// Every publish path needs a person's say-so (Steve, 12 Oct): without
+// confirm: true, show what would happen and do nothing.
+async function videoDryRun(tenant, id, platforms, what) {
+  const res = await api(tenant)(`/ads/video/${encodeURIComponent(id)}`);
+  if (!res.ok) throw await fail(res);
+  const video = await res.json();
+  const v = video.video ?? video.asset ?? video;
+  return {
+    dryRun: true,
+    message: `Nothing was published. This video would be ${what} ${platforms.join(", ")}. Pass confirm: true only once the person responsible has seen it.`,
+    video: { id: v.id ?? id, title: v.title ?? v.name ?? null, status: v.status ?? null, url: v.videoUrl ?? v.url ?? null },
+    platforms,
+  };
+}
+
 // ADS & SEARCH — the Ads module beyond briefs (grow.js) and competitors
 // (competitor.js): the overview, keyword research and rank tracking, the
 // keyword gap against a competitor, local search (map pack, local keywords,
@@ -334,9 +349,12 @@ export const adsTools = [
   },
   {
     name: "uiiq_ads_video_approve",
-    description: "Approve a video (queues organic posts on the given platforms, or the brief's) or reject it with a note.",
-    inputSchema: { type: "object", required: ["id", "action"], properties: { id: { type: "string" }, action: { type: "string", enum: ["approve", "reject"] }, platforms: { type: "array", items: { type: "string", enum: PLATFORMS } }, note: { type: "string" }, tenant: TENANT_PROP } },
-    async handler({ id, tenant, ...body }) {
+    description: "Approve a video or reject it with a note. Approving creates SCHEDULED organic posts dated now on the given platforms (or the brief's), which the cron publishes within minutes on an auto-publish workspace, so approve needs confirm: true (else a dry run). Reject needs no confirm.",
+    inputSchema: { type: "object", required: ["id", "action"], properties: { id: { type: "string" }, action: { type: "string", enum: ["approve", "reject"] }, platforms: { type: "array", items: { type: "string", enum: PLATFORMS } }, note: { type: "string" }, confirm: { type: "boolean", description: "Required (true) to approve" }, tenant: TENANT_PROP } },
+    async handler({ id, tenant, confirm, ...body }) {
+      if (body.action === "approve" && confirm !== true) {
+        return videoDryRun(tenant, id, body.platforms ?? ["the brief's platforms"], "approved and scheduled (published within minutes on an auto-publish workspace) on");
+      }
       const res = await post(tenant, `/ads/video/${encodeURIComponent(id)}/approve`, body);
       if (!res.ok) throw await fail(res);
       return res.json();
@@ -344,9 +362,10 @@ export const adsTools = [
   },
   {
     name: "uiiq_ads_video_publish",
-    description: "Publish an approved video as organic posts on platforms the workspace has connected (uiiq_social_accounts). Returns which were queued.",
-    inputSchema: { type: "object", required: ["id", "platforms"], properties: { id: { type: "string" }, platforms: { type: "array", items: { type: "string", enum: PLATFORMS } }, tenant: TENANT_PROP } },
-    async handler({ id, platforms, tenant }) {
+    description: "Publish an approved video as organic posts on platforms the workspace has connected (uiiq_social_accounts). Goes public. Without confirm: true this is a DRY RUN: it returns the video and the platforms, and publishes nothing. Only confirm once the person responsible has seen this video and said to publish it. Returns which were queued.",
+    inputSchema: { type: "object", required: ["id", "platforms"], properties: { id: { type: "string" }, platforms: { type: "array", items: { type: "string", enum: PLATFORMS } }, confirm: { type: "boolean", description: "true to really publish; anything else is a dry run" }, tenant: TENANT_PROP } },
+    async handler({ id, platforms, confirm, tenant }) {
+      if (confirm !== true) return videoDryRun(tenant, id, platforms, "published as organic posts on");
       const res = await post(tenant, `/ads/video/${encodeURIComponent(id)}/publish`, { platforms });
       if (!res.ok) throw await fail(res);
       return res.json();
@@ -354,9 +373,10 @@ export const adsTools = [
   },
   {
     name: "uiiq_ads_video_publish_paid",
-    description: "Submit a finished video to the paid campaign managers for the platforms given. Today this marks it queued for the campaign workflow; the direct ad-platform upload lands when IQEX stg is promoted.",
-    inputSchema: { type: "object", required: ["id", "platforms"], properties: { id: { type: "string" }, platforms: { type: "array", items: { type: "string" } }, tenant: TENANT_PROP } },
-    async handler({ id, platforms, tenant }) {
+    description: "Submit a finished video to the paid campaign managers for the platforms given. Today this marks it queued for the campaign workflow; the direct ad-platform upload lands when IQEX stg is promoted. Without confirm: true this is a DRY RUN and nothing is submitted; only confirm once the person responsible has seen the video.",
+    inputSchema: { type: "object", required: ["id", "platforms"], properties: { id: { type: "string" }, platforms: { type: "array", items: { type: "string" } }, confirm: { type: "boolean", description: "true to really submit; anything else is a dry run" }, tenant: TENANT_PROP } },
+    async handler({ id, platforms, confirm, tenant }) {
+      if (confirm !== true) return videoDryRun(tenant, id, platforms, "submitted to the paid campaign managers for");
       const res = await post(tenant, `/ads/video/${encodeURIComponent(id)}/publish-paid`, { platforms });
       if (!res.ok) throw await fail(res);
       return res.json();

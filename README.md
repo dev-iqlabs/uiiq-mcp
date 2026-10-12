@@ -397,8 +397,8 @@ Not exposed on purpose: the platform-to-platform callbacks under `/api/platform/
 | `uiiq_social_template_render` | Render an IQEX Design Studio social template with the tenant's field values (IQEX charges the org pool), then create a DRAFT SocialPost carrying the rendered PNG so it can be scheduled/published through the channels. |
 | `uiiq_social_post_create` | Creates a DRAFT only. It is never published or scheduled by this tool; a person reviews and publishes it in UiiQ. Optional `platformContent` gives a platform its own text. |
 | `uiiq_social_post_get` | One social post with its targets (account, platform, status, permalink, error). |
-| `uiiq_social_post_update` | Partial update of a DRAFT, QUEUED or SCHEDULED post: content, hashtags, scheduledAt (ISO, null to unschedule), status. |
-| `uiiq_social_post_save` | The full composer save of a DRAFT, QUEUED or SCHEDULED post: content (required), mediaUrls, hashtags, targetAccountIds (at least one connected account; Instagram needs a media URL), status DRAFT \| QUEUED \| SCHEDULED (+ scheduledAt). |
+| `uiiq_social_post_update` | Partial edit of a draft/queued/scheduled post. Setting status SCHEDULED or a scheduledAt needs `confirm: true` (else a dry run). |
+| `uiiq_social_post_save` | Full composer save (content, accounts, media, hashtags, per-platform text). Setting SCHEDULED or a scheduledAt needs `confirm: true` (else a dry run). |
 | `uiiq_social_post_delete` | DELETE a social post and its targets. |
 | `uiiq_social_post_duplicate` | Copy a post (content, media, hashtags, same target accounts) as a new DRAFT. |
 | `uiiq_social_post_publish` | PUBLISH a post now (irreversible). A dry run unless `confirm: true`: shows the post and where it would go. |
@@ -1025,9 +1025,9 @@ Every product's target against its actual, by week, month or fiscal year, colour
 | `uiiq_ads_video_thumbnails_generate` | Start generating thumbnail variants for a video from its brief. |
 | `uiiq_ads_video_thumbnail_status` | Poll one thumbnail generation: { status, urls }. |
 | `uiiq_ads_video_thumbnails_set` | Save the chosen thumbnail variants on a video (the array from generate/status, edited). |
-| `uiiq_ads_video_approve` | Approve a video (queues organic posts on the given platforms, or the brief's) or reject it with a note. |
-| `uiiq_ads_video_publish` | Publish an approved video as organic posts on platforms the workspace has connected (uiiq_social_accounts). |
-| `uiiq_ads_video_publish_paid` | Submit a finished video to the paid campaign managers for the platforms given. |
+| `uiiq_ads_video_approve` | Approve (schedules posts dated now: needs `confirm: true`, else a dry run) or reject a video. |
+| `uiiq_ads_video_publish` | Publish an approved video as organic posts. A dry run unless `confirm: true`. |
+| `uiiq_ads_video_publish_paid` | Submit a video to the paid campaign managers. A dry run unless `confirm: true`. |
 | `uiiq_ads_google_campaign_control` | Pause or enable a Google Ads campaign, or set its daily budget (budgetMicros = pounds × 1,000,000). |
 | `uiiq_ads_pinterest_alert_dismiss` | Dismiss a Pinterest trend alert (from the overview). |
 | `uiiq_ads_review_draft_reply` | Draft a reply to a Google review (by the review's id from uiiq_ads_local) in the workspace's voice. |
