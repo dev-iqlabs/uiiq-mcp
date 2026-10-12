@@ -16,6 +16,16 @@ async function fail(res) {
 }
 const send = (tenant, path, method, body) => api(tenant)(path, body === undefined ? { method } : { method, body: JSON.stringify(body) });
 const POST_STATUS = ["DRAFT", "QUEUED", "SCHEDULED"];
+// Per-platform text (UiiQ-platform #890): replaces the main content for that
+// platform's targets, e.g. Instagram "Tap the link in our bio" while Facebook
+// carries the URL. null (or "") clears a platform; a platform left out keeps
+// its text. UiiQ shows each platform's exact caption before anything goes out.
+const PLATFORM_CONTENT_PROP = {
+  type: ["object", "null"],
+  description: "Per-platform text, keyed FACEBOOK | INSTAGRAM | TWITTER | LINKEDIN | TIKTOK; replaces the main content for that platform. null/\"\" clears one platform; null for the whole field clears all. Needs UiiQ-platform #890.",
+  properties: Object.fromEntries(["FACEBOOK", "INSTAGRAM", "TWITTER", "LINKEDIN", "TIKTOK"].map((p) => [p, { type: ["string", "null"] }])),
+  additionalProperties: false,
+};
 
 
 export const socialTools = [
@@ -76,6 +86,24 @@ export const socialTools = [
 
   // ── Posts (one) ──
   {
+    name: "uiiq_social_post_create",
+    description: "Creates a DRAFT only. It is never published or scheduled by this tool; a person reviews and publishes it in UiiQ. Takes content and targetAccountIds (at least one, ids from uiiq_social_accounts), plus optional mediaUrls (public URLs; Instagram needs at least one), hashtags (stored without '#'; published as #tags) and platformContent (different text per platform). Returns the draft with its targets.",
+    inputSchema: { type: "object", required: ["content", "targetAccountIds"], properties: { content: { type: "string" }, targetAccountIds: { type: "array", items: { type: "string" } }, mediaUrls: { type: "array", items: { type: "string" } }, hashtags: { type: "array", items: { type: "string" } }, platformContent: PLATFORM_CONTENT_PROP, tenant: TENANT_PROP } },
+    // Only these fields reach the API. The route makes a post with scheduledAt
+    // SCHEDULED, which the cron publishes on an auto-publish workspace, so
+    // forwarding "...body" would let a stray key schedule a post (Lucas,
+    // uiiq-mcp #80 H1).
+    async handler({ tenant, content, targetAccountIds, mediaUrls, hashtags, platformContent }) {
+      const body = { content, targetAccountIds };
+      if (mediaUrls !== undefined) body.mediaUrls = mediaUrls;
+      if (hashtags !== undefined) body.hashtags = hashtags;
+      if (platformContent !== undefined) body.platformContent = platformContent;
+      const res = await send(tenant, "/socials/posts", "POST", body);
+      if (!res.ok) throw await fail(res);
+      return res.json();
+    },
+  },
+  {
     name: "uiiq_social_post_get",
     description: "One social post with its targets (account, platform, status, permalink, error).",
     inputSchema: { type: "object", required: ["id"], properties: { id: { type: "string" }, tenant: TENANT_PROP } },
@@ -87,8 +115,8 @@ export const socialTools = [
   },
   {
     name: "uiiq_social_post_update",
-    description: "Partial update of a DRAFT, QUEUED or SCHEDULED post: content, hashtags, scheduledAt (ISO, null to unschedule), status. Published posts are refused (409). Targets are not changed here — use uiiq_social_post_save for that.",
-    inputSchema: { type: "object", required: ["id"], properties: { id: { type: "string" }, content: { type: "string" }, hashtags: { type: "array", items: { type: "string" } }, scheduledAt: { type: ["string", "null"] }, status: { type: "string", enum: POST_STATUS }, tenant: TENANT_PROP } },
+    description: "Partial update of a DRAFT, QUEUED or SCHEDULED post: content, hashtags, platformContent (per-platform text, PENDING targets only), scheduledAt (ISO, null to unschedule), status. Published posts are refused (409). Which accounts it targets is not changed here — use uiiq_social_post_save for that.",
+    inputSchema: { type: "object", required: ["id"], properties: { id: { type: "string" }, content: { type: "string" }, hashtags: { type: "array", items: { type: "string" } }, platformContent: PLATFORM_CONTENT_PROP, scheduledAt: { type: ["string", "null"] }, status: { type: "string", enum: POST_STATUS }, tenant: TENANT_PROP } },
     async handler({ id, tenant, ...body }) {
       const res = await send(tenant, `/socials/posts/${encodeURIComponent(id)}`, "PATCH", body);
       if (!res.ok) throw await fail(res);
@@ -97,8 +125,8 @@ export const socialTools = [
   },
   {
     name: "uiiq_social_post_save",
-    description: "The full composer save of a DRAFT, QUEUED or SCHEDULED post: content (required), mediaUrls, hashtags, targetAccountIds (at least one connected account; Instagram needs a media URL), status DRAFT | QUEUED | SCHEDULED (+ scheduledAt). PENDING targets are replaced to match the selection; published/failed ones are history and kept.",
-    inputSchema: { type: "object", required: ["id", "content", "targetAccountIds"], properties: { id: { type: "string" }, content: { type: "string" }, mediaUrls: { type: "array", items: { type: "string" } }, hashtags: { type: "array", items: { type: "string" } }, targetAccountIds: { type: "array", items: { type: "string" } }, status: { type: "string", enum: POST_STATUS }, scheduledAt: { type: "string", description: "ISO datetime, with status SCHEDULED" }, tenant: TENANT_PROP } },
+    description: "The full composer save of a DRAFT, QUEUED or SCHEDULED post: content (required), mediaUrls, hashtags, targetAccountIds (at least one connected account; Instagram needs a media URL), status DRAFT | QUEUED | SCHEDULED (+ scheduledAt), platformContent (per-platform text). PENDING targets are replaced to match the selection; published/failed ones are history and kept.",
+    inputSchema: { type: "object", required: ["id", "content", "targetAccountIds"], properties: { id: { type: "string" }, content: { type: "string" }, mediaUrls: { type: "array", items: { type: "string" } }, hashtags: { type: "array", items: { type: "string" } }, platformContent: PLATFORM_CONTENT_PROP, targetAccountIds: { type: "array", items: { type: "string" } }, status: { type: "string", enum: POST_STATUS }, scheduledAt: { type: "string", description: "ISO datetime, with status SCHEDULED" }, tenant: TENANT_PROP } },
     async handler({ id, tenant, ...body }) {
       const res = await send(tenant, `/socials/posts/${encodeURIComponent(id)}`, "PUT", body);
       if (!res.ok) throw await fail(res);
@@ -127,9 +155,22 @@ export const socialTools = [
   },
   {
     name: "uiiq_social_post_publish",
-    description: "PUBLISH a DRAFT, QUEUED or SCHEDULED post to every PENDING target now — Facebook/Instagram through IQEX, LinkedIn direct. Goes public and cannot be recalled. Returns { post, published, failed }; a target that fails is marked FAILED with the reason and the post ends PUBLISHED, PARTIALLY_PUBLISHED or FAILED.",
-    inputSchema: { type: "object", required: ["id"], properties: { id: { type: "string" }, tenant: TENANT_PROP } },
-    async handler({ id, tenant }) {
+    description: "PUBLISH a DRAFT, QUEUED or SCHEDULED post to every PENDING target now — Facebook/Instagram through IQEX, LinkedIn direct. Goes public and cannot be recalled. Without confirm: true this is a DRY RUN: it returns the post and the accounts it would go to, and publishes nothing. Only pass confirm: true when the person responsible has seen this exact post and said to publish it. Returns { post, published, failed }; a target that fails is marked FAILED with the reason and the post ends PUBLISHED, PARTIALLY_PUBLISHED or FAILED.",
+    inputSchema: { type: "object", required: ["id"], properties: { id: { type: "string" }, confirm: { type: "boolean", description: "true to really publish; anything else is a dry run" }, tenant: TENANT_PROP } },
+    async handler({ id, tenant, confirm }) {
+      if (confirm !== true) {
+        const preview = await api(tenant)(`/socials/posts/${encodeURIComponent(id)}`);
+        if (!preview.ok) throw await fail(preview);
+        const post = await preview.json();
+        return {
+          dryRun: true,
+          message: "Nothing was published. Pass confirm: true to publish, only once the person responsible has seen this post.",
+          post: { id: post.id, status: post.status, content: post.content, mediaUrls: post.mediaUrls, hashtags: post.hashtags },
+          wouldPublishTo: (post.targets ?? [])
+            .filter((t) => t.status === "PENDING")
+            .map((t) => ({ platform: t.platform, account: t.socialAccount?.accountName ?? t.socialAccountId })),
+        };
+      }
       const res = await send(tenant, `/socials/posts/${encodeURIComponent(id)}/publish`, "POST");
       if (!res.ok) throw await fail(res);
       return res.json();
@@ -139,7 +180,7 @@ export const socialTools = [
   // ── Accounts ──
   {
     name: "uiiq_social_account_remove",
-    description: "REMOVE a connected social account from the workspace (its stored tokens go with it; posts targeting it lose that target). Reconnecting means going through Connect again.",
+    description: "REMOVE a connected social account from the workspace. Facebook/Instagram are disconnected in IQEX, which holds the connection (a Page takes its Instagram account with it; nothing is revoked at Meta), and stay in UiiQ as inactive so post history is kept. LinkedIn/TikTok rows and their tokens are deleted. Reconnecting means going through Connect again. Before UiiQ-platform #885 is live, Facebook/Instagram only disappear until the next accounts read.",
     inputSchema: { type: "object", required: ["id"], properties: { id: { type: "string" }, tenant: TENANT_PROP } },
     async handler({ id, tenant }) {
       const res = await send(tenant, `/socials/accounts/${encodeURIComponent(id)}`, "DELETE");
@@ -226,9 +267,21 @@ export const socialTools = [
   },
   {
     name: "uiiq_social_settings_update",
-    description: "Set autoPublish and/or minGapMinutes (0-1440). Turning autoPublish on lets the 5-minute cron PUBLISH every scheduled post that is already due — the reply's dueNow says how many go out at once.",
-    inputSchema: { type: "object", properties: { autoPublish: { type: "boolean" }, minGapMinutes: { type: "integer", minimum: 0, maximum: 1440 }, tenant: TENANT_PROP } },
-    async handler({ tenant, ...body } = {}) {
+    description: "Set autoPublish and/or minGapMinutes (0-1440). Turning autoPublish on lets the 5-minute cron PUBLISH every scheduled post that is already due — the reply's dueNow says how many go out at once. Turning it ON needs confirm: true; without it nothing changes and the reply says what would happen. Only confirm when the workspace owner has asked for automatic publishing.",
+    inputSchema: { type: "object", properties: { autoPublish: { type: "boolean" }, minGapMinutes: { type: "integer", minimum: 0, maximum: 1440 }, confirm: { type: "boolean", description: "Required (true) to turn autoPublish on" }, tenant: TENANT_PROP } },
+    async handler({ tenant, confirm, autoPublish, minGapMinutes } = {}) {
+      if (autoPublish === true && confirm !== true) {
+        const cur = await api(tenant)("/socials/settings");
+        if (!cur.ok) throw await fail(cur);
+        return {
+          dryRun: true,
+          message: "Auto-publish was NOT turned on. With it on, the cron publishes every SCHEDULED post as it falls due, with nobody pressing Publish. Pass confirm: true only if the workspace owner asked for that.",
+          current: await cur.json(),
+        };
+      }
+      const body = {};
+      if (autoPublish !== undefined) body.autoPublish = autoPublish;
+      if (minGapMinutes !== undefined) body.minGapMinutes = minGapMinutes;
       const res = await send(tenant, "/socials/settings", "PATCH", body);
       if (!res.ok) throw await fail(res);
       return res.json();
