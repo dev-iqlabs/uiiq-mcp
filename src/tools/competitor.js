@@ -29,6 +29,11 @@ const PROFILE_PROPS = {
     description:
       "Their Facebook Page ID (a number), or the Ad Library URL copied after clicking the advertiser (it carries view_all_page_id). A facebook.com/<handle> URL does not contain the ID and is refused. Check the 'Advertiser and payer' on a live ad first — same-name companies are common.",
   },
+  metaPageName: {
+    type: "string",
+    description:
+      "The Facebook Page's name, shown next to the ID. Send it with metaPageId when saving a page from uiiq_competitor_meta_page_find. Cleared when the ID changes or is removed.",
+  },
   adLibraryQuery: {
     type: "string",
     description: "Keyword for the Ad Library link when there is no Page ID. Defaults to the name.",
@@ -91,7 +96,7 @@ export const competitorTools = [
       properties: {
         id: { type: "string", description: "Competitor id from uiiq_competitor_list." },
         ...PROFILE_PROPS,
-        clearMetaPageId: { type: "boolean", description: "True to remove the Facebook Page ID." },
+        clearMetaPageId: { type: "boolean", description: "True to remove the Facebook Page ID (and its name)." },
         tenant: TENANT_PROP,
       },
     },
@@ -102,6 +107,26 @@ export const competitorTools = [
         method: "PATCH",
         body: JSON.stringify(body),
       });
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    },
+  },
+  {
+    name: "uiiq_competitor_meta_page_find",
+    description:
+      "Find a competitor's Facebook Page: a keyword search of Meta's Ad Library through IQEX (query, else the competitor's Ad Library search word, else its name, in its market) answering the distinct advertisers behind the ads as { query, pages: [{ id, name, ads }], partial }, most ads first. Pick the right one and save it with uiiq_competitor_update { id, metaPageId, metaPageName }; research then reads that Page's ads only. OWNER or ADMIN only. Refused for a business on the research block list, and a blocked page is never listed. Who paid for the ads is never included. Costs no credits; can take up to 30s.",
+    inputSchema: {
+      type: "object",
+      required: ["id"],
+      properties: {
+        id: { type: "string", description: "Competitor id from uiiq_competitor_list." },
+        query: { type: "string", description: "Search word, up to 100 characters. Defaults to the competitor's Ad Library search word or name." },
+        tenant: TENANT_PROP,
+      },
+    },
+    async handler({ id, query, tenant }) {
+      const qs = query ? `?q=${encodeURIComponent(query)}` : "";
+      const res = await api(tenant)(`/ads/competitors/${encodeURIComponent(id)}/meta-pages${qs}`);
       if (!res.ok) throw new Error(await res.text());
       return res.json();
     },
