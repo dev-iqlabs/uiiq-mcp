@@ -40,7 +40,7 @@ UIIQ is one subscription whose modules are grouped as **Sell**, **Grow** and **R
 | Social and press | `uiiq_social_*`, `uiiq_press_release_*`, `uiiq_journalist_contact_*` | Schedule posts from templates, draft, redraft, approve and distribute press releases |
 | Briefs | `uiiq_grow_brief_morning*`, `uiiq_grow_campaign_brief_generate` | Read or generate the morning brief, turn one campaign brief into channel copy |
 | Ads & Search | `uiiq_ads_*` | The overview, keyword research and rank tracking, the keyword gap against a competitor, local search (map pack, local keywords, nearby competitors), YouTube research, advert videos (generate on an engine, approve, publish, SEO copy, thumbnails), Google campaign controls, Pinterest alerts, Google review reply drafts. Needs `ads_search`; research spends credits |
-| Competitors | `uiiq_competitor_*`, `uiiq_admin_competitor_research_block` | Track competitors as companies with several domains, a priority, market, Facebook Page ID, socials and notes; research them on IQEX, watch rules and their hits; honour a research objection across every tenant |
+| Competitors | `uiiq_competitor_*`, `uiiq_admin_competitor_research_block` | Track competitors as companies with several domains, a priority, market, Facebook Page (found from an Ad Library search, or typed), socials and notes; research them on IQEX, watch rules and their hits; honour a research objection across every tenant |
 | SEO and Google | `uiiq_seo_*`, `uiiq_google_*` | Run audits, apply fixes, check PageSpeed, read Ads, Analytics and Search Console |
 | Pricing | `uiiq_price_list`, `uiiq_price_item_*`, `uiiq_pricing_leads_list` | Page through price items by type, add / edit / delete them, see who used the public pricing calculator |
 | Website connect | `uiiq_iqlink_claim`, `uiiq_tenant_api_key_get`, `uiiq_tenant_api_key` | Pair a connected site, look up its Connect key, or rotate it |
@@ -483,6 +483,7 @@ Dashboard → Ads → Competitors. Needs the `ads_search` feature and the ads ti
 | `uiiq_competitor_list` | The tenant's tracked competitors, main ones first — each with its domains, profile and `adLibrary.activeUrl` / `allUrl` links to their live (or all) ads in Meta's Ad Library. |
 | `uiiq_competitor_add` | Start tracking a competitor. |
 | `uiiq_competitor_update` | Change a competitor's profile. |
+| `uiiq_competitor_meta_page_find` | Find a competitor's Facebook Page: a keyword search of Meta's Ad Library through IQEX (query, else the competitor's Ad Library search word, else its name, in its market) answering the distinct advertisers behind the ads as { query, pages: [{ id, name, ads }], partial }, most ads first. |
 | `uiiq_competitor_remove` | Stop tracking a competitor and all of its domains. |
 | `uiiq_competitor_research` | A competitor's research: run history (each source as 'N found' or 'could not look' with the reason — an unreadable source is null, never zero), what changed since the previous run, the ads from the latest run that could read them, and the repeat cadence. |
 | `uiiq_competitor_research_run` | Research a competitor now on IQEX (ads, Google results, keywords). |
@@ -1664,4 +1665,4 @@ Every product's target against its actual, by week, month or fiscal year, colour
 | `uiiq_workflow_order_assign` | Assign a workflow order to a user in the tenant (assignedUserId null unassigns). |
 | `uiiq_workflow_order_request_approval` | Ask the customer to approve a stage of their order: creates an approval link, moves the order to AWAITING_APPROVAL and EMAILS the customer. |
 
-1150 tools.
+1158 tools.
