@@ -370,11 +370,11 @@ Needs the workspace's `sister_organisations` feature (404 when off). Changes are
 | --- | --- |
 | `uiiq_billing_org_list` | The workspace's own (MAIN) and sister organisations, each with its payment account's status, VAT and charity status and whether it is on; `canManage` and the monthly add-on price (0 = no charge). OWNER or ADMIN. |
 | `uiiq_billing_org_create` | Owner only: add a sister organisation (legalName required; displayName, statementDescriptor, vatNumber, isCharity, charityNumber). Dry run without `confirm: true`. |
-| `uiiq_billing_org_update` | Owner only: change an organisation's names or statement descriptor (kept in step with its payment account); a sister's VAT, charity status, or `active` (switch off/on). The workspace's own legal name changes are logged. |
+| `uiiq_billing_org_update` | Owner only: change an organisation's names or statement descriptor (kept in step with its payment account); a sister's VAT, charity status, or `active` (switch off/on; one switched off by UiiQ stays off). The workspace's own legal name changes are logged. |
 | `uiiq_billing_org_delete` | Owner only: remove a sister with no payment account (409 if it has one: switch it off instead). Dry run without `confirm: true`. |
 | `uiiq_billing_org_connect_start` | Owner only: create a sister's own Stripe connected account (keyed on the organisation) and return its onboardingUrl. Refuses a Stripe account attached to another organisation. Dry run without `confirm: true`. |
 | `uiiq_admin_billing_org_list` | Platform admin: a workspace's organisations with their accounts' fee terms, and whether the feature is on. |
-| `uiiq_admin_billing_org_update` | Platform admin: turn a sister off or on, verify the owner's charity / not-for-profit claim (only a verified claim takes the reduced fee), or set the fee terms on its payment account (applicationFeePercent 0–50, passFeesToCustomer). Never while impersonating; audited. |
+| `uiiq_admin_billing_org_update` | Platform admin: turn a sister off (with a reason the owner sees; the owner can't switch it back on) or on, verify the owner's charity / not-for-profit claim (only a verified claim takes the reduced fee; 409 if the claim changed since it was read), or set the fee terms on its payment account (applicationFeePercent 0–50, passFeesToCustomer). Verifying and fee changes are a dry run without `confirm: true`. Never while impersonating; audited. |
 
 ### Campaigns — `src/tools/campaign.js`
 
@@ -1395,6 +1395,7 @@ Every product's target against its actual, by week, month or fiscal year, colour
 | `uiiq_classes_register_payment` | TAKE A PAYMENT at the register against an enrolment (drop-in fee, plan excess or owed balance): raises a CASH/CARD till sale so it lands in daily takings, records it on the ledger, and with sessionDate stamps that day's attendance as paid (creating a PRESENT mark if none). |
 | `uiiq_classes_register_star` | Toggle a star for a student in a class on a date (calling again removes it; the reply says starred true/false). |
 | `uiiq_classes_register_costume` | Tick a student's costume for a show as handedOut and/or paid (send at least one). |
+| `uiiq_classes_billing_set` | Owner or admin only: Run for the workspace or a sister organisation (funded; refused while families still pay) and this routine's costume price and pay-by date. Dry run without `confirm: true`. |
 | `uiiq_classes_attendance_report` | Attendance rate by class and by student over a date range (inclusive; default the last 8 weeks), flagging students under the tenant's low-attendance threshold. |
 | `uiiq_classes_absences_list` | Every student's absences (student absences on): requests waiting, who is away, history; filters status/from/to/order, paged by cursor. Owners/admins see all plus the waiting count; others only excused absences, with detail on their own classes. Notes only with includeNotes=true. |
 | `uiiq_classes_register_settings` | The register-hook settings: lapseWeeks, arrearsGraceDays, lowAttendancePct, lateGraceMins; with student absences on, absenceApprovalRequired (parents' time off waits for approval; default false). |
@@ -1426,6 +1427,7 @@ Every product's target against its actual, by week, month or fiscal year, colour
 | `uiiq_event_create` | Create an event (slug derived from the name, unique per workspace). |
 | `uiiq_event_get` | One event with its linked experience (id, name, slug, status). |
 | `uiiq_event_update` | Edit an event: name, tagline, description, imageUrl, venueNote, startsAt, endsAt (null clears), status DRAFT\|PUBLISHED\|ARCHIVED, experienceId (null unlinks). |
+| `uiiq_event_billing_set` | Owner or admin only: what the event is billed through (the workspace or a sister organisation; its ticket types and show costumes inherit it) and the show's default costume price and pay-by date. Dry run without `confirm: true`. |
 | `uiiq_event_delete` | DELETE an event and its unapproved generated drafts (draft social posts, draft campaign, draft press release); approved pieces stay in their own systems and the event's display board token is revoked so screens go dark. |
 | `uiiq_event_generate` | Generate the event's marketing in one go: social posts + email campaign drafted by Anthropic, a press release via the IQEX Chris pipeline, and a display board slide. |
 | `uiiq_event_content` | The event's generated marketing, assembled live: social posts (with platforms + approved), the email campaign, the press release, the display board (with its /board URL) and how many social accounts are connected. |

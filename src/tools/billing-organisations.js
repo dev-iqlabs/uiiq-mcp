@@ -74,7 +74,7 @@ export const billingOrganisationsTools = [
   },
   {
     name: "uiiq_billing_org_update",
-    description: "Owner only: change a billing organisation. Any organisation: legalName, displayName, statementDescriptor (written to the organisation and its payment account together). A SISTER also: vatNumber, isCharity, charityNumber, and active (false switches it off: nothing can be billed through it). The workspace's own organisation takes VAT and charity status from the workspace settings (400 here), and a change to its legal name is logged. Refused (403) for anyone but the workspace owner, read live, and while impersonating; 404 for another workspace's organisation or with the feature off.",
+    description: "Owner only: change a billing organisation. Any organisation: legalName, displayName, statementDescriptor (written to the organisation and its payment account together). A SISTER also: vatNumber, isCharity, charityNumber, and active (false switches it off: nothing can be billed through it). A sister switched off by UiiQ (adminDisabled in uiiq_billing_org_list) can't be switched back on here (409, with UiiQ's reason). Changing the legal name, the charity number or unticking charity clears a platform admin's charity verification. The workspace's own organisation takes VAT and charity status from the workspace settings (400 here), and a change to its legal name is logged. Refused (403) for anyone but the workspace owner, read live, and while impersonating; 404 for another workspace's organisation or with the feature off.",
     inputSchema: {
       type: "object",
       required: ["id"],
@@ -118,15 +118,26 @@ export const billingOrganisationsTools = [
   },
   {
     name: "uiiq_admin_billing_org_update",
-    description: "Platform admin: turn a workspace's SISTER organisation off or on (active); VERIFY the owner's charity / not-for-profit claim (charityVerified: true records who and when, and only then the reduced Charity / NFP sister fee applies; 409 if the owner hasn't claimed it; false clears it); or set the fee terms on its payment account (applicationFeePercent 0–50, passFeesToCustomer), as uiiq_admin_tenant_stripe_set does for the workspace's own account. Turning a sister on needs the workspace's sister_organisations feature; the feature can't be switched off while any sister is on. SUPER_ADMIN, read live, never while impersonating; audited.",
+    description: "Platform admin: turn a workspace's SISTER organisation off or on (active; off is UiiQ's switch-off, with an optional reason the owner sees, and the owner can't switch it back on: only active: true here clears it); VERIFY the owner's charity / not-for-profit claim (charityVerified: true records who and when, and only then the reduced Charity / NFP sister fee applies; 409 if the owner hasn't claimed it, or changed the claim since it was read; false clears it); or set the fee terms on its payment account (applicationFeePercent 0–50, passFeesToCustomer), as uiiq_admin_tenant_stripe_set does for the workspace's own account. charityVerified: true, applicationFeePercent and passFeesToCustomer change what the sister is charged: without confirm: true a call with any of them is ALWAYS a dry run that changes nothing. Switching off, switching on and un-verifying need no confirm. Turning a sister on needs the workspace's sister_organisations feature; the feature can't be switched off while any sister is on. SUPER_ADMIN, read live, never while impersonating; audited.",
     inputSchema: {
       type: "object",
       required: ["tenantId", "orgId"],
-      properties: { tenantId: TENANT_ID, orgId: { type: "string" }, active: { type: "boolean" }, charityVerified: { type: "boolean" }, applicationFeePercent: { type: "number" }, passFeesToCustomer: { type: "boolean" } },
+      properties: {
+        tenantId: TENANT_ID,
+        orgId: { type: "string" },
+        active: { type: "boolean" },
+        reason: { type: "string", description: "With active: false, why UiiQ switched it off (shown to the owner; at most 300 characters)" },
+        charityVerified: { type: "boolean" },
+        applicationFeePercent: { type: "number" },
+        passFeesToCustomer: { type: "boolean" },
+        confirm: CONFIRM_PROP,
+      },
     },
-    async handler({ tenantId, orgId, ...body }) {
+    async handler({ tenantId, orgId, confirm, ...body }) {
       const data = defined(body);
       if (!Object.keys(data).length) throw new Error("Send active, charityVerified, applicationFeePercent or passFeesToCustomer");
+      const changesCharges = data.charityVerified === true || "applicationFeePercent" in data || "passFeesToCustomer" in data;
+      if (changesCharges && confirm !== true) return dryRun("change_sister_organisation_fee_terms", { tenantId, orgId, change: data });
       return send(null, `/admin/tenants/${enc(tenantId)}/billing-organisations/${enc(orgId)}`, "PATCH", data);
     },
   },

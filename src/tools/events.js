@@ -73,6 +73,29 @@ export const eventsTools = [
     },
   },
   {
+    name: "uiiq_event_billing_set",
+    description: "Owner or admin only: an event's billing (UiiQ-platform sister organisations 3/7). billingOrganisationId: what the event is BILLED THROUGH, null = the workspace's own or one of its SISTER organisations; set once per event, every ticket type (through its experience) and show costume inherits it; 409 when another event sharing its experience is billed differently. costumePricePence / costumePayBy (YYYY-MM-DD): the show's default costume price and pay-by date, which a class can override. Without confirm: true it is ALWAYS a dry run that changes nothing. Acts in your own signed-in workspace (no tenant: changes are refused while impersonating).",
+    inputSchema: {
+      type: "object",
+      required: ["id"],
+      properties: {
+        id: { type: "string" },
+        billingOrganisationId: { type: ["string", "null"] },
+        costumePricePence: { type: ["integer", "null"] },
+        costumePayBy: { type: ["string", "null"] },
+        confirm: { type: "boolean", description: "true = do it; omit for the dry run" },
+      },
+    },
+    async handler({ id, confirm, ...fields }) {
+      const body = Object.fromEntries(Object.entries(fields).filter(([, v]) => v !== undefined));
+      if (!Object.keys(body).length) throw new Error("Send billingOrganisationId, costumePricePence or costumePayBy");
+      if (confirm !== true) return { dryRun: true, changed: false, wouldDo: "set_event_billing", id, ...body, note: "Nothing was changed. Check this with the workspace owner, then call again with confirm: true." };
+      const res = await api(undefined)(`/events/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify(body) });
+      if (!res.ok) throw await fail(res);
+      return res.json();
+    },
+  },
+  {
     name: "uiiq_event_delete",
     description: "DELETE an event and its unapproved generated drafts (draft social posts, draft campaign, draft press release); approved pieces stay in their own systems and the event's display board token is revoked so screens go dark.",
     inputSchema: { type: "object", required: ["id"], properties: { id: { type: "string" }, tenant: TENANT_PROP } },
