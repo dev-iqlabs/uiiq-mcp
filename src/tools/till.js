@@ -478,7 +478,7 @@ export const tillTools = [
   },
   {
     name: "uiiq_till_daily_summary",
-    description: "The daily sales summary for one day (default today): headline revenue, refunds, discounts, tax, transaction count, expected cash drawer; sales by item kind; cash movement by payment method. csvPath writes the CSV export to that local file instead.",
+    description: "The daily sales summary for one day (default today): headline revenue, refunds, discounts, tax, transaction count, expected cash drawer; sales by item kind; cash movement by payment method. owedTo: desk takings that are a SISTER organisation's (a class payment taken at the register for a subsidised class), one line per sister ({ billingOrganisationId, name, owedPence, collectedPence, refundedPence, cashPence, cardPence, salesCount }), apart from the workspace's own so the office can pass them on; empty when nothing is owed. headline.ownNetRevenuePence = net revenue without them. csvPath writes the CSV export to that local file instead (with an Owed to section when anything is owed).",
     inputSchema: {
       type: "object",
       properties: {
@@ -505,7 +505,7 @@ export const tillTools = [
   },
   {
     name: "uiiq_till_day_close_list",
-    description: "The last 30 till cash-ups (day closes): period, opening float, declared vs expected cash, variance, sales total, who closed.",
+    description: "The last 30 till cash-ups (day closes): period, opening float, declared vs expected cash, variance, sales total, who closed. Each carries its owedTo: desk takings that are a SISTER organisation's (a class payment taken at the register for a subsidised class), one line per sister ({ billingOrganisationId, name, owedPence, collectedPence, refundedPence, cashPence, cardPence, salesCount }), apart from the workspace's own so the office can pass them on; empty when nothing is owed.",
     inputSchema: { type: "object", properties: { tenant: TENANT_PROP } },
     async handler({ tenant } = {}) {
       const res = await api(tenant)("/till/day-close");
@@ -515,7 +515,7 @@ export const tillTools = [
   },
   {
     name: "uiiq_till_day_close",
-    description: "Cash up: records a day close for one device (deviceId) or the whole venue (omit it) — expected cash = opening float + CASH takings in the window, variance = declared − expected. The window defaults to everything since the last close for that scope. Needs a MANAGER's till PIN; writes a permanent record. (A paired device can also call this route for its own drawer.)",
+    description: "Cash up: records a day close for one device (deviceId) or the whole venue (omit it) — expected cash = opening float + CASH takings in the window, variance = declared − expected. The window defaults to everything since the last close for that scope. Answers with owedTo: desk takings that are a SISTER organisation's (a class payment taken at the register for a subsidised class), one line per sister ({ billingOrganisationId, name, owedPence, collectedPence, refundedPence, cashPence, cardPence, salesCount }), apart from the workspace's own so the office can pass them on; empty when nothing is owed. They stay in the totals and expected cash (the money is in this till); ownSalesPence = totalSalesPence without them. Needs a MANAGER's till PIN; writes a permanent record. (A paired device can also call this route for its own drawer.)",
     inputSchema: {
       type: "object",
       required: ["managerPin", "declaredCashPence"],
