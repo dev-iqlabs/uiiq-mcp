@@ -93,8 +93,8 @@ test("enrol passes the enrolment answer's warning through", async () => {
 });
 
 test("update sends confirmAtRisk, and a 409 asking first comes back as its question", async () => {
-  const ok = await call("uiiq_classes_update", { id: "cls_mt", ...CLASS, coverSlots: 2, confirmAtRisk: true }, [200, { ok: true, atRisk: 1 }]);
-  assert.equal(ok.requests[0].body.confirmAtRisk, true);
+  const ok = await call("uiiq_classes_update", { id: "cls_mt", ...CLASS, coverSlots: 2, confirmAtRisk: 1 }, [200, { ok: true, atRisk: 1 }]);
+  assert.equal(ok.requests[0].body.confirmAtRisk, 1);
   assert.equal(ok.result.atRisk, 1);
   await assert.rejects(
     call("uiiq_classes_update", { id: "cls_mt", ...CLASS, coverSlots: 2 }, [409, { needsConfirmation: true, atRisk: 1, error: "1 family on a plan will now be over their weekly limit for this class. Save anyway?" }]),
@@ -105,7 +105,10 @@ test("update sends confirmAtRisk, and a 409 asking first comes back as its quest
 test("the update description warns about raising coverSlots and says what is kept when omitted", () => {
   const d = tools.uiiq_classes_update.description;
   assert.ok(d.includes("Raising coverSlots can put existing 1-a-week members over their weekly limit; check atRisk."));
-  assert.match(d, /confirmAtRisk: true/);
+  assert.match(d, /Only resend confirmAtRisk after the user explicitly agrees/);
+  assert.match(d, /confirmAtRisk: <n>/);
+  assert.equal(tools.uiiq_classes_update.inputSchema.properties.confirmAtRisk.type, "integer");
+  assert.doesNotMatch(tools.uiiq_classes_enrolment_plan_load.description, /memberCode }/);
   assert.match(d, /dropInPricePence, termFeePence, coveredByPlanIds, coverSlots\) are kept as they are when omitted/);
   assert.match(tools.uiiq_classes_enrolment_plan_options.description, /'partial'/);
 });
