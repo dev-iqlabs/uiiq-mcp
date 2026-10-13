@@ -1234,7 +1234,8 @@ export const sellTools = [
       "A new price applies to NEW purchases only: anyone already subscribed keeps billing at their " +
       "Stripe price, and a fixed-term pass has no subscription at all. " +
       "benefits REPLACES the whole benefits object (card image, tagline, features…) — send the full object; until the locality PR this was write-once at creation. " +
-      "eligibilityLocalityId / eligibilityMode make a plan residents-only (see uiiq_sell_membership_plan_create).",
+      "eligibilityLocalityId / eligibilityMode make a plan residents-only (see uiiq_sell_membership_plan_create). " +
+      "billingOrganisationId (UiiQ-platform sister organisations 4/7): what the plan is BILLED THROUGH, null = the workspace's own or one of its SISTER organisations; the live owner or an admin in their own session only (refused while impersonating, so send no tenant); refused (409) while it has live subscriptions; a plan only covers classes billed through the same organisation. It changes where members' money goes, so a call sending it is a dry run without confirm: true.",
     inputSchema: {
       type: "object",
       required: ["planId"],
@@ -1252,12 +1253,17 @@ export const sellTools = [
         benefits:       { type: ["object", "null"], description: "Whole benefits JSON — replaces what is there" },
         eligibilityLocalityId: { type: ["string", "null"], description: "Locality id, or null to open the plan to everyone" },
         eligibilityMode: { type: "string", enum: ["block", "flag_for_review"] },
+        billingOrganisationId: { type: ["string", "null"], description: "Billed through: null = the workspace's own, or a sister's id (needs confirm: true)" },
+        confirm: { type: "boolean", description: "true = change what the plan is billed through; omit for the dry run" },
         tenant: TENANT_PROP,
       }
     },
-    async handler({ planId, tenant, ...fields }) {
+    async handler({ planId, tenant, confirm, ...fields }) {
       const body = Object.fromEntries(Object.entries(fields).filter(([, v]) => v !== undefined));
       if (Object.keys(body).length === 0) throw new Error("Send at least one field to change");
+      if ("billingOrganisationId" in body && confirm !== true) {
+        return { dryRun: true, changed: false, wouldDo: "set_membership_plan_billing", planId, ...body, note: "Nothing was changed. Check this with the workspace owner, then call again with confirm: true." };
+      }
       const res = await api(tenant)(`/admin/memberships/plans/${encodeURIComponent(planId)}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },

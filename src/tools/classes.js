@@ -94,13 +94,14 @@ export const classesTools = [
   },
   {
     name: "uiiq_classes_billing_set",
-    description: "Owner or admin only: a class's billing (UiiQ-platform sister organisations 3/7). runForBillingOrganisationId: null = the workspace's own class, or one of its SISTER organisations (funded: families don't pay, plans don't cover it; switching clears its term fee, drop-in price, instalments and plan cover). Switching to funded is REFUSED (409, with the paying families) while it has paid enrolments, instalments or plan cover. costumePricePence / costumePayBy (YYYY-MM-DD): this routine's costume price and pay-by date, overriding its show's. Without confirm: true it is ALWAYS a dry run that changes nothing. Acts in your own signed-in workspace (no tenant: changes are refused while impersonating).",
+    description: "Owner or admin only: a class's billing (UiiQ-platform sister organisations 3/7 and 4/7). runForBillingOrganisationId: null = the workspace's own class, or one of its SISTER organisations (funded: families don't pay, plans don't cover it; switching clears its term fee, drop-in price, instalments, plan cover and Billed through). billingOrganisationId: what a PAID class is BILLED THROUGH (whose Stripe takes its term fees, instalments and balances), null = the workspace's own or a sister; not on a funded class (400); a plan only covers classes billed through the same organisation. Either change is REFUSED (409, with the paying families) while families pay for it. costumePricePence / costumePayBy (YYYY-MM-DD): this routine's costume price and pay-by date, overriding its show's. Without confirm: true it is ALWAYS a dry run that changes nothing. Acts in your own signed-in workspace (no tenant: changes are refused while impersonating).",
     inputSchema: {
       type: "object",
       required: ["id"],
       properties: {
         id: { type: "string" },
         runForBillingOrganisationId: { type: ["string", "null"] },
+        billingOrganisationId: { type: ["string", "null"], description: "Billed through, for a paid class: null = the workspace's own, or a sister's id" },
         costumePricePence: { type: ["integer", "null"] },
         costumePayBy: { type: ["string", "null"] },
         confirm: { type: "boolean", description: "true = do it; omit for the dry run" },
@@ -108,7 +109,7 @@ export const classesTools = [
     },
     async handler({ id, confirm, ...fields }) {
       const body = Object.fromEntries(Object.entries(fields).filter(([, v]) => v !== undefined));
-      if (!Object.keys(body).length) throw new Error("Send runForBillingOrganisationId, costumePricePence or costumePayBy");
+      if (!Object.keys(body).length) throw new Error("Send runForBillingOrganisationId, billingOrganisationId, costumePricePence or costumePayBy");
       if (confirm !== true) return { dryRun: true, changed: false, wouldDo: "set_class_billing", id, ...body, note: "Nothing was changed. Check this with the workspace owner, then call again with confirm: true." };
       const res = await send(undefined, "PATCH", `/classes/${encodeURIComponent(id)}/billing`, body);
       if (!res.ok) throw await fail(res);
@@ -475,6 +476,17 @@ export const classesTools = [
     inputSchema: { type: "object", required: ["studentId", "showEventId"], properties: { studentId: { type: "string" }, showEventId: { type: "string" }, classId: { type: "string", description: "The routine (class performing in the show) for a per-routine paid tick" }, handedOut: { type: "boolean" }, paid: { type: "boolean" }, tenant: TENANT_PROP } },
     async handler({ tenant, ...body }) {
       const res = await post(tenant, "/classes/registers/costume", body);
+      if (!res.ok) throw await fail(res);
+      return res.json();
+    },
+  },
+  {
+    name: "uiiq_classes_costume_refund",
+    description: "Owner or admin only: REFUND one routine's show costume paid online in the Members App (UiiQ-platform sister organisations 4/7), on the Stripe account it was paid on, which clears its tick. saleId is the routine's costume sale (routineSaleId on the register). A costume paid at the office is unticked with uiiq_classes_register_costume instead (409 here). Moves money: without confirm: true it is ALWAYS a dry run that changes nothing. Acts in your own signed-in workspace.",
+    inputSchema: { type: "object", required: ["saleId"], properties: { saleId: { type: "string" }, confirm: { type: "boolean", description: "true = refund it; omit for the dry run" } } },
+    async handler({ saleId, confirm }) {
+      if (confirm !== true) return { dryRun: true, changed: false, wouldDo: "refund_costume", saleId, note: "Nothing was changed. Check this with the workspace owner, then call again with confirm: true." };
+      const res = await post(undefined, `/classes/costumes/${encodeURIComponent(saleId)}/refund`, {});
       if (!res.ok) throw await fail(res);
       return res.json();
     },
