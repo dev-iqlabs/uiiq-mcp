@@ -287,6 +287,7 @@ A tenant is the organisation: list, detail and feature flags are `uiiq_tenant_li
 | `uiiq_sell_subscription_get` | One membership subscriber by id: plan, status, member code, address, residency-check outcome and who verified it. |
 | `uiiq_sell_subscription_review` | Residency review for a residents-only pass. |
 | `uiiq_sell_subscription_cancel` | Cancel a member (owner/admin). |
+| `uiiq_sell_subscription_change_plan` | Change plan, office only (owner/admin): move a member to another plan, now (prorated and charged at once) or at the next renewal (Stripe-paid only); their current plan cancels a move lined up for the renewal (`undone: true`). A dry run without `confirm: true`. Never a pass, fewer places, a residents-only plan, or another organisation's plan. |
 | `uiiq_sell_promo_create` | Create a UIIQ promo discount code. |
 | `uiiq_sell_gift_card_issue` | Issue a UIIQ gift card / voucher. |
 | `uiiq_sell_gift_card_bulk_issue` | Bulk-issue vouchers (max 500). |
@@ -1671,4 +1672,4 @@ Every product's target against its actual, by week, month or fiscal year, colour
 | `uiiq_workflow_order_assign` | Assign a workflow order to a user in the tenant (assignedUserId null unassigns). |
 | `uiiq_workflow_order_request_approval` | Ask the customer to approve a stage of their order: creates an approval link, moves the order to AWAITING_APPROVAL and EMAILS the customer. |
 
-1159 tools.
+1163 tools.
