@@ -72,3 +72,18 @@ test("update saves the picked page's id and name, and clearing sends null", asyn
   const cleared = await call("uiiq_competitor_update", { id: "comp_1", clearMetaPageId: true }, [200, { competitor: {} }]);
   assert.deepEqual(cleared.requests[0].body, { metaPageId: null });
 });
+
+test("research carries the competitor's socials as UIIQ sends them, and the description explains them", async () => {
+  const socials = [
+    { platform: "instagram", state: "found", handle: "acme.rooms", audience: 1520, recent: [] },
+    { platform: "youtube", state: "could_not_look", reason: "YouTube is not set up yet (no YouTube API key)", recent: [] },
+    { platform: "facebook", state: "not_found", recent: [] },
+  ];
+  const { result, requests } = await call("uiiq_competitor_research", { id: "comp_1" }, [200, { runs: [], socials }]);
+  assert.deepEqual(requests, [{ method: "GET", path: "/ads/competitors/comp_1/research" }]);
+  assert.deepEqual(result.socials, socials);
+  const description = tools.uiiq_competitor_research.description;
+  for (const word of ["socials", "not_found", "could_not_look", "Who paid for the ads is deliberately never included"]) {
+    assert.ok(description.includes(word), word);
+  }
+});
