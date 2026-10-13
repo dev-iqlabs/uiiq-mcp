@@ -28,6 +28,19 @@ for (const [name, args] of [
   });
 }
 
+test("3d: fundingMode on uiiq_classes_billing_set, a dry run like the rest; the register payment and get say what free and subsidised mean", async () => {
+  const t = tool("uiiq_classes_billing_set");
+  assert.deepEqual(t.inputSchema.properties.fundingMode.enum, ["NONE", "FREE", "SUBSIDISED"]);
+  assert.match(t.description, /SUBSIDISED = families pay the class fee, taken by the organisation running it/);
+  assert.match(t.description, /Run for a sister without fundingMode = FREE, as before/);
+  const out = await t.handler({ id: "cls_line", runForBillingOrganisationId: "bo_college", fundingMode: "SUBSIDISED" });
+  assert.equal(out.dryRun, true);
+  assert.equal(out.fundingMode, "SUBSIDISED");
+  assert.ok(tool("uiiq_classes_register_payment").description.includes("Refused (400) on a funded, FREE class"));
+  assert.ok(tool("uiiq_classes_register_payment").description.includes("A funded, SUBSIDISED class takes it like any other"));
+  assert.ok(tool("uiiq_classes_get").description.includes("fundingMode (NONE | FREE | SUBSIDISED)"));
+});
+
 test("4/7 fields are in the schemas and described", () => {
   assert.ok("costumeBillingOrganisationId" in tool("uiiq_event_billing_set").inputSchema.properties);
   assert.match(tool("uiiq_event_billing_set").description, /COSTUMES are billed through, set separately; 409 once a costume has been paid for/);

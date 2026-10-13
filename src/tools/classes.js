@@ -65,7 +65,7 @@ export const classesTools = [
   },
   {
     name: "uiiq_classes_get",
-    description: "One class in full: editor fields, every teacher, its course runs, and the roster (enrolments with student names, guardian, fee/paid/owed). No medical data. coverSlots is how many of a weekly plan's slots one session uses (coverSlotsNote 'uses 2 slots' when more than one); canSetCoverSlots says whether you may change it.",
+    description: "One class in full: editor fields, every teacher, its course runs, and the roster (enrolments with student names, guardian, fee/paid/owed). No medical data. coverSlots is how many of a weekly plan's slots one session uses (coverSlotsNote 'uses 2 slots' when more than one); canSetCoverSlots says whether you may change it. fundingMode (NONE | FREE | SUBSIDISED) and funding ('Funded, free' / 'Funded, subsidised' / null) say whether it is run for a sister organisation and whether families pay; set with uiiq_classes_billing_set.",
     inputSchema: { type: "object", required: ["id"], properties: { id: { type: "string" }, tenant: TENANT_PROP } },
     async handler({ id, tenant }) {
       const res = await api(tenant)(`/classes/${encodeURIComponent(id)}`);
@@ -95,13 +95,14 @@ export const classesTools = [
   },
   {
     name: "uiiq_classes_billing_set",
-    description: "Owner or admin only: a class's billing (UiiQ-platform sister organisations 3/7 and 4/7). runForBillingOrganisationId: null = the workspace's own class, or one of its SISTER organisations (funded: families don't pay, plans don't cover it; switching clears its term fee, drop-in price, instalments, plan cover and Billed through). billingOrganisationId: what a PAID class is BILLED THROUGH (whose Stripe takes its term fees, instalments and balances), null = the workspace's own or a sister; not on a funded class (400); a plan only covers classes billed through the same organisation. Either change is REFUSED (409, with the paying families) while families pay for it. costumePricePence / costumePayBy (YYYY-MM-DD): this routine's costume price and pay-by date, overriding its show's. Without confirm: true it is ALWAYS a dry run that changes nothing. Acts in your own signed-in workspace (no tenant: changes are refused while impersonating).",
+    description: "Owner or admin only: a class's billing (UiiQ-platform sister organisations 3/7, 4/7 and 3d). runForBillingOrganisationId: null = the workspace's own class, or one of its SISTER organisations (funded). fundingMode says what funded means (Steve, 13 Oct 2026): FREE = nobody pays (plans don't cover it; switching clears its term fee, drop-in price, instalments, plan cover and Billed through); SUBSIDISED = families pay the class fee, taken by the organisation running it (its Billed through follows its Run for; only plans billed through that organisation cover it). Run for a sister without fundingMode = FREE, as before; NONE only with runForBillingOrganisationId null. billingOrganisationId: what a PAID class of the workspace's own is BILLED THROUGH (whose Stripe takes its term fees, instalments and balances), null = the workspace's own or a sister; refused on a funded class (400: a free one takes nothing, a subsidised one's follows Run for); a plan only covers classes billed through the same organisation. REFUSED (409, with the paying families) while families pay for it: making it free, and any change to the organisation its fees go to (Billed through, or a subsidised class's Run for). costumePricePence / costumePayBy (YYYY-MM-DD): this routine's costume price and pay-by date, overriding its show's. Without confirm: true it is ALWAYS a dry run that changes nothing. Acts in your own signed-in workspace (no tenant: changes are refused while impersonating).",
     inputSchema: {
       type: "object",
       required: ["id"],
       properties: {
         id: { type: "string" },
         runForBillingOrganisationId: { type: ["string", "null"] },
+        fundingMode: { type: "string", enum: ["NONE", "FREE", "SUBSIDISED"], description: "What funded means for a class run for a sister: FREE = nobody pays; SUBSIDISED = families pay the class fee, taken by the organisation running it. NONE only with runForBillingOrganisationId null." },
         billingOrganisationId: { type: ["string", "null"], description: "Billed through, for a paid class: null = the workspace's own, or a sister's id" },
         costumePricePence: { type: ["integer", "null"] },
         costumePayBy: { type: ["string", "null"] },
@@ -110,7 +111,7 @@ export const classesTools = [
     },
     async handler({ id, confirm, ...fields }) {
       const body = Object.fromEntries(Object.entries(fields).filter(([, v]) => v !== undefined));
-      if (!Object.keys(body).length) throw new Error("Send runForBillingOrganisationId, billingOrganisationId, costumePricePence or costumePayBy");
+      if (!Object.keys(body).length) throw new Error("Send runForBillingOrganisationId, fundingMode, billingOrganisationId, costumePricePence or costumePayBy");
       if (confirm !== true) return { dryRun: true, changed: false, wouldDo: "set_class_billing", id, ...body, note: "Nothing was changed. Check this with the workspace owner, then call again with confirm: true." };
       const res = await send(undefined, "PATCH", `/classes/${encodeURIComponent(id)}/billing`, body);
       if (!res.ok) throw await fail(res);
@@ -464,7 +465,7 @@ export const classesTools = [
   },
   {
     name: "uiiq_classes_register_payment",
-    description: "TAKE A PAYMENT at the register against an enrolment (drop-in fee, plan excess or owed balance): raises a CASH/CARD till sale so it lands in daily takings, records it on the ledger, and with sessionDate stamps that day's attendance as paid (creating a PRESENT mark if none). Refused (400) on a funded class, run for a sister organisation: families never pay for it.",
+    description: "TAKE A PAYMENT at the register against an enrolment (drop-in fee, plan excess or owed balance): raises a CASH/CARD till sale so it lands in daily takings, records it on the ledger, and with sessionDate stamps that day's attendance as paid (creating a PRESENT mark if none). Refused (400) on a funded, FREE class (run for a sister organisation): families never pay for it. A funded, SUBSIDISED class takes it like any other; the ledger line records the organisation running it as whose money it is.",
     inputSchema: { type: "object", required: ["enrolmentId", "amountPence", "method"], properties: { enrolmentId: { type: "string" }, amountPence: { type: "number" }, method: { type: "string", enum: ["CASH", "CARD"] }, sessionDate: { type: "string", description: "YYYY-MM-DD" }, note: { type: "string" }, tenant: TENANT_PROP } },
     async handler({ tenant, ...body }) {
       const res = await post(tenant, "/classes/registers/payment", body);
