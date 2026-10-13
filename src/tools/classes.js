@@ -453,7 +453,7 @@ export const classesTools = [
   },
   {
     name: "uiiq_classes_register_payment",
-    description: "TAKE A PAYMENT at the register against an enrolment (drop-in fee, plan excess or owed balance): raises a CASH/CARD till sale so it lands in daily takings, records it on the ledger, and with sessionDate stamps that day's attendance as paid (creating a PRESENT mark if none).",
+    description: "TAKE A PAYMENT at the register against an enrolment (drop-in fee, plan excess or owed balance): raises a CASH/CARD till sale so it lands in daily takings, records it on the ledger, and with sessionDate stamps that day's attendance as paid (creating a PRESENT mark if none). Refused (400) on a funded class, run for a sister organisation: families never pay for it.",
     inputSchema: { type: "object", required: ["enrolmentId", "amountPence", "method"], properties: { enrolmentId: { type: "string" }, amountPence: { type: "number" }, method: { type: "string", enum: ["CASH", "CARD"] }, sessionDate: { type: "string", description: "YYYY-MM-DD" }, note: { type: "string" }, tenant: TENANT_PROP } },
     async handler({ tenant, ...body }) {
       const res = await post(tenant, "/classes/registers/payment", body);
