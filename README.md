@@ -485,7 +485,7 @@ Dashboard → Ads → Competitors. Needs the `ads_search` feature and the ads ti
 | `uiiq_competitor_update` | Change a competitor's profile. |
 | `uiiq_competitor_meta_page_find` | Find a competitor's Facebook Page: a keyword search of Meta's Ad Library through IQEX (query, else the competitor's Ad Library search word, else its name, in its market) answering the distinct advertisers behind the ads as { query, pages: [{ id, name, ads }], partial }, most ads first. |
 | `uiiq_competitor_remove` | Stop tracking a competitor and all of its domains. |
-| `uiiq_competitor_research` | A competitor's research: run history (each source as 'N found' or 'could not look' with the reason — an unreadable source is null, never zero), what changed since the previous run, the ads from the latest run that could read them, and the repeat cadence. |
+| `uiiq_competitor_research` | A competitor's research: run history (each source as 'N found' or 'could not look' with the reason — an unreadable source is null, never zero), what changed since the previous run, the ads from the latest run that could read them, their own Instagram, YouTube and Facebook Page, and the repeat cadence. |
 | `uiiq_competitor_research_run` | Research a competitor now on IQEX (ads, Google results, keywords). |
 | `uiiq_competitor_research_schedule` | How often IQEX re-researches a competitor on its own: WEEKLY, MONTHLY, or OFF. |
 | `uiiq_competitor_signals` | Competitor watch hits (UiiQ #716): a rule such as 'tell me when their live ad count rises by 25/50/100/200%' fired on a research run. |
@@ -1667,4 +1667,4 @@ Every product's target against its actual, by week, month or fiscal year, colour
 | `uiiq_workflow_order_assign` | Assign a workflow order to a user in the tenant (assignedUserId null unassigns). |
 | `uiiq_workflow_order_request_approval` | Ask the customer to approve a stage of their order: creates an approval link, moves the order to AWAITING_APPROVAL and EMAILS the customer. |
 
-1158 tools.
+1160 tools.
