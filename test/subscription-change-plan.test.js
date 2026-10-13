@@ -69,8 +69,14 @@ test("a refusal is the platform's status and message", async () => {
   );
 });
 
+test("choosing the current plan cancels a lined-up move: the answer's undone rides through", async () => {
+  const out = await call([200, { ...OK, when: "next_renewal", undone: true, warning: null }], { id: "mem_1", planId: "plan_2", when: "next_renewal", confirm: true });
+  assert.deepEqual(seen, [{ method: "POST", path: "/admin/memberships/subscribers/mem_1/change-plan", body: { planId: "plan_2", when: "next_renewal" } }]);
+  assert.equal(out.undone, true);
+});
+
 test("the description carries the money rules", () => {
-  for (const re of [/prorates/, /next_renewal/, /Recorded by the office/, /fixed-term pass/, /residents-only/, /another organisation/, /If Stripe refuses, nothing is changed/, /No refund/]) {
+  for (const re of [/prorates/, /CHARGES the difference at once/, /refused card: 502 and nothing changes/, /CURRENT plan as planId cancels a move/, /undone: true/, /'now' while a move is lined up is refused/, /next_renewal/, /Recorded by the office/, /fewer places/, /fixed-term pass/, /residents-only/, /another organisation/, /ended subscription/, /If Stripe refuses, nothing is changed/, /No refund/]) {
     assert.match(tool.description, re);
   }
 });

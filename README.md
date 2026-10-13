@@ -287,7 +287,7 @@ A tenant is the organisation: list, detail and feature flags are `uiiq_tenant_li
 | `uiiq_sell_subscription_get` | One membership subscriber by id: plan, status, member code, address, residency-check outcome and who verified it. |
 | `uiiq_sell_subscription_review` | Residency review for a residents-only pass. |
 | `uiiq_sell_subscription_cancel` | Cancel a member (owner/admin). |
-| `uiiq_sell_subscription_change_plan` | Change plan, office only (owner/admin): move a member to another plan, now (prorated) or at the next renewal (Stripe-paid only). A dry run without `confirm: true`. Never a pass, a residents-only plan, or another organisation's plan. |
+| `uiiq_sell_subscription_change_plan` | Change plan, office only (owner/admin): move a member to another plan, now (prorated and charged at once) or at the next renewal (Stripe-paid only); their current plan cancels a move lined up for the renewal (`undone: true`). A dry run without `confirm: true`. Never a pass, fewer places, a residents-only plan, or another organisation's plan. |
 | `uiiq_sell_promo_create` | Create a UIIQ promo discount code. |
 | `uiiq_sell_gift_card_issue` | Issue a UIIQ gift card / voucher. |
 | `uiiq_sell_gift_card_bulk_issue` | Bulk-issue vouchers (max 500). |
