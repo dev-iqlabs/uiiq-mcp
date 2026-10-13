@@ -758,9 +758,9 @@ Dashboard → Ads → Competitors. Needs the `ads_search` feature and the ads ti
 | `uiiq_till_device_delete` | Permanently un-register a till device. |
 | `uiiq_till_staff_list` | Till staff (cashiers and managers) with role, active, last used and any PIN lockout. |
 | `uiiq_till_staff_create` | Add a till staff member with a PIN (CASHIER 4–8 digits, MANAGER 6–8 digits; a PIN already in use by active staff is refused). |
-| `uiiq_till_daily_summary` | The daily sales summary for one day (default today): headline revenue, refunds, discounts, tax, transaction count, expected cash drawer; sales by item kind; cash movement by payment method. |
-| `uiiq_till_day_close_list` | The last 30 till cash-ups (day closes): period, opening float, declared vs expected cash, variance, sales total, who closed. |
-| `uiiq_till_day_close` | Cash up: records a day close for one device (deviceId) or the whole venue (omit it) — expected cash = opening float + CASH takings in the window, variance = declared − expected. |
+| `uiiq_till_daily_summary` | The daily sales summary for one day (default today): headline revenue, refunds, discounts, tax, transaction count, expected cash drawer; sales by item kind; cash movement by payment method. owedTo: a sister organisation's desk takings, one line per sister ("Owed to …"), apart from the workspace's own. |
+| `uiiq_till_day_close_list` | The last 30 till cash-ups (day closes): period, opening float, declared vs expected cash, variance, sales total, who closed; each with its owedTo lines. |
+| `uiiq_till_day_close` | Cash up: records a day close for one device (deviceId) or the whole venue (omit it) — expected cash = opening float + CASH takings in the window, variance = declared − expected. Answers with owedTo lines (a sister organisation's desk takings) and ownSalesPence. |
 | `uiiq_till_sale_refund` | Refund a PAID till sale: marks it REFUNDED (daily summary nets it off), reverses its COGS and puts retail stock back via RETURN movements. |
 | `uiiq_till_payment_config_set` | Set up a till payment method for the venue (one row per provider): enabled on/off plus configJson — SUMUP {affiliateKey, appId?, merchantCode?, currency?}, STRIPE_TERMINAL / STRIPE_TAP_TO_PAY {locationId}; the others take no config. |
 | `uiiq_till_kds_tickets` | Live kitchen tickets: orders fired to the kitchen and not yet served, oldest first, with their live lines; station narrows to one kitchen station. |
