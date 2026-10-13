@@ -45,7 +45,8 @@ test("charity: the owner claims, a platform admin verifies (only then the reduce
 
 test("admin: verifying charity or changing fee terms is a dry run without confirm: true, and calls nothing (Lucas #899 L2)", async () => {
   const admin = tool("uiiq_admin_billing_org_update");
-  for (const change of [{ charityVerified: true }, { applicationFeePercent: 1.5 }, { passFeesToCustomer: false }, { active: true, applicationFeePercent: 0 }]) {
+  const seen = { charityVerified: true, expectedLegalName: "Streetbeat College", expectedCharityNumber: "1234567" };
+  for (const change of [seen, { ...seen, expectedCharityNumber: null }, { applicationFeePercent: 1.5 }, { passFeesToCustomer: false }, { active: true, applicationFeePercent: 0 }]) {
     const out = await admin.handler({ tenantId: "sbda", orgId: "bo_college", ...change });
     assert.equal(out.dryRun, true, JSON.stringify(change));
     assert.equal(out.changed, false);
@@ -53,6 +54,28 @@ test("admin: verifying charity or changing fee terms is a dry run without confir
   }
   assert.ok("confirm" in admin.inputSchema.properties);
   assert.match(admin.description, /without confirm: true a call with any of them is ALWAYS a dry run/);
+});
+
+test("admin: verifying carries the claim that was checked, or is refused before anything is sent (UiiQ-platform #899 L1)", async () => {
+  const admin = tool("uiiq_admin_billing_org_update");
+  const props = admin.inputSchema.properties;
+  assert.ok("expectedLegalName" in props && "expectedCharityNumber" in props);
+  assert.deepEqual(props.expectedCharityNumber.type, ["string", "null"]);
+  assert.match(admin.description, /MUST carry the claim you checked/);
+  let called = false;
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = async () => ((called = true), new Response("{}"));
+  try {
+    for (const partial of [{}, { expectedLegalName: "Streetbeat College" }, { expectedCharityNumber: "1234567" }]) {
+      await assert.rejects(admin.handler({ tenantId: "sbda", orgId: "bo_college", charityVerified: true, confirm: true, ...partial }), /send what you checked/);
+    }
+    assert.equal(called, false, "nothing reached UIIQ");
+    // Un-verifying needs no claim.
+    const out = await admin.handler({ tenantId: "sbda", orgId: "bo_college", charityVerified: false, confirm: true }).catch((e) => e);
+    assert.doesNotMatch(String(out?.message ?? ""), /send what you checked/);
+  } finally {
+    globalThis.fetch = realFetch;
+  }
 });
 
 test("admin: switching off takes a reason the owner sees, and only an admin switches it back on", () => {

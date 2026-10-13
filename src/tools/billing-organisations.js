@@ -118,7 +118,7 @@ export const billingOrganisationsTools = [
   },
   {
     name: "uiiq_admin_billing_org_update",
-    description: "Platform admin: turn a workspace's SISTER organisation off or on (active; off is UiiQ's switch-off, with an optional reason the owner sees, and the owner can't switch it back on: only active: true here clears it); VERIFY the owner's charity / not-for-profit claim (charityVerified: true records who and when, and only then the reduced Charity / NFP sister fee applies; 409 if the owner hasn't claimed it, or changed the claim since it was read; false clears it); or set the fee terms on its payment account (applicationFeePercent 0–50, passFeesToCustomer), as uiiq_admin_tenant_stripe_set does for the workspace's own account. charityVerified: true, applicationFeePercent and passFeesToCustomer change what the sister is charged: without confirm: true a call with any of them is ALWAYS a dry run that changes nothing. Switching off, switching on and un-verifying need no confirm. Turning a sister on needs the workspace's sister_organisations feature; the feature can't be switched off while any sister is on. SUPER_ADMIN, read live, never while impersonating; audited.",
+    description: "Platform admin: turn a workspace's SISTER organisation off or on (active; off is UiiQ's switch-off, with an optional reason the owner sees, and the owner can't switch it back on: only active: true here clears it); VERIFY the owner's charity / not-for-profit claim (charityVerified: true records who and when, and only then the reduced Charity / NFP sister fee applies. It MUST carry the claim you checked, as uiiq_admin_billing_org_list showed it: expectedLegalName and expectedCharityNumber, null when it has none. It lands only if the organisation still says exactly that: 409 if the owner hasn't claimed it or has changed the claim since. false clears it and needs neither); or set the fee terms on its payment account (applicationFeePercent 0–50, passFeesToCustomer), as uiiq_admin_tenant_stripe_set does for the workspace's own account. charityVerified: true, applicationFeePercent and passFeesToCustomer change what the sister is charged: without confirm: true a call with any of them is ALWAYS a dry run that changes nothing. Switching off, switching on and un-verifying need no confirm. Turning a sister on needs the workspace's sister_organisations feature; the feature can't be switched off while any sister is on. SUPER_ADMIN, read live, never while impersonating; audited.",
     inputSchema: {
       type: "object",
       required: ["tenantId", "orgId"],
@@ -128,6 +128,8 @@ export const billingOrganisationsTools = [
         active: { type: "boolean" },
         reason: { type: "string", description: "With active: false, why UiiQ switched it off (shown to the owner; at most 300 characters)" },
         charityVerified: { type: "boolean" },
+        expectedLegalName: { type: "string", description: "With charityVerified: true, the legal name you checked (from uiiq_admin_billing_org_list)" },
+        expectedCharityNumber: { type: ["string", "null"], description: "With charityVerified: true, the charity number you checked; null when the claim has none" },
         applicationFeePercent: { type: "number" },
         passFeesToCustomer: { type: "boolean" },
         confirm: CONFIRM_PROP,
@@ -136,6 +138,10 @@ export const billingOrganisationsTools = [
     async handler({ tenantId, orgId, confirm, ...body }) {
       const data = defined(body);
       if (!Object.keys(data).length) throw new Error("Send active, charityVerified, applicationFeePercent or passFeesToCustomer");
+      // A verification is of the claim that was checked (UiiQ-platform #899 L1).
+      if (data.charityVerified === true && (typeof data.expectedLegalName !== "string" || !("expectedCharityNumber" in data))) {
+        throw new Error("Read the claim with uiiq_admin_billing_org_list first, then send what you checked: expectedLegalName and expectedCharityNumber (null when it has none).");
+      }
       const changesCharges = data.charityVerified === true || "applicationFeePercent" in data || "passFeesToCustomer" in data;
       if (changesCharges && confirm !== true) return dryRun("change_sister_organisation_fee_terms", { tenantId, orgId, change: data });
       return send(null, `/admin/tenants/${enc(tenantId)}/billing-organisations/${enc(orgId)}`, "PATCH", data);

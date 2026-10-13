@@ -473,7 +473,7 @@ export const classesTools = [
   },
   {
     name: "uiiq_classes_register_costume",
-    description: "Tick a student's costume for a show as handedOut and/or paid (send at least one). Stamped with who did it. With classId, paid is THAT ROUTINE's costume paid at the office: a costume sale is recorded at the routine's price (the class's override, else the show's) in the show's billing organisation; 409 with no price set; a costume paid online can't be unticked here. Without classId, paid is the older per-show tick.",
+    description: "Tick a student's costume for a show as handedOut and/or paid (send at least one). Stamped with who did it. With classId, paid is THAT ROUTINE's costume paid at the office: a costume sale is recorded at the routine's price (the class's override, else the show's) in the show's billing organisation; 409 with no price set, or when the student isn't enrolled in that routine; unticking (paid: false) deletes the office sale, so it is the owner's or an admin's (403 otherwise); a costume paid online can't be unticked here. Both are audited. Without classId, paid is the older per-show tick.",
     inputSchema: { type: "object", required: ["studentId", "showEventId"], properties: { studentId: { type: "string" }, showEventId: { type: "string" }, classId: { type: "string", description: "The routine (class performing in the show) for a per-routine paid tick" }, handedOut: { type: "boolean" }, paid: { type: "boolean" }, tenant: TENANT_PROP } },
     async handler({ tenant, ...body }) {
       const res = await post(tenant, "/classes/registers/costume", body);
