@@ -1,5 +1,18 @@
 import { apiClient, withTenant } from "../auth.js";
 
+// What UIIQ said, never an empty "Error:": a JSON { error } (with the ignored
+// feature keys when it names them), else the body, else the status — and for
+// a redirect, where to (fetched with redirect: "manual", a 3xx has no body).
+async function fail(res) {
+  const text = await res.text();
+  try {
+    const j = JSON.parse(text);
+    if (j?.error) return new Error(Array.isArray(j.ignored) && j.ignored.length ? `${j.error}: ${j.ignored.join(", ")}` : j.error);
+  } catch { /* not JSON */ }
+  const where = res.headers.get("location");
+  return new Error(text || `HTTP ${res.status}${where ? ` to ${where}` : ""}`);
+}
+
 const TENANT_SUMMARY = [
   "id", "name", "slug", "status", "launchStage", "tier", "industry", "isInternal", "iqexOrgId", "createdAt",
 ];
@@ -117,11 +130,11 @@ export const tenantTools = [
       if (enable || disable) {
         const body = enable ? { [enable]: true } : { [disable]: false };
         const res = await api(`/admin/tenants/${id}/features`, { method: "PATCH", body: JSON.stringify(body) });
-        if (!res.ok) throw new Error(await res.text());
+        if (!res.ok) throw await fail(res);
         return res.json();
       }
       const res = await api(`/admin/tenants/${id}/features`);
-      if (!res.ok) throw new Error(`Tenant not found: ${id}`);
+      if (!res.ok) throw await fail(res);
       return res.json();
     }
   },
