@@ -132,6 +132,31 @@ export const sellTools = [
     }
   },
   {
+    name: "uiiq_sell_subscription_change_plan",
+    description:
+      "Change plan, office only (owner/admin): move a member to another of the workspace's plans. MONEY: without confirm: true it is ALWAYS a dry run that calls nothing and answers { dryRun: true }. " +
+      "Stripe-paid: the subscription is repriced on the account it was taken on; when 'now' prorates the rest of the period on the next invoice, when 'next_renewal' changes nothing until the next payment at the new price (UIIQ's plan follows when that invoice is PAID). " +
+      "Recorded by the office (no subscription): 'now' only (409 for next_renewal). Never the plan they are on, an inactive plan, a fixed-term pass, a residents-only plan, or a plan billed through another organisation (409). " +
+      "If Stripe refuses, nothing is changed. No refund is made. The answer's `warning` says what the new plan means for the family's classes; pass it on.",
+    inputSchema: {
+      type: "object",
+      required: ["id", "planId", "when"],
+      properties: {
+        id: { type: "string", description: "Membership (subscriber) id — see uiiq_sell_subscription_list" },
+        planId: { type: "string", description: "The plan to move them to — see uiiq_sell_membership_plan_list" },
+        when: { type: "string", enum: ["now", "next_renewal"], description: "now = prorated from today; next_renewal = from the next payment (Stripe-paid only)" },
+        confirm: { type: "boolean", description: "true = do it. Only after the user has agreed to the plan and the timing." },
+        tenant: TENANT_PROP,
+      }
+    },
+    async handler({ id, planId, when, confirm, tenant }) {
+      if (confirm !== true) return { dryRun: true, changed: false, would: { membershipId: id, planId, when }, note: "Nothing was changed. Send confirm: true to change the plan." };
+      const res = await api(tenant)(`/admin/memberships/subscribers/${encodeURIComponent(id)}/change-plan`, { method: "POST", body: JSON.stringify({ planId, when }) });
+      if (!res.ok) throw new Error(`${res.status} ${await res.text()}`);
+      return res.json();
+    }
+  },
+  {
     name: "uiiq_sell_promo_create",
     description: "Create a UIIQ promo discount code.",
     inputSchema: {
