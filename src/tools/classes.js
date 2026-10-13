@@ -45,6 +45,7 @@ const CLASS_FIELDS = {
   instalmentsAllowed: { type: "boolean" },
   signOutRequired: { type: "boolean", description: "A second scan at the end records the child leaving" },
   coveredByPlanIds: { type: "array", items: { type: "string" }, description: "MembershipPlan ids whose members attend on their plan" },
+  coverSlots: { type: "integer", minimum: 1, maximum: 14, description: "How many of a weekly plan's slots one session uses (default 1): 2 for a double-length class, so it counts as two classes on a 'N classes a week' plan. Owner or admin only to change (403 otherwise). Kept as it is when omitted." },
   active: { type: "boolean" },
 };
 const CLASS_REQUIRED = ["name", "dayOfWeek", "startTime", "durationMins", "capacity"];
@@ -64,7 +65,7 @@ export const classesTools = [
   },
   {
     name: "uiiq_classes_get",
-    description: "One class in full: editor fields, every teacher, its course runs, and the roster (enrolments with student names, guardian, fee/paid/owed). No medical data.",
+    description: "One class in full: editor fields, every teacher, its course runs, and the roster (enrolments with student names, guardian, fee/paid/owed). No medical data. coverSlots is how many of a weekly plan's slots one session uses (coverSlotsNote 'uses 2 slots' when more than one); canSetCoverSlots says whether you may change it.",
     inputSchema: { type: "object", required: ["id"], properties: { id: { type: "string" }, tenant: TENANT_PROP } },
     async handler({ id, tenant }) {
       const res = await api(tenant)(`/classes/${encodeURIComponent(id)}`);
@@ -74,7 +75,7 @@ export const classesTools = [
   },
   {
     name: "uiiq_classes_create",
-    description: "Create a class. Requires name, dayOfWeek (0-6), startTime (HH:MM), durationMins and capacity; the slug is generated from the name. Linked ids (staffMemberId, venueId, showEventId, instructorResourceId) must belong to the tenant.",
+    description: "Create a class. Requires name, dayOfWeek (0-6), startTime (HH:MM), durationMins and capacity; the slug is generated from the name. Linked ids (staffMemberId, venueId, showEventId, instructorResourceId) must belong to the tenant. coverSlots above 1 needs an owner or admin.",
     inputSchema: { type: "object", required: CLASS_REQUIRED, properties: { ...CLASS_FIELDS, tenant: TENANT_PROP } },
     async handler({ tenant, ...body }) {
       const res = await post(tenant, "/classes", body);
@@ -84,7 +85,7 @@ export const classesTools = [
   },
   {
     name: "uiiq_classes_update",
-    description: "Replace a class's details. NOT a partial update: the API validates the full class, so send every field you want kept (name, dayOfWeek, startTime, durationMins, capacity are required; an omitted staffMemberId/venueId/price is reset to empty). Teachers are only rewritten when `teachers` is sent.",
+    description: "Replace a class's details. NOT a partial update: the API validates the full class, so send every field you want kept (name, dayOfWeek, startTime, durationMins, capacity are required; an omitted staffMemberId/venueId/price is reset to empty). Teachers are only rewritten when `teachers` is sent, and coverSlots only when it is sent (changing it needs an owner or admin).",
     inputSchema: { type: "object", required: ["id", ...CLASS_REQUIRED], properties: { id: { type: "string" }, ...CLASS_FIELDS, tenant: TENANT_PROP } },
     async handler({ id, tenant, ...body }) {
       const res = await send(tenant, "PATCH", `/classes/${encodeURIComponent(id)}`, body);
