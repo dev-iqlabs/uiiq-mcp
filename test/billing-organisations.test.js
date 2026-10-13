@@ -11,7 +11,7 @@ const CHANGING = ["uiiq_billing_org_create", "uiiq_billing_org_update", "uiiq_bi
 
 test("every tool path is one UIIQ route", () => {
   assert.deepEqual(billingOrganisationsTools.map((t) => t.name).sort(), [
-    "uiiq_admin_billing_org_list", "uiiq_admin_billing_org_update",
+    "uiiq_admin_billing_org_cancel_subscriptions", "uiiq_admin_billing_org_list", "uiiq_admin_billing_org_update", "uiiq_admin_payment_review_resolve", "uiiq_admin_payment_reviews",
     "uiiq_billing_org_connect_start", "uiiq_billing_org_create", "uiiq_billing_org_delete", "uiiq_billing_org_list", "uiiq_billing_org_update",
   ]);
 });
@@ -85,8 +85,39 @@ test("admin: switching off takes a reason the owner sees, and only an admin swit
   assert.match(tool("uiiq_billing_org_update").description, /switched off by UiiQ .* can't be switched back on here \(409/);
 });
 
+test("admin: cancelling a switched-off sister's subscriptions is a dry run without confirm: true, and calls nothing (sister organisations 4b)", async () => {
+  const cancel = tool("uiiq_admin_billing_org_cancel_subscriptions");
+  const out = await cancel.handler({ tenantId: "sbda", orgId: "bo_college" });
+  assert.deepEqual({ dryRun: out.dryRun, changed: out.changed, wouldDo: out.wouldDo, orgId: out.orgId }, { dryRun: true, changed: false, wouldDo: "cancel_sister_organisation_subscriptions", orgId: "bo_college" });
+  assert.match(cancel.description, /only once UiiQ switched it off/);
+  assert.match(cancel.description, /at the end of its paid period/);
+  assert.match(cancel.description, /Without confirm: true it is ALWAYS a dry run/);
+});
+
+test("admin: payment reviews list unresolved ones by default and resolve ticks one, each on its one route", async () => {
+  const calls = [];
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = async (url, init) => (calls.push({ url: String(url).replace(/^.*\/api/, ""), method: init?.method, body: init?.body }), new Response("{}", { headers: { "content-type": "application/json" } }));
+  try {
+    await tool("uiiq_admin_payment_reviews").handler({});
+    await tool("uiiq_admin_payment_reviews").handler({ scope: "all", reason: "amount", tenantId: "sbda", limit: 10 });
+    await tool("uiiq_admin_payment_review_resolve").handler({ id: "rev_1", resolved: true, note: "Refunded on the sister" });
+    await tool("uiiq_admin_payment_review_resolve").handler({ id: "rev_1", resolved: false });
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+  assert.deepEqual(calls, [
+    { url: "/admin/payments/reviews", method: "GET", body: undefined },
+    { url: "/admin/payments/reviews?scope=all&reason=amount&tenantId=sbda&limit=10", method: "GET", body: undefined },
+    { url: "/admin/payments/reviews/rev_1", method: "PATCH", body: JSON.stringify({ resolved: true, note: "Refunded on the sister" }) },
+    { url: "/admin/payments/reviews/rev_1", method: "PATCH", body: JSON.stringify({ resolved: false }) },
+  ]);
+  assert.deepEqual(tool("uiiq_admin_payment_reviews").inputSchema.properties.reason.enum, ["account", "amount", "currency"]);
+  assert.match(tool("uiiq_admin_payment_reviews").description, /no personal data/);
+});
+
 test("the platform admin tools are SUPER_ADMIN and say so", () => {
-  for (const name of ["uiiq_admin_billing_org_list", "uiiq_admin_billing_org_update"]) {
+  for (const name of ["uiiq_admin_billing_org_list", "uiiq_admin_billing_org_update", "uiiq_admin_billing_org_cancel_subscriptions", "uiiq_admin_payment_reviews", "uiiq_admin_payment_review_resolve"]) {
     assert.match(tool(name).description, /SUPER_ADMIN/, name);
   }
 });
