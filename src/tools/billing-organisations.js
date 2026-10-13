@@ -147,4 +147,39 @@ export const billingOrganisationsTools = [
       return send(null, `/admin/tenants/${enc(tenantId)}/billing-organisations/${enc(orgId)}`, "PATCH", data);
     },
   },
+  {
+    name: "uiiq_admin_billing_org_cancel_subscriptions",
+    description: "Platform admin: END the membership subscriptions still collecting on a SISTER organisation UiiQ has switched off (sister organisations 4b, Lucas #913 M2). Switching a sister off closes what it had open (pending bookings, open checkouts) but leaves live subscriptions running so a family's cover doesn't vanish, and refuses new ones; uiiq_admin_billing_org_list shows how many are still collecting (liveSubscriptions). This cancels each the way the workspace cancels one: at the end of its paid period, on the account it lives on; the workspace's own emails tell the family. Only a sister, only once UiiQ switched it off (409 before), never the workspace's own organisation (400). Returns live, cancelled, alreadyEnding and failed (207 if any failed: call again for the rest). Without confirm: true it is ALWAYS a dry run that changes nothing. SUPER_ADMIN, read live, never while impersonating; audited with the counts.",
+    inputSchema: { type: "object", required: ["tenantId", "orgId"], properties: { tenantId: TENANT_ID, orgId: { type: "string" }, confirm: CONFIRM_PROP } },
+    async handler({ tenantId, orgId, confirm }) {
+      if (confirm !== true) return dryRun("cancel_sister_organisation_subscriptions", { tenantId, orgId });
+      return send(null, `/admin/tenants/${enc(tenantId)}/billing-organisations/${enc(orgId)}/cancel-subscriptions`, "POST");
+    },
+  },
+  {
+    name: "uiiq_admin_payment_reviews",
+    description: "Platform admin: the payments flagged for a look (payment_attribution_reviews; sister organisations 4b): a Stripe payment that arrived on an account the server didn't expect (reason account), for the wrong amount (amount) or not in pounds (currency). Nothing was created or confirmed for it; the family or customer may need a refund or a manual record, and every row is also raised in Sentry. Unresolved ones by default (scope unresolved), newest first, with the workspace (slug, name) and the organisation whose account received the money; scope all includes resolved ones. Filter by reason or tenantId; limit 1-200 (default 100). Ids and the reason only, no amounts, no personal data. Tick one off with uiiq_admin_payment_review_resolve. SUPER_ADMIN, read live.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        scope: { type: "string", enum: ["unresolved", "all"] },
+        reason: { type: "string", enum: ["account", "amount", "currency"] },
+        tenantId: { type: "string", description: "Only this workspace's" },
+        limit: { type: "integer", minimum: 1, maximum: 200 },
+      },
+    },
+    async handler({ scope, reason, tenantId, limit }) {
+      const q = new URLSearchParams(Object.entries(defined({ scope, reason, tenantId, limit })).map(([k, v]) => [k, String(v)]));
+      const path = "/admin/payments/reviews";
+      return send(null, q.size ? `${path}?${q}` : path, "GET");
+    },
+  },
+  {
+    name: "uiiq_admin_payment_review_resolve",
+    description: "Platform admin: tick a flagged payment (from uiiq_admin_payment_reviews) as resolved, with an optional note of what was done (refunded, recorded by hand, nothing owed; at most 500 characters), recording who and when; resolved: false reopens it. Resolving one already resolved, or reopening one that isn't, is refused (409). Audited (admin.payment_review.resolved / reopened) with the note. SUPER_ADMIN, read live.",
+    inputSchema: { type: "object", required: ["id", "resolved"], properties: { id: { type: "string" }, resolved: { type: "boolean" }, note: { type: "string" } } },
+    async handler({ id, ...body }) {
+      return send(null, `/admin/payments/reviews/${enc(id)}`, "PATCH", defined(body));
+    },
+  },
 ];
