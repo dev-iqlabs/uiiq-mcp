@@ -151,11 +151,10 @@ Not exposed on purpose: the platform-to-platform callbacks under `/api/platform/
 
 ### Organisations — `src/tools/org.js`
 
+A tenant is the organisation: list, detail and feature flags are `uiiq_tenant_list`, `uiiq_tenant_get` and `uiiq_tenant_features`. Sister (billing) organisations are `uiiq_billing_org_*`.
+
 | Tool | What it does |
 | --- | --- |
-| `uiiq_org_list` | List organisations. |
-| `uiiq_org_get` | Get an organisation by ID. |
-| `uiiq_org_features` | Get feature flags / entitlements for an organisation. |
 | `uiiq_org_onboarding_status` | Whether the workspace has completed onboarding ({ completed }). |
 | `uiiq_org_profile_get` | The workspace's own tenant profile — name, description, industry, contact details, address, logo, brand colours, socials, email identity, onboarding state. |
 | `uiiq_org_profile_update` | Update the workspace profile (the Settings → Profile screen): only the fields you send change; an empty string clears one. |
@@ -1669,4 +1668,4 @@ Every product's target against its actual, by week, month or fiscal year, colour
 | `uiiq_workflow_order_assign` | Assign a workflow order to a user in the tenant (assignedUserId null unassigns). |
 | `uiiq_workflow_order_request_approval` | Ask the customer to approve a stage of their order: creates an approval link, moves the order to AWAITING_APPROVAL and EMAILS the customer. |
 
-1162 tools.
+1159 tools.

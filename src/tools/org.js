@@ -6,39 +6,11 @@ const TENANT_PROP = {
 };
 const api = (tenant) => apiClient(tenant ? { tenant } : {});
 
+// A tenant IS the organisation: its list, detail and feature flags are the
+// uiiq_tenant_* tools (/admin/tenants). UIIQ has never had /organisations
+// routes; the tools that called them were born 404 and are gone. Sister
+// organisations (billing) are uiiq_billing_org_*.
 export const orgTools = [
-  {
-    name: "uiiq_org_list",
-    description: "List organisations.",
-    inputSchema: { type: "object", properties: { search: { type: "string" } } },
-    async handler({ search } = {}) {
-      const qs = search ? `?search=${encodeURIComponent(search)}` : "";
-      const res = await apiClient()(`/organisations${qs}`);
-      if (!res.ok) throw new Error(await res.text());
-      return res.json();
-    },
-  },
-  {
-    name: "uiiq_org_get",
-    description: "Get an organisation by ID.",
-    inputSchema: { type: "object", required: ["id"], properties: { id: { type: "string" } } },
-    async handler({ id }) {
-      const res = await apiClient()(`/organisations/${id}`);
-      if (!res.ok) throw new Error(`Organisation not found: ${id}`);
-      return res.json();
-    },
-  },
-  {
-    name: "uiiq_org_features",
-    description: "Get feature flags / entitlements for an organisation.",
-    inputSchema: { type: "object", required: ["id"], properties: { id: { type: "string" } } },
-    async handler({ id }) {
-      const res = await apiClient()(`/organisations/${id}/features`);
-      if (!res.ok) throw new Error(await res.text());
-      return res.json();
-    },
-  },
-
   // ── The tenant's own onboarding state and profile (/onboarding, /profile) ──
   {
     name: "uiiq_org_onboarding_status",
