@@ -1362,7 +1362,7 @@ Every product's target against its actual, by week, month or fiscal year, colour
 | Tool | What it does |
 |---|---|
 | `uiiq_classes_list` | List the school's classes (active only unless includeInactive) with teachers, venue, show, schedule type, prices and the active-enrolment count. |
-| `uiiq_classes_get` | One class in full: editor fields, every teacher, its course runs, and the roster (enrolments with student names, guardian, fee/paid/owed). |
+| `uiiq_classes_get` | One class in full: editor fields, every teacher, its course runs, and the roster (enrolments with student names, guardian, fee/paid/owed); `fundingMode` / `funding` say whether it is run for a sister organisation, free or subsidised. |
 | `uiiq_classes_create` | Create a class. |
 | `uiiq_classes_update` | Replace a class's details. |
 | `uiiq_classes_delete` | DELETE a class outright. |
@@ -1396,10 +1396,10 @@ Every product's target against its actual, by week, month or fiscal year, colour
 | `uiiq_classes_register_day` | The day's registers (default today): every class running on that date with its students, attendance marks, check-in/out times, paid chip (PAID / OWES / DROP_IN_DUE / PLAN / PLAN_OVER / ARREARS …), stars and costume ticks; cancelled sessions listed separately. |
 | `uiiq_classes_register_students` | Names-only student search (id, name, guardian name; max 20) for adding a walk-in to a register. |
 | `uiiq_classes_register_mark` | Mark a student PRESENT, ABSENT or LATE for a class on a date. With student absences on, ILL too (stored as ABSENT, linked to an illness, a neutral "noted as unwell" notice instead of "Missed class"); ILL only by the class's teachers, cover or owners/admins, for an enrolled child, today or earlier. |
-| `uiiq_classes_register_payment` | Refused on a funded class (run for a sister; families never pay for it). TAKE A PAYMENT at the register against an enrolment (drop-in fee, plan excess or owed balance): raises a CASH/CARD till sale so it lands in daily takings, records it on the ledger, and with sessionDate stamps that day's attendance as paid (creating a PRESENT mark if none). |
+| `uiiq_classes_register_payment` | Refused on a funded, free class (run for a sister; families never pay for it); a funded, subsidised class is charged like any other. TAKE A PAYMENT at the register against an enrolment (drop-in fee, plan excess or owed balance): raises a CASH/CARD till sale so it lands in daily takings, records it on the ledger, and with sessionDate stamps that day's attendance as paid (creating a PRESENT mark if none). |
 | `uiiq_classes_register_star` | Toggle a star for a student in a class on a date (calling again removes it; the reply says starred true/false). |
 | `uiiq_classes_register_costume` | Tick a student's costume for a show as handedOut and/or paid (send at least one). A routine's paid tick needs the student enrolled in it; unticking a paid routine is owner or admin only; both are audited. |
-| `uiiq_classes_billing_set` | Owner or admin only: Run for the workspace or a sister organisation (funded), Billed through for a paid class, and this routine's costume price and pay-by date; organisation changes refused while families still pay. Dry run without `confirm: true`. |
+| `uiiq_classes_billing_set` | Owner or admin only: Run for the workspace or a sister organisation, with `fundingMode` FREE (nobody pays) or SUBSIDISED (families pay the class fee, taken by the organisation running it), Billed through for a paid class, and this routine's costume price and pay-by date; making a class free or moving where its fees go is refused while families still pay. Dry run without `confirm: true`. |
 | `uiiq_classes_costume_refund` | Owner or admin only: refund one routine's costume paid online, on the account it was paid on (clears its tick). Dry run without `confirm: true`. |
 | `uiiq_classes_attendance_report` | Attendance rate by class and by student over a date range (inclusive; default the last 8 weeks), flagging students under the tenant's low-attendance threshold. |
 | `uiiq_classes_absences_list` | Every student's absences (student absences on): requests waiting, who is away, history; filters status/from/to/order, paged by cursor. Owners/admins see all plus the waiting count; others only excused absences, with detail on their own classes. Notes only with includeNotes=true. |
