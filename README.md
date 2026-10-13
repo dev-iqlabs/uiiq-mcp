@@ -1389,6 +1389,7 @@ Every product's target against its actual, by week, month or fiscal year, colour
 | `uiiq_classes_enrolment_update` | Change an enrolment's status (TRIAL \| ACTIVE \| WAITLIST \| CANCELLED \| COMPLETED — activating re-checks capacity; CANCELLED keeps the ledger), feePence or notes. |
 | `uiiq_classes_enrolment_instalment_link` | Regenerate the Stripe Checkout link for an ACTIVE INSTALMENTS enrolment whose guardian never completed checkout. |
 | `uiiq_classes_enrolment_plan_options` | The student's guardian's ACTIVE memberships, each flagged with whether its plan covers the class — what to pass as membershipId for a PLAN enrolment. |
+| `uiiq_classes_enrolment_plan_load` | Would enrolling the student in the class on this membership take them over their plan's weekly classes, and which plan would they need? |
 | `uiiq_classes_register_day` | The day's registers (default today): every class running on that date with its students, attendance marks, check-in/out times, paid chip (PAID / OWES / DROP_IN_DUE / PLAN / PLAN_OVER / ARREARS …), stars and costume ticks; cancelled sessions listed separately. |
 | `uiiq_classes_register_students` | Names-only student search (id, name, guardian name; max 20) for adding a walk-in to a register. |
 | `uiiq_classes_register_mark` | Mark a student PRESENT, ABSENT or LATE for a class on a date. With student absences on, ILL too (stored as ABSENT, linked to an illness, a neutral "noted as unwell" notice instead of "Missed class"); ILL only by the class's teachers, cover or owners/admins, for an enrolled child, today or earlier. |
@@ -1668,4 +1669,4 @@ Every product's target against its actual, by week, month or fiscal year, colour
 | `uiiq_workflow_order_assign` | Assign a workflow order to a user in the tenant (assignedUserId null unassigns). |
 | `uiiq_workflow_order_request_approval` | Ask the customer to approve a stage of their order: creates an approval link, moves the order to AWAITING_APPROVAL and EMAILS the customer. |
 
-1161 tools.
+1162 tools.

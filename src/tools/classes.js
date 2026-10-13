@@ -45,7 +45,7 @@ const CLASS_FIELDS = {
   instalmentsAllowed: { type: "boolean" },
   signOutRequired: { type: "boolean", description: "A second scan at the end records the child leaving" },
   coveredByPlanIds: { type: "array", items: { type: "string" }, description: "MembershipPlan ids whose members attend on their plan" },
-  coverSlots: { type: "integer", minimum: 1, maximum: 14, description: "How many of a weekly plan's slots one session uses (default 1): 2 for a double-length class, so it counts as two classes on a 'N classes a week' plan. Owner or admin only to change (403 otherwise). Kept as it is when omitted." },
+  coverSlots: { type: "integer", minimum: 1, maximum: 14, description: "How many of a weekly plan's slots one session uses (default 1): 2 for a double-length class, so it counts as two classes on a 'N classes a week' plan. Owner or admin only to change (403 otherwise). Kept as it is when omitted. Raising coverSlots can put existing 1-a-week members over their weekly limit; check atRisk." },
   active: { type: "boolean" },
 };
 const CLASS_REQUIRED = ["name", "dayOfWeek", "startTime", "durationMins", "capacity"];
@@ -75,7 +75,7 @@ export const classesTools = [
   },
   {
     name: "uiiq_classes_create",
-    description: "Create a class. Requires name, dayOfWeek (0-6), startTime (HH:MM), durationMins and capacity; the slug is generated from the name. Linked ids (staffMemberId, venueId, showEventId, instructorResourceId) must belong to the tenant. coverSlots above 1 needs an owner or admin.",
+    description: "Create a class. Requires name, dayOfWeek (0-6), startTime (HH:MM), durationMins and capacity; the slug is generated from the name. Linked ids (staffMemberId, venueId, showEventId, instructorResourceId) must belong to the tenant. Prices (dropInPricePence, termFeePence), coveredByPlanIds and coverSlots above 1 need an owner or admin (403).",
     inputSchema: { type: "object", required: CLASS_REQUIRED, properties: { ...CLASS_FIELDS, tenant: TENANT_PROP } },
     async handler({ tenant, ...body }) {
       const res = await post(tenant, "/classes", body);
@@ -85,8 +85,8 @@ export const classesTools = [
   },
   {
     name: "uiiq_classes_update",
-    description: "Replace a class's details. NOT a partial update: the API validates the full class, so send every field you want kept (name, dayOfWeek, startTime, durationMins, capacity are required; an omitted staffMemberId/venueId/price is reset to empty). Teachers are only rewritten when `teachers` is sent, and coverSlots only when it is sent (changing it needs an owner or admin).",
-    inputSchema: { type: "object", required: ["id", ...CLASS_REQUIRED], properties: { id: { type: "string" }, ...CLASS_FIELDS, tenant: TENANT_PROP } },
+    description: "Replace a class's details. NOT a partial update: the API validates the full class, so send every field you want kept (name, dayOfWeek, startTime, durationMins, capacity are required; an omitted staffMemberId/venueId is reset to empty). Teachers are only rewritten when `teachers` is sent. The owner/admin settings (dropInPricePence, termFeePence, coveredByPlanIds, coverSlots) are kept as they are when omitted, and changing any of them needs an owner or admin (403). Raising coverSlots can put existing 1-a-week members over their weekly limit; check atRisk. When a coverSlots change would newly put families on plans over their weekly classes, the API answers 409 { needsConfirmation: true, atRisk, error } and saves NOTHING. Only resend confirmAtRisk after the user explicitly agrees, and send the COUNT the 409 gave (confirmAtRisk: <n>): if more families are at risk by then, the API asks again. The answer's atRisk says how many families it put over.",
+    inputSchema: { type: "object", required: ["id", ...CLASS_REQUIRED], properties: { id: { type: "string" }, ...CLASS_FIELDS, confirmAtRisk: { type: "integer", minimum: 0, description: "The atRisk count the user agreed to (from the 409): save the coverSlots change even though it puts that many families on plans over their weekly classes. Never send it without the user's explicit agreement." }, tenant: TENANT_PROP } },
     async handler({ id, tenant, ...body }) {
       const res = await send(tenant, "PATCH", `/classes/${encodeURIComponent(id)}`, body);
       if (!res.ok) throw await fail(res);
@@ -378,7 +378,7 @@ export const classesTools = [
   },
   {
     name: "uiiq_classes_enrol",
-    description: "Enrol a student in a class. paymentMode UPFRONT | DROP_IN | INSTALMENTS | PLAN. TERM classes need courseRunId (except DROP_IN). Full class → 409 with full:true; retry with waitlist=true to WAITLIST. TAKES MONEY when asked: `payment` {method CASH|CARD, amountPence?} raises a till sale (UPFRONT only); INSTALMENTS (2-12, class must allow them, Stripe connected) returns a Stripe Checkout URL for the guardian; PLAN needs the guardian's ACTIVE membershipId whose plan covers the class.",
+    description: "Enrol a student in a class. paymentMode UPFRONT | DROP_IN | INSTALMENTS | PLAN. TERM classes need courseRunId (except DROP_IN). Full class → 409 with full:true; retry with waitlist=true to WAITLIST. TAKES MONEY when asked: `payment` {method CASH|CARD, amountPence?} raises a till sale (UPFRONT only); INSTALMENTS (2-12, class must allow them, Stripe connected) returns a Stripe Checkout URL for the guardian; PLAN needs the guardian's ACTIVE membershipId whose plan covers the class. On a PLAN enrolment the answer's `warning`, when not null, is the upgrade prompt to pass on (e.g. 'This takes them to 3 classes a week. Their plan covers 2. They'll need SBDA 3 classes Weekly (£54.75/month).'); the enrolment is still made, and sessions over the plan are charged at the register.",
     inputSchema: { type: "object", required: ["studentId", "classId", "paymentMode"], properties: { studentId: { type: "string" }, classId: { type: "string" }, courseRunId: { type: "string" }, paymentMode: { type: "string", enum: ["UPFRONT", "DROP_IN", "INSTALMENTS", "PLAN"] }, feePence: { type: "number", description: "Defaults to the run/class fee (0 for DROP_IN)" }, startDate: { type: "string", description: "YYYY-MM-DD, default today" }, waitlist: { type: "boolean" }, payment: { type: "object", properties: { method: { type: "string", enum: ["CASH", "CARD"] }, amountPence: { type: "number" } } }, instalmentCount: { type: "number" }, membershipId: { type: "string" }, notes: { type: "string" }, tenant: TENANT_PROP } },
     async handler({ tenant, ...body }) {
       const res = await post(tenant, "/classes/enrolments", body);
@@ -408,11 +408,22 @@ export const classesTools = [
   },
   {
     name: "uiiq_classes_enrolment_plan_options",
-    description: "The student's guardian's ACTIVE memberships, each flagged with whether its plan covers the class — what to pass as membershipId for a PLAN enrolment.",
+    description: "The student's guardian's ACTIVE memberships, each flagged with whether its plan covers the class — what to pass as membershipId for a PLAN enrolment. covers is true, false, or 'partial' when one session of the class uses more of the plan's weekly slots than it allows (still usable for a PLAN enrolment; every session goes over).",
     inputSchema: { type: "object", required: ["studentId", "classId"], properties: { studentId: { type: "string" }, classId: { type: "string" }, tenant: TENANT_PROP } },
     async handler({ studentId, classId, tenant }) {
       const qs = `?studentId=${encodeURIComponent(studentId)}&classId=${encodeURIComponent(classId)}`;
       const res = await api(tenant)(`/classes/enrolments/plan-options${qs}`);
+      if (!res.ok) throw await fail(res);
+      return res.json();
+    },
+  },
+  {
+    name: "uiiq_classes_enrolment_plan_load",
+    description: "Would enrolling the student in the class on this membership take them over their plan's weekly classes, and which plan would they need? Read-only. Answers { perWeek, usedSlots, classSlots, totalSlots, over, suggestedPlan: { id, name, price, perWeek } | null, warning, membershipId } (never the member code). Only plans billed through the class's organisation are suggested; a funded class, or one the plan can't cover, gives no load. Slots, not sessions: a double class (coverSlots 2) counts as two. suggestedPlan is the cheapest active plan (per month) big enough, else the cheapest unlimited one, else null (warning then says no plan covers it). Unlimited plans and no plan never warn. A warning, not a refusal: the enrolment is still allowed.",
+    inputSchema: { type: "object", required: ["studentId", "classId", "membershipId"], properties: { studentId: { type: "string" }, classId: { type: "string" }, membershipId: { type: "string" }, tenant: TENANT_PROP } },
+    async handler({ studentId, classId, membershipId, tenant }) {
+      const qs = new URLSearchParams({ studentId, classId, membershipId });
+      const res = await api(tenant)(`/classes/enrolments/plan-load?${qs}`);
       if (!res.ok) throw await fail(res);
       return res.json();
     },
