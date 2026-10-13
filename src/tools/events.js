@@ -74,13 +74,14 @@ export const eventsTools = [
   },
   {
     name: "uiiq_event_billing_set",
-    description: "Owner or admin only: an event's billing (UiiQ-platform sister organisations 3/7). billingOrganisationId: what the event is BILLED THROUGH, null = the workspace's own or one of its SISTER organisations; set once per event, every ticket type (through its experience) and show costume inherits it; 409 when another event sharing its experience is billed differently. costumePricePence / costumePayBy (YYYY-MM-DD): the show's default costume price and pay-by date, which a class can override. Without confirm: true it is ALWAYS a dry run that changes nothing. Acts in your own signed-in workspace (no tenant: changes are refused while impersonating).",
+    description: "Owner or admin only: an event's billing (UiiQ-platform sister organisations 3/7 and 4/7). billingOrganisationId: what its TICKETS are billed through, null = the workspace's own or one of its SISTER organisations; every ticket type (through its experience) inherits it; 409 when another event sharing its experience is billed differently, or once its tickets have a paid booking. costumeBillingOrganisationId: what its show COSTUMES are billed through, set separately; 409 once a costume has been paid for. A sister switched off meanwhile is refused (409). costumePricePence / costumePayBy (YYYY-MM-DD): the show's default costume price and pay-by date, which a class can override. Without confirm: true it is ALWAYS a dry run that changes nothing. Acts in your own signed-in workspace (no tenant: changes are refused while impersonating).",
     inputSchema: {
       type: "object",
       required: ["id"],
       properties: {
         id: { type: "string" },
-        billingOrganisationId: { type: ["string", "null"] },
+        billingOrganisationId: { type: ["string", "null"], description: "Tickets: null = the workspace's own, or a sister's id" },
+        costumeBillingOrganisationId: { type: ["string", "null"], description: "Show costumes: null = the workspace's own, or a sister's id" },
         costumePricePence: { type: ["integer", "null"] },
         costumePayBy: { type: ["string", "null"] },
         confirm: { type: "boolean", description: "true = do it; omit for the dry run" },
@@ -88,7 +89,7 @@ export const eventsTools = [
     },
     async handler({ id, confirm, ...fields }) {
       const body = Object.fromEntries(Object.entries(fields).filter(([, v]) => v !== undefined));
-      if (!Object.keys(body).length) throw new Error("Send billingOrganisationId, costumePricePence or costumePayBy");
+      if (!Object.keys(body).length) throw new Error("Send billingOrganisationId, costumeBillingOrganisationId, costumePricePence or costumePayBy");
       if (confirm !== true) return { dryRun: true, changed: false, wouldDo: "set_event_billing", id, ...body, note: "Nothing was changed. Check this with the workspace owner, then call again with confirm: true." };
       const res = await api(undefined)(`/events/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify(body) });
       if (!res.ok) throw await fail(res);
