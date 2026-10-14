@@ -388,7 +388,7 @@ Needs the workspace's `sister_organisations` feature (404 when off). Changes are
 | `uiiq_campaign_prospect_audience` | Preview who a campaign to prospects would go to — nothing is sent or created. |
 | `uiiq_campaign_responses` | Who pressed which reply button on a campaign that carried them: counts for Tell me more / Interested / Not interested (each recipient's latest press), one row per recipient with their contact and matched prospect (null when they are not in the pipeline — nothing is invented), and how many presses looked like a corporate link scanner and were ignored. |
 | `uiiq_campaign_duplicate` | Duplicate an existing campaign. |
-| `uiiq_campaign_test_send` | Send a test email for a campaign to a given address. |
+| `uiiq_campaign_test_send` | Send a test email for a campaign. The address must be your own, someone on the workspace team, or on its test list (403 otherwise); 20 an hour per user (429). |
 | `uiiq_segment_list` | List contact segments. |
 | `uiiq_segment_preview` | Preview which contacts match a segment. |
 | `uiiq_campaign_send` | SEND an email campaign to its audience now (subscribed contacts, or the CRM pipeline for a prospects campaign — gated on `prospect_campaigns`). |
