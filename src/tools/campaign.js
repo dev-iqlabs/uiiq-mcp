@@ -139,7 +139,7 @@ export const campaignTools = [
   },
   {
     name: "uiiq_campaign_test_send",
-    description: "Send a test email for a campaign to a given address.",
+    description: "Send a test email for a campaign. The address must be the caller's own, a person on this workspace's team, or on its test list (otherwise refused with 403); at most 20 test emails per user per hour (429).",
     inputSchema: {
       type: "object",
       required: ["id", "email"],
