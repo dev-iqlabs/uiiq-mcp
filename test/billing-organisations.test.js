@@ -2,6 +2,7 @@
 // changing tools say "Owner only"; create, connect and remove are dry runs
 // without confirm: true and never reach the API; changing tools take no tenant
 // (naming one would impersonate, which UIIQ refuses for these).
+import "./isolate-home.js"; // first: no real login, nothing reaches UIIQ (Lucas, #97)
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { billingOrganisationsTools } from "../src/tools/billing-organisations.js";

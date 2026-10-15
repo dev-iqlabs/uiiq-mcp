@@ -1,5 +1,6 @@
 // node --test — the payments connect and integrations tools say who may use them
 // (UiiQ-platform #879, #881): STAFF read only the flags and get 403 on writes.
+import "./isolate-home.js"; // first: no real login, nothing reaches UIIQ (Lucas, #97)
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { adminPlatformTools } from "../src/tools/admin-platform.js";

@@ -1,6 +1,7 @@
 // node --test — "Billed through" and "Run for" tools (UiiQ-platform sister organisations 3/7):
 // owner or admin only, explicit (dry run without confirm: true, calling nothing), and
 // acting in the signed-in workspace (no tenant: UIIQ refuses these while impersonating).
+import "./isolate-home.js"; // first: no real login, nothing reaches UIIQ (Lucas, #97)
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { classesTools } from "../src/tools/classes.js";

@@ -57,6 +57,7 @@ import { connectTools }         from "./tools/connect.js";
 import { iqplantTools }         from "./tools/iqplant.js";
 import { postroomTools }        from "./tools/postroom.js";
 import { appealsTools }         from "./tools/appeals.js";
+import { competitionTools }     from "./tools/competitions.js";
 import { auctionsTools }        from "./tools/auctions.js";
 import { nx2uTools }            from "./tools/nx2u.js";
 import { adminOpsTools } from "./tools/admin-ops.js";
@@ -135,6 +136,7 @@ const ALL_TOOLS = [
   ...iqplantTools,
   ...postroomTools,
   ...appealsTools,
+  ...competitionTools,
   ...auctionsTools,
   ...nx2uTools,
   ...adminOpsTools,
