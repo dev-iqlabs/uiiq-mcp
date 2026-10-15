@@ -173,15 +173,20 @@ export const competitionTools = [
     },
   },
   {
-    name: "uiiq_competition_call_post_draft",
-    description: "This round's call to enter as a DRAFT social post, or the one already drafted: never scheduled or published here. Goes to the competition's social accounts, with the Meta/TikTok disclaimer and \"the link in our bio\" on Instagram and TikTok. Returns { postId, created, warnings }; schedule it in Social after a look.",
+    name: "uiiq_competition_post_draft",
+    description: "A round's post as a DRAFT social post, or the one already drafted: never scheduled or published here. stage: call (the call to enter, while the round is open or to come), shortlist (before Decide; names only shortlisted nominees who agreed, first names, never a photo), winner (after Decide; named only if they agreed, otherwise \"this week's winner has been told\"). Goes to the competition's social accounts, with the Meta/TikTok disclaimer and \"the link in our bio\" on Instagram and TikTok. Returns { postId, created, warnings }; schedule it in Social after a look.",
     inputSchema: {
       type: "object",
-      required: ["id", "roundId"],
-      properties: { id: { type: "string" }, roundId: { type: "string" }, tenant: TENANT_PROP },
+      required: ["id", "roundId", "stage"],
+      properties: {
+        id: { type: "string" },
+        roundId: { type: "string" },
+        stage: { type: "string", enum: ["call", "shortlist", "winner"] },
+        tenant: TENANT_PROP,
+      },
     },
-    async handler({ id, roundId, tenant }) {
-      return call(tenant, `/competitions/${enc(id)}/rounds/${enc(roundId)}/call-post`, { method: "POST" });
+    async handler({ id, roundId, stage, tenant }) {
+      return call(tenant, `/competitions/${enc(id)}/rounds/${enc(roundId)}/posts/${enc(stage)}`, { method: "POST" });
     },
   },
   {

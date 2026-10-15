@@ -63,7 +63,8 @@ test("each tool calls its own route, with its own method and body", async () => 
     ["uiiq_competition_update", { id: "c1", status: "ACTIVE" }, "PATCH", "/competitions/c1", { status: "ACTIVE" }],
     ["uiiq_competition_round_update", { id: "c1", roundId: "r1", theme: "Bonfire" }, "PATCH", "/competitions/c1/rounds/r1", { theme: "Bonfire" }],
     ["uiiq_competition_round_decide", { id: "c1", roundId: "r1", winnerEntryId: "e1" }, "POST", "/competitions/c1/rounds/r1/decide", { winnerEntryId: "e1" }],
-    ["uiiq_competition_call_post_draft", { id: "c1", roundId: "r1" }, "POST", "/competitions/c1/rounds/r1/call-post", undefined],
+    ["uiiq_competition_post_draft", { id: "c1", roundId: "r1", stage: "call" }, "POST", "/competitions/c1/rounds/r1/posts/call", undefined],
+    ["uiiq_competition_post_draft", { id: "c1", roundId: "r1", stage: "winner" }, "POST", "/competitions/c1/rounds/r1/posts/winner", undefined],
     ["uiiq_competition_entries", { id: "c1", roundId: "r1", status: "NEW" }, "GET", "/competitions/c1/entries?roundId=r1&status=NEW", undefined],
     ["uiiq_competition_entries", { id: "c1" }, "GET", "/competitions/c1/entries", undefined],
     ["uiiq_competition_entry_get", { entryId: "e1" }, "GET", "/competitions/entries/e1", undefined],
@@ -103,6 +104,7 @@ test("UiiQ's refusal comes back as its own words", async () => {
 
 test("no tool publishes: the only post tool drafts", () => {
   const names = Object.keys(tools);
-  assert.deepEqual(names.filter((n) => /post|publish|schedule/.test(n)), ["uiiq_competition_call_post_draft"]);
-  assert.match(tools.uiiq_competition_call_post_draft.description, /never scheduled or published/);
+  assert.deepEqual(names.filter((n) => /post|publish|schedule/.test(n)), ["uiiq_competition_post_draft"]);
+  assert.match(tools.uiiq_competition_post_draft.description, /never scheduled or published/);
+  assert.deepEqual(tools.uiiq_competition_post_draft.inputSchema.properties.stage.enum, ["call", "shortlist", "winner"]);
 });

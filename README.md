@@ -1110,7 +1110,7 @@ Needs the `competitions` feature. Setting up, rounds, the nominee confirmation a
 | `uiiq_competition_rounds_add` | One round, or weekly rounds with a theme each. |
 | `uiiq_competition_round_update` | A round's theme and times, until it's decided. |
 | `uiiq_competition_round_decide` | The winner and runners-up of a closed round, from its confirmed entries; locks the round. |
-| `uiiq_competition_call_post_draft` | The round's call to enter as a DRAFT social post (never scheduled or published). |
+| `uiiq_competition_post_draft` | A round's call, shortlist or winner post as a DRAFT social post (never scheduled or published); a nominee named only as far as they agreed. |
 | `uiiq_competition_entries` | Entries, ranked by score; by round and status. |
 | `uiiq_competition_entry_get` | One entry, its consents, the nominee's answer and what was confirmed. |
 | `uiiq_competition_entry_update` | Status, notes, or your own scores; locked once its round is decided. |
