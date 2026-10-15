@@ -67,7 +67,7 @@ UIIQ is one subscription whose modules are grouped as **Sell**, **Grow** and **R
 | Materials and legacy films | `uiiq_material_*`, `uiiq_legacy_*` | Discover, verify and watch materials, check whether each lead's link leads anywhere, edit or delete a material; list legacy films |
 | Postroom | `uiiq_postroom_*`, `uiiq_admin_postroom_*` | The parcels board: product ready, label printed, dispatch, corrections, add recent orders, the return address (needs the `postroom` feature). Postroom HQ: every tenant's parcels for platform admins. A shop gets on it by REQUESTING it with a click in UiiQ (its owner or admin accepts the in-app terms in Postroom settings, and a code is generated), or a platform admin raises it for the shop in the admin UI with the evidence. Those are an Art 28 acceptance, so no tool can make them; `uiiq_postroom_hq_request_status` / `_withdraw` and the admin status / withdraw tools read and stop them. `postroom_hq` can then be switched on via `uiiq_tenant_features`. Per-tenant HQ log: `uiiq_postroom_hq_log`, `uiiq_admin_postroom_hq_log` |
 | Appeals | `uiiq_appeal_*`, `uiiq_admin_appeal_suspend` | Fundraising appeals on a cause: draft, publish under the Fundraising Regulator's Code, match pledges, updates emailed to supporters (needs the `appeals` feature) |
-| Competitions | `uiiq_competition_*` | Competitions in rounds: set up, rounds, entries, judges' scores, Decide, what a nominee agreed to, the round's posts as drafts, erasure (needs the `competitions` feature; deciding, erasing and clearing a post's mark are dry runs until `confirm: true`; nothing publishes) |
+| Competitions | `uiiq_competition_*` | Competitions in rounds: set up, rounds, entries, judges' scores, Decide (which issues the prize codes when the competition gives them), what a nominee agreed to, the round's posts as drafts, erasure (needs the `competitions` feature; deciding, issuing a prize code, erasing and clearing a post's mark are dry runs until `confirm: true`; nothing publishes) |
 | Auctions | `uiiq_auction_*` | The seller's side: draft, lots, publish, bids, withdraw, defaults (needs the `auctions` feature; buyers bid through the public API) |
 | NX2U live streaming | `uiiq_nx2u_*` | Channels, events, the control room (provision, running order, slate, end, replay), the video library, usage (needs the `nx2u` feature; platform switches OFF until Steve turns them on) |
 | Funding, estimates, integrations | `uiiq_funding_*`, `uiiq_estimates_*`, `uiiq_integrations_*`, `uiiq_virtual_office_*` | Funding projects, headings, allocations and claims (Xero invoices); estimates with lines and proposals; integration sources and Xero config; compliance reminders |
@@ -1099,7 +1099,7 @@ Every product's target against its actual, by week, month or fiscal year, colour
 
 ### Competitions — `src/tools/competitions.js`
 
-Needs the `competitions` feature. Setting up, rounds, the nominee confirmation and erasure are an owner/admin's; entry status and notes any staff login's; scores and Decide the competition's judges'. Deciding and erasing can't be undone, so each is a dry run until `confirm: true`. Nothing here publishes.
+Needs the `competitions` feature. Setting up, rounds, the nominee confirmation and erasure are an owner/admin's; entry status and notes any staff login's; scores and Decide the competition's judges'. Deciding and erasing can't be undone, so each is a dry run until `confirm: true`; so is issuing a prize code. When a competition gives prizes, Decide makes the coupons and emails them to the nominators. Nothing here publishes.
 
 | Tool | What it does |
 |---|---|
@@ -1109,7 +1109,7 @@ Needs the `competitions` feature. Setting up, rounds, the nominee confirmation a
 | `uiiq_competition_update` | Change a competition, including going live or archiving. Photos stay off until the photo terms are signed off. |
 | `uiiq_competition_rounds_add` | One round, or weekly rounds with a theme each. |
 | `uiiq_competition_round_update` | A round's theme and times, until it's decided. |
-| `uiiq_competition_round_decide` | The winner and runners-up of a closed round, from its confirmed entries; locks the round. A dry run until `confirm: true`. |
+| `uiiq_competition_round_decide` | The winner and runners-up of a closed round, from its confirmed entries; locks the round. Also issues the prizes: with `prizeAction` COUPON it makes a real coupon on the shop for the winner and each runner-up and emails each code to the nominator. Its `prizes` rows say which weren't issued and why; issue those with `uiiq_competition_prize_issue`. A dry run until `confirm: true`. |
 | `uiiq_competition_post_draft` | A round's call, shortlist or winner post as a DRAFT in Social (never scheduled or published here), saying about a nominee only what they agreed to. |
 | `uiiq_competition_round_posts` | A round's posts by stage, with any mark to take one down or to check it. |
 | `uiiq_competition_post_taken_down` | Clear a marked shortlist or winner post once it's down (or checked); owner/admin. A dry run until `confirm: true`. |

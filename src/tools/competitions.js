@@ -181,7 +181,7 @@ export const competitionTools = [
   },
   {
     name: "uiiq_competition_round_decide",
-    description: "Decide a round after it closes: the winner and any runners-up (up to 10), from its confirmed entries that aren't rejected or withdrawn. Judges only (or owner/admin when none are named). Locks the round for good; the audit keeps who chose, when, and the scores. Without confirm: true it's a dry run that changes nothing.",
+    description: "Decide a round after it closes: the winner and any runners-up (up to 10), from its confirmed entries that aren't rejected or withdrawn. Judges only (or owner/admin when none are named). Locks the round for good; the audit keeps who chose, when, and the scores. Decide also issues the prizes: when the competition's prizeAction is COUPON, it makes a real single-use coupon on the competition's shop for the winner and each runner-up, and emails each code to that entry's nominator. The answer's prizes list has a row per entry ({ entryId, ok, error }); a row that isn't ok (e.g. \"Not issued yet\", when there wasn't time) is issued with uiiq_competition_prize_issue. Without confirm: true it's a dry run that changes, makes and sends nothing.",
     inputSchema: {
       type: "object",
       required: ["id", "roundId", "winnerEntryId"],
@@ -202,7 +202,7 @@ export const competitionTools = [
       if (runnerUpEntryIds !== undefined && !Array.isArray(runnerUpEntryIds)) throw new Error("runnerUpEntryIds must be a list of entry ids");
       for (const r of runnerUpEntryIds ?? []) seg(r, "runnerUpEntryIds");
       const body = { winnerEntryId, ...(runnerUpEntryIds ? { runnerUpEntryIds } : {}) };
-      if (confirm !== true) return dryRun("decide_round", tenant, { competitionId: id, roundId, ...body }, "Deciding locks the round for good. Check the winner and runners-up with the judges.");
+      if (confirm !== true) return dryRun("decide_round", tenant, { competitionId: id, roundId, ...body }, "Deciding locks the round for good, and when the competition gives prizes (prizeAction COUPON) it makes a real coupon on the shop for the winner and each runner-up and emails each code to the nominator. Check the winner and runners-up with the judges.");
       return call(tenant, path, send("POST", body));
     },
   },

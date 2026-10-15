@@ -256,3 +256,13 @@ test("issuing a prize code is a dry run until confirm: true, and sends nothing (
     assert.match(result.note, /real coupon/);
   }
 });
+
+test("Decide says it issues the prizes: real coupons on the shop, emailed to the nominators (Lucas, uiiq-mcp #99 L2)", async () => {
+  const { description } = tools.uiiq_competition_round_decide;
+  assert.match(description, /Decide also issues the prizes/);
+  assert.match(description, /prizeAction is COUPON, it makes a real single-use coupon on the competition's shop for the winner and each runner-up, and emails each code to that entry's nominator/);
+  assert.match(description, /uiiq_competition_prize_issue/);
+  const { result, requests } = await call("uiiq_competition_round_decide", { id: "c1", roundId: "r1", winnerEntryId: "e1" });
+  assert.equal(requests.length, 0);
+  assert.match(result.note, /when the competition gives prizes \(prizeAction COUPON\) it makes a real coupon on the shop for the winner and each runner-up and emails each code to the nominator/);
+});
