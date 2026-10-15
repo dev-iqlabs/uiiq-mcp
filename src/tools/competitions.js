@@ -59,6 +59,10 @@ function keptWarning(out) {
   return kept ? { ...out, warning: `${kept} ${kept === 1 ? "entry was" : "entries were"} kept because ${kept === 1 ? "its photo" : "their photos"} couldn't be deleted. Erase again shortly.` } : out;
 }
 
+// A round's posts (UiiQ-platform #953): the call, the shortlist and the winner; only the last two name anyone.
+const POST_STAGES = ["call", "shortlist", "winner"];
+const NAMING_STAGES = ["shortlist", "winner"];
+
 const ROUND_PROPS = {
   theme: { type: "string", description: "Up to 120 characters, e.g. \"Remembrance\"" },
   opensAt: { type: "string", description: "ISO date-time" },
@@ -78,10 +82,9 @@ const COMPETITION_PROPS = {
   prizeValuePence: { type: ["number", "null"] },
   eligibility: { type: "string", description: "Who may enter, e.g. \"UK residents aged 18 or over\"" },
   rulesUrl: { type: ["string", "null"], description: "https" },
-  entryFormUrl: { type: ["string", "null"], description: "The IQForm link (www.iqex.co.uk only)" },
-  entryFormId: { type: ["number", "null"], description: "The entry IQForm's number: the form-id in its link" },
-  consentFormUrl: { type: ["string", "null"], description: "The nominee consent IQForm link (www.iqex.co.uk only)" },
-  consentFormId: { type: ["number", "null"], description: "The consent IQForm's number: the form-id in its link" },
+  // The forms' numbers are read from their links by UiiQ (UiiQ-platform #954): no separate number is sent.
+  entryFormUrl: { type: ["string", "null"], description: "The entry IQForm's page, exactly https://www.iqex.co.uk/data?form-id=<number> (nothing else after the number); UiiQ reads the form's number from it and checks it's one of the workspace's own Public forms" },
+  consentFormUrl: { type: ["string", "null"], description: "The nominee consent IQForm's page, in the same form as entryFormUrl" },
   criteria: { type: "array", items: { type: "object", properties: { key: { type: "string" }, label: { type: "string" }, weight: { type: "number" } } }, description: "Up to 10 judging criteria, each with a weight 1-100 (relative)" },
   judgeUserIds: { type: "array", items: { type: "string" }, description: "This workspace's people (uiiq_task_members); none = owners/admins judge" },
   socialAccountIds: { type: "array", items: { type: "string" }, description: "This workspace's social accounts the round's posts are for (uiiq_social_accounts)" },
@@ -196,6 +199,57 @@ export const competitionTools = [
       const body = { winnerEntryId, ...(runnerUpEntryIds ? { runnerUpEntryIds } : {}) };
       if (confirm !== true) return dryRun("decide_round", tenant, { competitionId: id, roundId, ...body }, "Deciding locks the round for good. Check the winner and runners-up with the judges.");
       return call(tenant, path, send("POST", body));
+    },
+  },
+  {
+    name: "uiiq_competition_post_draft",
+    description: "A round's post as a DRAFT social post, or the one already drafted: never scheduled or published here. stage: call (the call to enter), shortlist (before Decide: only shortlisted nominees who agreed, by first name, never a photo, with the round's card for Instagram), winner (after Decide: named only as far as they agreed). Goes to the competition's social accounts. Returns { postId, created, warnings }; check it and schedule it in Social.",
+    inputSchema: {
+      type: "object",
+      required: ["id", "roundId", "stage"],
+      properties: {
+        id: { type: "string" },
+        roundId: { type: "string" },
+        stage: { type: "string", enum: POST_STAGES },
+        tenant: TENANT_PROP,
+      },
+    },
+    async handler({ id, roundId, stage, tenant }) {
+      if (!POST_STAGES.includes(stage)) throw new Error(`stage must be one of ${POST_STAGES.join(", ")}`);
+      return call(tenant, `/competitions/${seg(id)}/rounds/${seg(roundId)}/posts/${seg(stage)}`, { method: "POST" });
+    },
+  },
+  {
+    name: "uiiq_competition_round_posts",
+    description: "A round's posts in Social, by stage: each one's post id, status, when it's scheduled or went out, and any mark on it (to take down, or to check after an erasure). A marked post won't be sent.",
+    inputSchema: {
+      type: "object",
+      required: ["id", "roundId"],
+      properties: { id: { type: "string" }, roundId: { type: "string" }, tenant: TENANT_PROP },
+    },
+    async handler({ id, roundId, tenant }) {
+      return call(tenant, `/competitions/${seg(id)}/rounds/${seg(roundId)}/posts`, { method: "GET" });
+    },
+  },
+  {
+    name: "uiiq_competition_post_taken_down",
+    description: "Say a marked shortlist or winner post is dealt with: down on the platforms (or, for a post that couldn't be checked, checked). Clears its mark, audited. Owner/admin only: it is a statement that the post is gone. Without confirm: true it's a dry run that changes nothing.",
+    inputSchema: {
+      type: "object",
+      required: ["id", "roundId", "stage"],
+      properties: {
+        id: { type: "string" },
+        roundId: { type: "string" },
+        stage: { type: "string", enum: NAMING_STAGES },
+        confirm: CONFIRM_PROP,
+        tenant: TENANT_PROP,
+      },
+    },
+    async handler({ id, roundId, stage, confirm, tenant }) {
+      if (!NAMING_STAGES.includes(stage)) throw new Error(`stage must be one of ${NAMING_STAGES.join(", ")}`);
+      const path = `/competitions/${seg(id)}/rounds/${seg(roundId)}/posts/${seg(stage)}`;
+      if (confirm !== true) return dryRun("clear_post_mark", tenant, { competitionId: id, roundId, stage }, "Make sure the post is down on every platform it went to (or checked, if it couldn't be).");
+      return call(tenant, path, send("PATCH", { takenDown: true }));
     },
   },
   {
