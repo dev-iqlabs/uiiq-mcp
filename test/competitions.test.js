@@ -52,7 +52,7 @@ test("every tool is named uiiq_competition_* and describes itself", () => {
     assert.ok(t.description.length > 20, name);
     assert.equal(t.inputSchema.type, "object", name);
   }
-  assert.equal(Object.keys(tools).length, 14);
+  assert.equal(Object.keys(tools).length, 16);
 });
 
 test("each tool calls its own route, with its own method and body", async () => {
@@ -70,6 +70,8 @@ test("each tool calls its own route, with its own method and body", async () => 
     ["uiiq_competition_entry_get", { entryId: "e1" }, "GET", "/competitions/entries/e1", undefined],
     ["uiiq_competition_entry_update", { entryId: "e1", scores: { story: 8 } }, "PATCH", "/competitions/entries/e1", { scores: { story: 8 } }],
     ["uiiq_competition_entry_erase", { entryId: "e1" }, "DELETE", "/competitions/entries/e1", undefined],
+    ["uiiq_competition_prize_get", { entryId: "e1" }, "GET", "/competitions/entries/e1/prize", undefined],
+    ["uiiq_competition_prize_issue", { entryId: "e1" }, "POST", "/competitions/entries/e1/prize", undefined],
     ["uiiq_competition_erase_address", { email: "jo@example.com" }, "POST", "/competitions/erase", { email: "jo@example.com" }],
   ];
   for (const [name, args, method, path, body] of cases) {

@@ -1115,6 +1115,8 @@ Needs the `competitions` feature. Setting up, rounds, the nominee confirmation a
 | `uiiq_competition_entry_get` | One entry, its consents, the nominee's answer and what was confirmed. |
 | `uiiq_competition_entry_update` | Status, notes, or your own scores; locked once its round is decided. |
 | `uiiq_competition_nominee_confirm` | What was agreed directly with the nominee (or a parent or guardian): the only thing that lets anything about them be published. |
+| `uiiq_competition_prize_get` | A winner's or runner-up's prize code (owner/admin; a secret). |
+| `uiiq_competition_prize_issue` | Make a prize code now, after a failure (owner/admin); never twice. |
 | `uiiq_competition_entry_erase` | Erase one entry for good, photo included. |
 | `uiiq_competition_erase_address` | Erase everything an email address sent to the workspace's competitions. |
 
