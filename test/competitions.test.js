@@ -56,7 +56,7 @@ test("every tool is named uiiq_competition_* and describes itself", () => {
     assert.ok(t.description.length > 20, name);
     assert.equal(t.inputSchema.type, "object", name);
   }
-  assert.equal(Object.keys(tools).length, 13);
+  assert.equal(Object.keys(tools).length, 16);
 });
 
 test("each tool calls its own route, with its own method and body", async () => {
@@ -75,6 +75,9 @@ test("each tool calls its own route, with its own method and body", async () => 
     ["uiiq_competition_nominee_confirm", { entryId: "e1", answeredBy: "nominee", how: "phone", items: {} }, "POST", "/competitions/entries/e1/nominee-confirmation", { answeredBy: "nominee", how: "phone", items: {} }],
     ["uiiq_competition_entry_erase", { entryId: "e1", confirm: true }, "DELETE", "/competitions/entries/e1", undefined],
     ["uiiq_competition_erase_address", { email: "jo@example.com", confirm: true }, "POST", "/competitions/erase", { email: "jo@example.com" }],
+    ["uiiq_competition_post_draft", { id: "c1", roundId: "r1", stage: "shortlist" }, "POST", "/competitions/c1/rounds/r1/posts/shortlist", undefined],
+    ["uiiq_competition_round_posts", { id: "c1", roundId: "r1" }, "GET", "/competitions/c1/rounds/r1/posts", undefined],
+    ["uiiq_competition_post_taken_down", { id: "c1", roundId: "r1", stage: "winner", confirm: true }, "PATCH", "/competitions/c1/rounds/r1/posts/winner", { takenDown: true }],
   ];
   for (const [name, args, method, path, body] of cases) {
     const { requests } = await call(name, args);
@@ -85,9 +88,10 @@ test("each tool calls its own route, with its own method and body", async () => 
   }
 });
 
-test("only the routes UiiQ has: no post, prize or publish tools yet", () => {
+test("only the routes UiiQ has: posts only as drafts, nothing publishes or schedules, no prize tools yet", () => {
   const names = Object.keys(tools);
-  assert.deepEqual(names.filter((n) => /post|publish|schedule|prize/.test(n)), []);
+  assert.deepEqual(names.filter((n) => /publish|schedule|prize/.test(n)), []);
+  assert.deepEqual(names.filter((n) => /post/.test(n)).sort(), ["uiiq_competition_post_draft", "uiiq_competition_post_taken_down", "uiiq_competition_round_posts"]);
   for (const t of Object.values(tools)) {
     for (const k of ["prizeAction", "prizeSiteId", "prizeWinner", "prizeRunnerUp"]) assert.equal(t.inputSchema.properties?.[k], undefined, `${t.name} ${k}`);
   }
@@ -209,4 +213,23 @@ test("UiiQ's refusal comes back as its own words", async () => {
     call("uiiq_competition_round_decide", { id: "c1", roundId: "r1", winnerEntryId: "e1", confirm: true }, [409, { error: "A round is decided after it closes" }]),
     /A round is decided after it closes/,
   );
+});
+
+test("a round's posts: a draft by stage, never another stage; clearing a mark is a dry run until confirm: true", async () => {
+  await assert.rejects(() => tools.uiiq_competition_post_draft.handler({ id: "c1", roundId: "r1", stage: "delivery" }), /stage must be one of call, shortlist, winner/);
+  await assert.rejects(() => tools.uiiq_competition_post_taken_down.handler({ id: "c1", roundId: "r1", stage: "call", confirm: true }), /stage must be one of shortlist, winner/);
+  const { result, requests } = await call("uiiq_competition_post_taken_down", { id: "c1", roundId: "r1", stage: "shortlist" });
+  assert.equal(requests.length, 0);
+  assert.equal(result.dryRun, true);
+  assert.equal(result.wouldDo, "clear_post_mark");
+  assert.match(result.note, /Nothing was changed/);
+});
+
+test("the form numbers aren't sent: UiiQ reads them from the links (UiiQ-platform #954)", () => {
+  for (const name of ["uiiq_competition_create", "uiiq_competition_update"]) {
+    const props = tools[name].inputSchema.properties;
+    assert.equal(props.entryFormId, undefined, name);
+    assert.equal(props.consentFormId, undefined, name);
+    assert.match(props.entryFormUrl.description, /data\?form-id=<number>/, name);
+  }
 });
