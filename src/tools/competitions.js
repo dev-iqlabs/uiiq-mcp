@@ -91,6 +91,11 @@ const COMPETITION_PROPS = {
   postTemplates: { type: "object", description: "{ call, shortlist, winner, delivery }: the wording of each of the round's posts. Placeholders: {competition} {round} {closes} {prize} {promoter} {eligibility} {link} {rules}" },
   entriesPerEmail: { type: "number", description: "1-20, per round" },
   retentionDays: { type: "number", description: "7-90" },
+  // Prize codes (UiiQ-platform #966): a workspace given the competition_prizes feature only.
+  prizeAction: { type: "string", enum: ["NONE", "COUPON"], description: "COUPON: Decide makes the winner's and runners-up' single-use codes on prizeSiteId through UiiQ Connect (4.51.0 or newer) and emails each to the nominator. Needs the workspace's competition_prizes feature" },
+  prizeSiteId: { type: ["string", "null"], description: "The shop the codes are made on: an active site this workspace owns, with UiiQ Connect's Prize codes module" },
+  prizeWinner: { type: ["object", "null"], description: "The winner's coupon: { percent 1-100, categoryIds, productIds (WooCommerce ids; at least one between them: never the whole shop), expiryDays 1-365 }" },
+  prizeRunnerUp: { type: ["object", "null"], description: "Each runner-up's coupon, the same shape; null for none" },
 };
 
 // COMPETITIONS: a competition that runs in rounds (e.g. Ultimate Coins'
@@ -176,7 +181,7 @@ export const competitionTools = [
   },
   {
     name: "uiiq_competition_round_decide",
-    description: "Decide a round after it closes: the winner and any runners-up (up to 10), from its confirmed entries that aren't rejected or withdrawn. Judges only (or owner/admin when none are named). Locks the round for good; the audit keeps who chose, when, and the scores. Without confirm: true it's a dry run that changes nothing.",
+    description: "Decide a round after it closes: the winner and any runners-up (up to 10), from its confirmed entries that aren't rejected or withdrawn. Judges only (or owner/admin when none are named). Locks the round for good; the audit keeps who chose, when, and the scores. Decide also issues the prizes: when the competition's prizeAction is COUPON, it makes a real single-use coupon on the competition's shop for the winner and each runner-up, and emails each code to that entry's nominator. The answer's prizes list has a row per entry ({ entryId, ok, error }); a row that isn't ok (e.g. \"Not issued yet\", when there wasn't time) is issued with uiiq_competition_prize_issue. Without confirm: true it's a dry run that changes, makes and sends nothing.",
     inputSchema: {
       type: "object",
       required: ["id", "roundId", "winnerEntryId"],
@@ -197,7 +202,7 @@ export const competitionTools = [
       if (runnerUpEntryIds !== undefined && !Array.isArray(runnerUpEntryIds)) throw new Error("runnerUpEntryIds must be a list of entry ids");
       for (const r of runnerUpEntryIds ?? []) seg(r, "runnerUpEntryIds");
       const body = { winnerEntryId, ...(runnerUpEntryIds ? { runnerUpEntryIds } : {}) };
-      if (confirm !== true) return dryRun("decide_round", tenant, { competitionId: id, roundId, ...body }, "Deciding locks the round for good. Check the winner and runners-up with the judges.");
+      if (confirm !== true) return dryRun("decide_round", tenant, { competitionId: id, roundId, ...body }, "Deciding locks the round for good, and when the competition gives prizes (prizeAction COUPON) it makes a real coupon on the shop for the winner and each runner-up and emails each code to the nominator. Check the winner and runners-up with the judges.");
       return call(tenant, path, send("POST", body));
     },
   },
@@ -327,6 +332,24 @@ export const competitionTools = [
     },
     async handler({ entryId, tenant, ...body }) {
       return call(tenant, `/competitions/entries/${seg(entryId)}/nominee-confirmation`, send("POST", body));
+    },
+  },
+  {
+    name: "uiiq_competition_prize_get",
+    description: "A winner's or runner-up's prize code, when it was made and any failure (owner/admin; refused to read-only impersonation). Each look is recorded, without the code. Treat the code as a secret: it's already been emailed to the nominator.",
+    inputSchema: { type: "object", required: ["entryId"], properties: { entryId: { type: "string" }, tenant: TENANT_PROP } },
+    async handler({ entryId, tenant }) {
+      return call(tenant, `/competitions/entries/${seg(entryId)}/prize`, { method: "GET" });
+    },
+  },
+  {
+    name: "uiiq_competition_prize_issue",
+    description: "Make a winner's or runner-up's prize code now: after a failure, or one Decide had no time for (owner/admin). It is a real single-use coupon on the shop, emailed to the nominator, so without confirm: true it's a dry run that makes and sends nothing. An entry that has its code is left as it is: nothing is made or emailed again. Returns { ok, existing, emailed }.",
+    inputSchema: { type: "object", required: ["entryId"], properties: { entryId: { type: "string" }, confirm: CONFIRM_PROP, tenant: TENANT_PROP } },
+    async handler({ entryId, confirm, tenant }) {
+      const path = `/competitions/entries/${seg(entryId)}/prize`;
+      if (confirm !== true) return dryRun("issue_prize", tenant, { entryId }, "This makes a real coupon on the competition's shop and emails it to the nominator. Check it's the winner or runner-up you mean.");
+      return call(tenant, path, { method: "POST" });
     },
   },
   {
