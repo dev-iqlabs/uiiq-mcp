@@ -5,11 +5,25 @@ const TENANT_PROP = {
   description: "Tenant id, slug or exact name to act in. Omit for your own tenant.",
 };
 const api = (tenant) => apiClient(tenant ? { tenant } : {});
-const enc = encodeURIComponent;
+const CONFIRM_PROP = { type: "boolean", description: "true = do it; omit for the dry run, which changes nothing" };
+
+// An id that goes into a route: only the characters an id has, so "", "." or
+// ".." can never turn one route into another ("/competitions/entries/.." is
+// "/competitions"). Lucas, uiiq-mcp #97 L1.
+const ID = /^[A-Za-z0-9_-]{1,64}$/;
+function seg(name, value) {
+  if (typeof value !== "string" || !ID.test(value)) throw new Error(`${name} must be an id: letters, numbers, - and _ only (up to 64)`);
+  return value;
+}
 
 async function fail(res) {
   const text = await res.text();
-  try { const j = JSON.parse(text); if (j?.error) return new Error(j.error); } catch { /* not JSON */ }
+  try {
+    const j = JSON.parse(text);
+    // An erasure that kept entries says which, besides why (their photos couldn't be deleted yet).
+    if (j?.error && j.kept) return new Error(`${j.error} Erased ${j.erased ?? 0}; kept ${Array.isArray(j.kept) ? j.kept.join(", ") : j.kept}.`);
+    if (j?.error) return new Error(j.error);
+  } catch { /* not JSON */ }
   return new Error(text || `HTTP ${res.status}`);
 }
 
@@ -19,6 +33,20 @@ async function call(tenant, path, init) {
   return res.json();
 }
 const send = (method, body) => ({ method, body: JSON.stringify(body) });
+const dryRun = (wouldDo, tenant, details, note) => ({
+  dryRun: true,
+  changed: false,
+  wouldDo,
+  tenant: tenant ?? "your own",
+  ...details,
+  note: `Nothing was changed. ${note} Then call again with confirm: true.`,
+});
+
+// An erasure answers { erased, photosDeleted, kept }; anything kept waits for its photo.
+function keptWarning(out) {
+  const kept = Array.isArray(out?.kept) ? out.kept.length : out?.kept;
+  return kept ? { ...out, warning: `${kept} ${kept === 1 ? "entry was" : "entries were"} kept because ${kept === 1 ? "its photo" : "their photos"} couldn't be deleted. Erase again shortly.` } : out;
+}
 
 const ROUND_PROPS = {
   theme: { type: "string", description: "Up to 120 characters, e.g. \"Remembrance\"" },
@@ -28,15 +56,38 @@ const ROUND_PROPS = {
   winnerAt: { type: ["string", "null"], description: "ISO date-time the winner is announced" },
 };
 
-// COMPETITIONS — a competition that runs in rounds (e.g. Ultimate Coins'
-// "Coin of the Week"): entries come in through an IQForm, judges score them
-// against weighted criteria, a judge decides each round after it closes.
+const COMPETITION_PROPS = {
+  name: { type: "string" },
+  slug: { type: "string", description: "Lower-case letters, numbers and hyphens, unique in the workspace" },
+  type: { type: "string", enum: ["NOMINATION", "ENTRY"] },
+  status: { type: "string", enum: ["DRAFT", "ACTIVE", "ARCHIVED"] },
+  promoterName: { type: "string" },
+  promoterAddress: { type: "string" },
+  prizeDescription: { type: "string" },
+  prizeValuePence: { type: ["number", "null"] },
+  eligibility: { type: "string", description: "Who may enter, e.g. \"UK residents aged 18 or over\"" },
+  rulesUrl: { type: ["string", "null"], description: "https" },
+  entryFormUrl: { type: ["string", "null"], description: "The IQForm link (www.iqex.co.uk only)" },
+  entryFormId: { type: ["number", "null"], description: "The entry IQForm's number: the form-id in its link" },
+  consentFormUrl: { type: ["string", "null"], description: "The nominee consent IQForm link (www.iqex.co.uk only)" },
+  consentFormId: { type: ["number", "null"], description: "The consent IQForm's number: the form-id in its link" },
+  criteria: { type: "array", items: { type: "object", properties: { key: { type: "string" }, label: { type: "string" }, weight: { type: "number" } } }, description: "Up to 10 judging criteria, each with a weight 1-100 (relative)" },
+  judgeUserIds: { type: "array", items: { type: "string" }, description: "This workspace's people (uiiq_task_members); none = owners/admins judge" },
+  socialAccountIds: { type: "array", items: { type: "string" }, description: "This workspace's social accounts the round's posts are for (uiiq_social_accounts)" },
+  postTemplates: { type: "object", description: "{ call, shortlist, winner, delivery }: the wording of each of the round's posts. Placeholders: {competition} {round} {closes} {prize} {promoter} {eligibility} {link} {rules}" },
+  entriesPerEmail: { type: "number", description: "1-20, per round" },
+  retentionDays: { type: "number", description: "7-90" },
+};
+
+// COMPETITIONS: a competition that runs in rounds (e.g. Ultimate Coins'
+// "Coin of the Week"). Entries come in through an IQForm, judges score them
+// against weighted criteria, and a judge decides each round after it closes.
 // Mirrors the UIIQ /competitions API (UiiQ-platform #946). GATED: needs the
 // `competitions` feature ticked for the workspace. Setting a competition up,
 // its rounds, recording what a nominee agreed to, and erasure are an
 // owner/admin's; entry status and notes are any staff login's; scoring and
-// Decide are the competition's judges'. Nothing here publishes a post: the
-// call to enter is only ever a DRAFT in Social.
+// Decide are the competition's judges'. Deciding and erasing can't be undone,
+// so each takes confirm: true after a dry run. Nothing here publishes a post.
 export const competitionTools = [
   {
     name: "uiiq_competition_list",
@@ -51,42 +102,16 @@ export const competitionTools = [
     description: "One competition with its rounds, each with its phase (upcoming, open, closed, decided) and the entry form link for that round (share the round's link, never the bare form).",
     inputSchema: { type: "object", required: ["id"], properties: { id: { type: "string" }, tenant: TENANT_PROP } },
     async handler({ id, tenant }) {
-      return call(tenant, `/competitions/${enc(id)}`);
+      return call(tenant, `/competitions/${seg("id", id)}`);
     },
   },
   {
     name: "uiiq_competition_create",
-    description: "A new competition, DRAFT unless status says otherwise (owner/admin). ACTIVE needs entryFormUrl, rulesUrl, promoterName, and for a NOMINATION consentFormUrl. slug: lower-case letters, numbers and hyphens, unique in the workspace.",
+    description: "A new competition, DRAFT unless status says otherwise (owner/admin). ACTIVE needs entryFormUrl, rulesUrl, promoterName, and for a NOMINATION consentFormUrl.",
     inputSchema: {
       type: "object",
       required: ["name", "slug"],
-      properties: {
-        name: { type: "string" },
-        slug: { type: "string" },
-        type: { type: "string", enum: ["NOMINATION", "ENTRY"] },
-        status: { type: "string", enum: ["DRAFT", "ACTIVE", "ARCHIVED"] },
-        promoterName: { type: "string" },
-        promoterAddress: { type: "string" },
-        prizeDescription: { type: "string" },
-        prizeValuePence: { type: ["number", "null"] },
-        eligibility: { type: "string", description: "Who may enter, e.g. \"UK residents aged 18 or over\"" },
-        rulesUrl: { type: ["string", "null"], description: "https" },
-        entryFormUrl: { type: ["string", "null"], description: "The IQForm link (www.iqex.co.uk only)" },
-        entryFormId: { type: ["number", "null"] },
-        consentFormUrl: { type: ["string", "null"], description: "The nominee consent IQForm link (www.iqex.co.uk only)" },
-        consentFormId: { type: ["number", "null"] },
-        criteria: { type: "array", items: { type: "object", properties: { key: { type: "string" }, label: { type: "string" }, weight: { type: "number" } } }, description: "Up to 10 judging criteria, each with a weight 1-100 (relative)" },
-        judgeUserIds: { type: "array", items: { type: "string" }, description: "This workspace's people (uiiq_task_members); none = owners/admins judge" },
-        socialAccountIds: { type: "array", items: { type: "string" }, description: "This workspace's social accounts the call post goes to (uiiq_social_accounts)" },
-        postTemplates: { type: "object", description: "{ call } — the call to enter; must include {link} and {closes}. Placeholders: {competition} {round} {closes} {prize} {promoter} {eligibility} {link} {rules}" },
-        entriesPerEmail: { type: "number", description: "1-20, per round" },
-        retentionDays: { type: "number", description: "7-90" },
-        prizeAction: { type: "string", enum: ["NONE", "COUPON"], description: "COUPON: Decide makes the winner's and runners-up' codes on prizeSiteId through UiiQ Connect (>= 4.51.0) and emails them to the nominator" },
-        prizeSiteId: { type: ["string", "null"], description: "A site this workspace owns, with UiiQ Connect and WooCommerce" },
-        prizeWinner: { type: ["object", "null"], description: "{ percent 1-100, categoryIds, productIds (WooCommerce ids; at least one), expiryDays 1-365 }" },
-        prizeRunnerUp: { type: ["object", "null"], description: "{ percent 1-100, categoryIds, productIds (WooCommerce ids; at least one), expiryDays 1-365 }" },
-        tenant: TENANT_PROP,
-      },
+      properties: { ...COMPETITION_PROPS, tenant: TENANT_PROP },
     },
     async handler({ tenant, ...body }) {
       return call(tenant, "/competitions", send("POST", body));
@@ -98,37 +123,10 @@ export const competitionTools = [
     inputSchema: {
       type: "object",
       required: ["id"],
-      properties: {
-        id: { type: "string" },
-        name: { type: "string" },
-        slug: { type: "string" },
-        type: { type: "string", enum: ["NOMINATION", "ENTRY"] },
-        status: { type: "string", enum: ["DRAFT", "ACTIVE", "ARCHIVED"] },
-        promoterName: { type: "string" },
-        promoterAddress: { type: "string" },
-        prizeDescription: { type: "string" },
-        prizeValuePence: { type: ["number", "null"] },
-        eligibility: { type: "string" },
-        rulesUrl: { type: ["string", "null"] },
-        entryFormUrl: { type: ["string", "null"] },
-        entryFormId: { type: ["number", "null"] },
-        consentFormUrl: { type: ["string", "null"] },
-        consentFormId: { type: ["number", "null"] },
-        criteria: { type: "array", items: { type: "object" } },
-        judgeUserIds: { type: "array", items: { type: "string" } },
-        socialAccountIds: { type: "array", items: { type: "string" } },
-        postTemplates: { type: "object" },
-        entriesPerEmail: { type: "number" },
-        retentionDays: { type: "number" },
-        prizeAction: { type: "string", enum: ["NONE", "COUPON"] },
-        prizeSiteId: { type: ["string", "null"] },
-        prizeWinner: { type: ["object", "null"], description: "{ percent 1-100, categoryIds, productIds (WooCommerce ids; at least one), expiryDays 1-365 }" },
-        prizeRunnerUp: { type: ["object", "null"], description: "{ percent 1-100, categoryIds, productIds (WooCommerce ids; at least one), expiryDays 1-365 }" },
-        tenant: TENANT_PROP,
-      },
+      properties: { id: { type: "string" }, ...COMPETITION_PROPS, tenant: TENANT_PROP },
     },
     async handler({ id, tenant, ...body }) {
-      return call(tenant, `/competitions/${enc(id)}`, send("PATCH", body));
+      return call(tenant, `/competitions/${seg("id", id)}`, send("PATCH", body));
     },
   },
   {
@@ -147,7 +145,7 @@ export const competitionTools = [
     },
     async handler({ id, tenant, weeks, themes, ...round }) {
       const body = weeks && weeks > 1 ? { weekly: { first: round, count: weeks, ...(themes ? { themes } : {}) } } : { round };
-      return call(tenant, `/competitions/${enc(id)}/rounds`, send("POST", body));
+      return call(tenant, `/competitions/${seg("id", id)}/rounds`, send("POST", body));
     },
   },
   {
@@ -159,12 +157,12 @@ export const competitionTools = [
       properties: { id: { type: "string" }, roundId: { type: "string" }, ...ROUND_PROPS, tenant: TENANT_PROP },
     },
     async handler({ id, roundId, tenant, ...body }) {
-      return call(tenant, `/competitions/${enc(id)}/rounds/${enc(roundId)}`, send("PATCH", body));
+      return call(tenant, `/competitions/${seg("id", id)}/rounds/${seg("roundId", roundId)}`, send("PATCH", body));
     },
   },
   {
     name: "uiiq_competition_round_decide",
-    description: "Decide a round after it closes: the winner and any runners-up (up to 10), from its confirmed entries that aren't rejected or withdrawn. Judges only (or owner/admin when none are named). Locks the round; the audit keeps who chose, when, and the scores.",
+    description: "Decide a round after it closes: the winner and any runners-up (up to 10), from its confirmed entries that aren't rejected or withdrawn. Judges only (or owner/admin when none are named). Locks the round for good; the audit keeps who chose, when, and the scores. Without confirm: true it's a dry run that changes nothing.",
     inputSchema: {
       type: "object",
       required: ["id", "roundId", "winnerEntryId"],
@@ -173,33 +171,22 @@ export const competitionTools = [
         roundId: { type: "string" },
         winnerEntryId: { type: "string" },
         runnerUpEntryIds: { type: "array", items: { type: "string" } },
+        confirm: CONFIRM_PROP,
         tenant: TENANT_PROP,
       },
     },
-    async handler({ id, roundId, tenant, winnerEntryId, runnerUpEntryIds }) {
-      return call(tenant, `/competitions/${enc(id)}/rounds/${enc(roundId)}/decide`, send("POST", { winnerEntryId, ...(runnerUpEntryIds ? { runnerUpEntryIds } : {}) }));
-    },
-  },
-  {
-    name: "uiiq_competition_post_draft",
-    description: "A round's post as a DRAFT social post, or the one already drafted: never scheduled or published here. stage: call (the call to enter, while the round is open or to come), shortlist (before Decide; names only shortlisted nominees who agreed, first names, never a photo), winner (after Decide; named only if they agreed, otherwise \"this week's winner has been told\"). Goes to the competition's social accounts, with the Meta/TikTok disclaimer and \"the link in our bio\" on Instagram and TikTok. Returns { postId, created, warnings }; schedule it in Social after a look.",
-    inputSchema: {
-      type: "object",
-      required: ["id", "roundId", "stage"],
-      properties: {
-        id: { type: "string" },
-        roundId: { type: "string" },
-        stage: { type: "string", enum: ["call", "shortlist", "winner"] },
-        tenant: TENANT_PROP,
-      },
-    },
-    async handler({ id, roundId, stage, tenant }) {
-      return call(tenant, `/competitions/${enc(id)}/rounds/${enc(roundId)}/posts/${enc(stage)}`, { method: "POST" });
+    async handler({ id, roundId, tenant, winnerEntryId, runnerUpEntryIds, confirm }) {
+      const path = `/competitions/${seg("id", id)}/rounds/${seg("roundId", roundId)}/decide`;
+      seg("winnerEntryId", winnerEntryId);
+      for (const r of runnerUpEntryIds ?? []) seg("runnerUpEntryIds", r);
+      const body = { winnerEntryId, ...(runnerUpEntryIds ? { runnerUpEntryIds } : {}) };
+      if (confirm !== true) return dryRun("decide_round", tenant, { competitionId: id, roundId, ...body }, "Deciding locks the round for good. Check the winner and runners-up with the judges.");
+      return call(tenant, path, send("POST", body));
     },
   },
   {
     name: "uiiq_competition_entries",
-    description: "A competition's entries, ranked by weighted score (earlier entry first on a tie), each with what may be published about its nominee. roundId and status narrow it.",
+    description: "A competition's entries, ranked by weighted score (earlier entry first on a tie): each one's id, round, nominee's first name, status, score, when it came in, and what may be published about its nominee. roundId and status narrow it. uiiq_competition_entry_get has one entry in full.",
     inputSchema: {
       type: "object",
       required: ["id"],
@@ -211,9 +198,13 @@ export const competitionTools = [
       },
     },
     async handler({ id, roundId, status, tenant }) {
-      const q = new URLSearchParams({ ...(roundId ? { roundId } : {}), ...(status ? { status } : {}) }).toString();
-      const path = `/competitions/${enc(id)}/entries`;
-      return call(tenant, q ? `${path}?${q}` : path);
+      const q = new URLSearchParams({ ...(roundId ? { roundId: seg("roundId", roundId) } : {}), ...(status ? { status } : {}) }).toString();
+      const path = `/competitions/${seg("id", id)}/entries`;
+      const rows = await call(tenant, q ? `${path}?${q}` : path);
+      // The list carries no entrant details, reasons or photo links (Lucas, uiiq-mcp #97 L3).
+      return Array.isArray(rows)
+        ? rows.map((e) => ({ id: e.id, roundId: e.roundId, nomineeFirstName: e.nomineeFirstName, status: e.status, weightedScore: e.weightedScore, receivedAt: e.receivedAt, publishable: e.publishable }))
+        : rows;
     },
   },
   {
@@ -221,7 +212,7 @@ export const competitionTools = [
     description: "One entry: the entrant, the reason, the consents as ticked, the nominee's provisional answer and what was confirmed with them, the scores (photo as a 10-minute link).",
     inputSchema: { type: "object", required: ["entryId"], properties: { entryId: { type: "string" }, tenant: TENANT_PROP } },
     async handler({ entryId, tenant }) {
-      return call(tenant, `/competitions/entries/${enc(entryId)}`);
+      return call(tenant, `/competitions/entries/${seg("entryId", entryId)}`);
     },
   },
   {
@@ -239,7 +230,7 @@ export const competitionTools = [
       },
     },
     async handler({ entryId, tenant, ...body }) {
-      return call(tenant, `/competitions/entries/${enc(entryId)}`, send("PATCH", body));
+      return call(tenant, `/competitions/entries/${seg("entryId", entryId)}`, send("PATCH", body));
     },
   },
   {
@@ -267,39 +258,26 @@ export const competitionTools = [
       },
     },
     async handler({ entryId, tenant, ...body }) {
-      return call(tenant, `/competitions/entries/${enc(entryId)}/nominee-confirmation`, send("POST", body));
-    },
-  },
-  {
-    name: "uiiq_competition_prize_get",
-    description: "A winner's or runner-up's prize code, when it was made and any failure (owner/admin only; treat the code as a secret).",
-    inputSchema: { type: "object", required: ["entryId"], properties: { entryId: { type: "string" }, tenant: TENANT_PROP } },
-    async handler({ entryId, tenant }) {
-      return call(tenant, `/competitions/entries/${enc(entryId)}/prize`);
-    },
-  },
-  {
-    name: "uiiq_competition_prize_issue",
-    description: "Make a winner's or runner-up's prize code now, after a failure or one Decide didn't make (owner/admin). An entry that has its code is left as it is: nothing is made or emailed again. Returns { ok, existing, emailed }.",
-    inputSchema: { type: "object", required: ["entryId"], properties: { entryId: { type: "string" }, tenant: TENANT_PROP } },
-    async handler({ entryId, tenant }) {
-      return call(tenant, `/competitions/entries/${enc(entryId)}/prize`, { method: "POST" });
+      return call(tenant, `/competitions/entries/${seg("entryId", entryId)}/nominee-confirmation`, send("POST", body));
     },
   },
   {
     name: "uiiq_competition_entry_erase",
-    description: "Erase one entry for good, its photo included, e.g. when a nominee asks (owner/admin). Can't be undone; the audit keeps only that it happened.",
-    inputSchema: { type: "object", required: ["entryId"], properties: { entryId: { type: "string" }, tenant: TENANT_PROP } },
-    async handler({ entryId, tenant }) {
-      return call(tenant, `/competitions/entries/${enc(entryId)}`, { method: "DELETE" });
+    description: "Erase one entry for good, its photo included, e.g. when a nominee asks (owner/admin). Can't be undone; the audit keeps only that it happened. Without confirm: true it's a dry run that changes nothing.",
+    inputSchema: { type: "object", required: ["entryId"], properties: { entryId: { type: "string" }, confirm: CONFIRM_PROP, tenant: TENANT_PROP } },
+    async handler({ entryId, tenant, confirm }) {
+      const path = `/competitions/entries/${seg("entryId", entryId)}`;
+      if (confirm !== true) return dryRun("erase_entry", tenant, { entryId }, "Erasing can't be undone. Check it's the right entry (uiiq_competition_entry_get) and the right workspace.");
+      return keptWarning(await call(tenant, path, { method: "DELETE" }));
     },
   },
   {
     name: "uiiq_competition_erase_address",
-    description: "A person's erasure request: every entry their email address sent to this workspace's competitions, photos included (owner/admin). Can't be undone; the audit keeps the address only as a hash. Returns { erased, photosDeleted }.",
-    inputSchema: { type: "object", required: ["email"], properties: { email: { type: "string" }, tenant: TENANT_PROP } },
-    async handler({ email, tenant }) {
-      return call(tenant, "/competitions/erase", send("POST", { email }));
+    description: "A person's erasure request: every entry their email address sent to this workspace's competitions, photos included (owner/admin). Can't be undone; the audit keeps the address only as a hash. Returns { erased, photosDeleted, kept }; an entry whose photo couldn't be deleted is kept, and erasing again takes it. Without confirm: true it's a dry run that changes nothing.",
+    inputSchema: { type: "object", required: ["email"], properties: { email: { type: "string" }, confirm: CONFIRM_PROP, tenant: TENANT_PROP } },
+    async handler({ email, tenant, confirm }) {
+      if (confirm !== true) return dryRun("erase_address", tenant, { email }, "Erasing can't be undone. Check the address and the workspace with the person who asked.");
+      return keptWarning(await call(tenant, "/competitions/erase", send("POST", { email })));
     },
   },
 ];

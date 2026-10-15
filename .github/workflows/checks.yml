@@ -60,6 +60,12 @@ jobs:
           if (bad) process.exit(1);
           "
 
+      # The tests under test/ run against a local stand-in for UIIQ (a throwaway
+      # HOME and session), so nothing real is read or sent. Without this step a
+      # tool whose test fails still merges green (Lucas, uiiq-mcp #97 L2).
+      - name: Tests
+        run: npm test
+
       # Only when shipped code changed. A CI or docs-only PR has nothing to
       # release, and demanding a bump for one is how a check trains people to
       # ignore it. Two PRs claiming one version is the real thing being stopped:

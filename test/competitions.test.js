@@ -52,27 +52,25 @@ test("every tool is named uiiq_competition_* and describes itself", () => {
     assert.ok(t.description.length > 20, name);
     assert.equal(t.inputSchema.type, "object", name);
   }
-  assert.equal(Object.keys(tools).length, 16);
+  assert.equal(Object.keys(tools).length, 13);
 });
 
 test("each tool calls its own route, with its own method and body", async () => {
   const cases = [
     ["uiiq_competition_list", {}, "GET", "/competitions", undefined],
-    ["uiiq_competition_get", { id: "c 1" }, "GET", "/competitions/c%201", undefined],
+    ["uiiq_competition_get", { id: "c1" }, "GET", "/competitions/c1", undefined],
     ["uiiq_competition_create", { name: "Coin of the Week", slug: "coin-of-the-week", type: "NOMINATION" }, "POST", "/competitions", { name: "Coin of the Week", slug: "coin-of-the-week", type: "NOMINATION" }],
     ["uiiq_competition_update", { id: "c1", status: "ACTIVE" }, "PATCH", "/competitions/c1", { status: "ACTIVE" }],
     ["uiiq_competition_round_update", { id: "c1", roundId: "r1", theme: "Bonfire" }, "PATCH", "/competitions/c1/rounds/r1", { theme: "Bonfire" }],
-    ["uiiq_competition_round_decide", { id: "c1", roundId: "r1", winnerEntryId: "e1" }, "POST", "/competitions/c1/rounds/r1/decide", { winnerEntryId: "e1" }],
-    ["uiiq_competition_post_draft", { id: "c1", roundId: "r1", stage: "call" }, "POST", "/competitions/c1/rounds/r1/posts/call", undefined],
-    ["uiiq_competition_post_draft", { id: "c1", roundId: "r1", stage: "winner" }, "POST", "/competitions/c1/rounds/r1/posts/winner", undefined],
+    ["uiiq_competition_round_decide", { id: "c1", roundId: "r1", winnerEntryId: "e1", confirm: true }, "POST", "/competitions/c1/rounds/r1/decide", { winnerEntryId: "e1" }],
+    ["uiiq_competition_round_decide", { id: "c1", roundId: "r1", winnerEntryId: "e1", runnerUpEntryIds: ["e2"], confirm: true }, "POST", "/competitions/c1/rounds/r1/decide", { winnerEntryId: "e1", runnerUpEntryIds: ["e2"] }],
     ["uiiq_competition_entries", { id: "c1", roundId: "r1", status: "NEW" }, "GET", "/competitions/c1/entries?roundId=r1&status=NEW", undefined],
     ["uiiq_competition_entries", { id: "c1" }, "GET", "/competitions/c1/entries", undefined],
     ["uiiq_competition_entry_get", { entryId: "e1" }, "GET", "/competitions/entries/e1", undefined],
     ["uiiq_competition_entry_update", { entryId: "e1", scores: { story: 8 } }, "PATCH", "/competitions/entries/e1", { scores: { story: 8 } }],
-    ["uiiq_competition_entry_erase", { entryId: "e1" }, "DELETE", "/competitions/entries/e1", undefined],
-    ["uiiq_competition_prize_get", { entryId: "e1" }, "GET", "/competitions/entries/e1/prize", undefined],
-    ["uiiq_competition_prize_issue", { entryId: "e1" }, "POST", "/competitions/entries/e1/prize", undefined],
-    ["uiiq_competition_erase_address", { email: "jo@example.com" }, "POST", "/competitions/erase", { email: "jo@example.com" }],
+    ["uiiq_competition_nominee_confirm", { entryId: "e1", answeredBy: "nominee", how: "phone", items: {} }, "POST", "/competitions/entries/e1/nominee-confirmation", { answeredBy: "nominee", how: "phone", items: {} }],
+    ["uiiq_competition_entry_erase", { entryId: "e1", confirm: true }, "DELETE", "/competitions/entries/e1", undefined],
+    ["uiiq_competition_erase_address", { email: "jo@example.com", confirm: true }, "POST", "/competitions/erase", { email: "jo@example.com" }],
   ];
   for (const [name, args, method, path, body] of cases) {
     const { requests } = await call(name, args);
@@ -81,6 +79,73 @@ test("each tool calls its own route, with its own method and body", async () => 
     assert.equal(requests[0].path, path, name);
     assert.deepEqual(requests[0].body, body, name);
   }
+});
+
+test("only the routes UiiQ has: no post, prize or publish tools yet", () => {
+  const names = Object.keys(tools);
+  assert.deepEqual(names.filter((n) => /post|publish|schedule|prize/.test(n)), []);
+  for (const t of Object.values(tools)) {
+    for (const k of ["prizeAction", "prizeSiteId", "prizeWinner", "prizeRunnerUp"]) assert.equal(t.inputSchema.properties?.[k], undefined, `${t.name} ${k}`);
+  }
+});
+
+test("deciding and erasing are dry runs until confirm: true, and send nothing (Lucas, #97 M1)", async () => {
+  const dry = [
+    ["uiiq_competition_round_decide", { id: "c1", roundId: "r1", winnerEntryId: "e1", runnerUpEntryIds: ["e2"] }, { wouldDo: "decide_round", competitionId: "c1", roundId: "r1", winnerEntryId: "e1", runnerUpEntryIds: ["e2"] }],
+    ["uiiq_competition_entry_erase", { entryId: "e1", tenant: "ultimatecoins" }, { wouldDo: "erase_entry", entryId: "e1", tenant: "ultimatecoins" }],
+    ["uiiq_competition_erase_address", { email: "jo@example.com" }, { wouldDo: "erase_address", email: "jo@example.com", tenant: "your own" }],
+  ];
+  for (const [name, args, expected] of dry) {
+    for (const confirm of [undefined, false, "true", 1]) {
+      const { result, requests } = await call(name, { ...args, confirm });
+      assert.equal(requests.length, 0, `${name} confirm=${confirm}`);
+      assert.equal(result.dryRun, true, name);
+      assert.equal(result.changed, false, name);
+      assert.match(result.note, /Nothing was changed.*confirm: true/, name);
+      for (const [k, v] of Object.entries(expected)) assert.deepEqual(result[k], v, `${name} ${k}`);
+    }
+    assert.ok(tools[name].inputSchema.properties.confirm, name);
+  }
+});
+
+test("ids must be ids: no empty, dot or slashed segment reaches a route (Lucas, #97 L1)", async () => {
+  for (const bad of ["", ".", "..", "a/b", "c 1", "%2e%2e", "x".repeat(65), undefined, 7]) {
+    for (const [name, args] of [
+      ["uiiq_competition_get", { id: bad }],
+      ["uiiq_competition_round_update", { id: "c1", roundId: bad }],
+      ["uiiq_competition_entry_get", { entryId: bad }],
+      ["uiiq_competition_entries", { id: "c1", roundId: bad }],
+      ["uiiq_competition_round_decide", { id: "c1", roundId: "r1", winnerEntryId: bad, confirm: true }],
+      ["uiiq_competition_round_decide", { id: "c1", roundId: "r1", winnerEntryId: "e1", runnerUpEntryIds: [bad], confirm: true }],
+      ["uiiq_competition_entry_erase", { entryId: bad, confirm: true }],
+    ]) {
+      if (name === "uiiq_competition_entries" && (bad === "" || bad === undefined)) continue; // no roundId = every round
+      seen = [];
+      await assert.rejects(tools[name].handler(args), /must be an id/, `${name} ${String(bad)}`);
+      assert.equal(seen.length, 0, `${name} ${String(bad)}`);
+    }
+  }
+});
+
+test("the entries list carries no entrant details, reasons or photo links (Lucas, #97 L3)", async () => {
+  const row = {
+    id: "e1", roundId: "r1", entrantName: "Jo Bloggs", entrantEmail: "jo@example.com", nomineeFirstName: "Sam", reason: "Kind", photoUrl: "https://signed",
+    consents: {}, status: "NEW", confirmedAt: "2026-11-03T10:00:00Z", nomineeConsent: {}, nomineeConfirmed: null, scores: {}, notes: "n", receivedAt: "2026-11-03T09:00:00Z",
+    weightedScore: 7.5, publishable: { firstName: false, quote: false, photo: false },
+  };
+  const { result } = await call("uiiq_competition_entries", { id: "c1" }, [200, [row]]);
+  assert.deepEqual(result, [{ id: "e1", roundId: "r1", nomineeFirstName: "Sam", status: "NEW", weightedScore: 7.5, receivedAt: "2026-11-03T09:00:00Z", publishable: { firstName: false, quote: false, photo: false } }]);
+});
+
+test("an erasure that kept entries says so, whichever way UiiQ answers", async () => {
+  let r = await call("uiiq_competition_erase_address", { email: "jo@example.com", confirm: true }, [200, { erased: 1, photosDeleted: 0, kept: 1 }]);
+  assert.match(r.result.warning, /1 entry was kept/);
+  r = await call("uiiq_competition_erase_address", { email: "jo@example.com", confirm: true }, [200, { erased: 2, photosDeleted: 1, kept: 0 }]);
+  assert.equal(r.result.warning, undefined);
+  await assert.rejects(
+    call("uiiq_competition_erase_address", { email: "jo@example.com", confirm: true }, [503, { error: "1 entry was kept.", erased: 1, kept: ["e9"] }]),
+    /Erased 1; kept e9/,
+  );
 });
 
 test("rounds: one round, or weekly with themes", async () => {
@@ -99,14 +164,7 @@ test("the nominee confirmation sends exactly what was agreed, all four items", a
 
 test("UiiQ's refusal comes back as its own words", async () => {
   await assert.rejects(
-    call("uiiq_competition_round_decide", { id: "c1", roundId: "r1", winnerEntryId: "e1" }, [409, { error: "A round is decided after it closes" }]),
+    call("uiiq_competition_round_decide", { id: "c1", roundId: "r1", winnerEntryId: "e1", confirm: true }, [409, { error: "A round is decided after it closes" }]),
     /A round is decided after it closes/,
   );
-});
-
-test("no tool publishes: the only post tool drafts", () => {
-  const names = Object.keys(tools);
-  assert.deepEqual(names.filter((n) => /post|publish|schedule/.test(n)), ["uiiq_competition_post_draft"]);
-  assert.match(tools.uiiq_competition_post_draft.description, /never scheduled or published/);
-  assert.deepEqual(tools.uiiq_competition_post_draft.inputSchema.properties.stage.enum, ["call", "shortlist", "winner"]);
 });
