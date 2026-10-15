@@ -1,4 +1,4 @@
-import { apiClient } from "../auth.js";
+import { apiClient, impersonationState } from "../auth.js";
 
 const TENANT_PROP = {
   type: "string",
@@ -9,11 +9,22 @@ const CONFIRM_PROP = { type: "boolean", description: "true = do it; omit for the
 
 // An id that goes into a route: only the characters an id has, so "", "." or
 // ".." can never turn one route into another ("/competitions/entries/.." is
-// "/competitions"). Lucas, uiiq-mcp #97 L1.
+// "/competitions"). Lucas, uiiq-mcp #97 L1. Called as seg(x) inside a path,
+// with no quotes, so UiiQ's client-coverage scan reads the whole path.
 const ID = /^[A-Za-z0-9_-]{1,64}$/;
-function seg(name, value) {
+function seg(value, name = "Each id") {
   if (typeof value !== "string" || !ID.test(value)) throw new Error(`${name} must be an id: letters, numbers, - and _ only (up to 64)`);
   return value;
+}
+
+// The workspace a call acts in: the tenant named, an impersonation this MCP
+// inherits, or your own (Lucas, #97 L-b).
+function actingIn(tenant) {
+  if (tenant) return tenant;
+  const s = impersonationState();
+  if (!s.honoured) return "your own workspace";
+  const who = s.imp.tenantName ?? s.imp.tenantSlug ?? s.imp.tenantId;
+  return s.writeBlocked ? `${who} (inherited; the change would be refused without UIIQ_MCP_INHERIT_WRITE=1)` : `${who} (inherited impersonation)`;
 }
 
 async function fail(res) {
@@ -37,7 +48,7 @@ const dryRun = (wouldDo, tenant, details, note) => ({
   dryRun: true,
   changed: false,
   wouldDo,
-  tenant: tenant ?? "your own",
+  tenant: actingIn(tenant),
   ...details,
   note: `Nothing was changed. ${note} Then call again with confirm: true.`,
 });
@@ -102,7 +113,7 @@ export const competitionTools = [
     description: "One competition with its rounds, each with its phase (upcoming, open, closed, decided) and the entry form link for that round (share the round's link, never the bare form).",
     inputSchema: { type: "object", required: ["id"], properties: { id: { type: "string" }, tenant: TENANT_PROP } },
     async handler({ id, tenant }) {
-      return call(tenant, `/competitions/${seg("id", id)}`);
+      return call(tenant, `/competitions/${seg(id)}`);
     },
   },
   {
@@ -126,7 +137,7 @@ export const competitionTools = [
       properties: { id: { type: "string" }, ...COMPETITION_PROPS, tenant: TENANT_PROP },
     },
     async handler({ id, tenant, ...body }) {
-      return call(tenant, `/competitions/${seg("id", id)}`, send("PATCH", body));
+      return call(tenant, `/competitions/${seg(id)}`, send("PATCH", body));
     },
   },
   {
@@ -145,7 +156,7 @@ export const competitionTools = [
     },
     async handler({ id, tenant, weeks, themes, ...round }) {
       const body = weeks && weeks > 1 ? { weekly: { first: round, count: weeks, ...(themes ? { themes } : {}) } } : { round };
-      return call(tenant, `/competitions/${seg("id", id)}/rounds`, send("POST", body));
+      return call(tenant, `/competitions/${seg(id)}/rounds`, send("POST", body));
     },
   },
   {
@@ -157,7 +168,7 @@ export const competitionTools = [
       properties: { id: { type: "string" }, roundId: { type: "string" }, ...ROUND_PROPS, tenant: TENANT_PROP },
     },
     async handler({ id, roundId, tenant, ...body }) {
-      return call(tenant, `/competitions/${seg("id", id)}/rounds/${seg("roundId", roundId)}`, send("PATCH", body));
+      return call(tenant, `/competitions/${seg(id)}/rounds/${seg(roundId)}`, send("PATCH", body));
     },
   },
   {
@@ -176,9 +187,12 @@ export const competitionTools = [
       },
     },
     async handler({ id, roundId, tenant, winnerEntryId, runnerUpEntryIds, confirm }) {
-      const path = `/competitions/${seg("id", id)}/rounds/${seg("roundId", roundId)}/decide`;
-      seg("winnerEntryId", winnerEntryId);
-      for (const r of runnerUpEntryIds ?? []) seg("runnerUpEntryIds", r);
+      const path = `/competitions/${seg(id)}/rounds/${seg(roundId)}/decide`;
+      seg(winnerEntryId, "winnerEntryId");
+      // A list, never a string: for…of would walk its letters, and UiiQ would
+      // decide the round for good with no runners-up (Lucas, #97 L-a).
+      if (runnerUpEntryIds !== undefined && !Array.isArray(runnerUpEntryIds)) throw new Error("runnerUpEntryIds must be a list of entry ids");
+      for (const r of runnerUpEntryIds ?? []) seg(r, "runnerUpEntryIds");
       const body = { winnerEntryId, ...(runnerUpEntryIds ? { runnerUpEntryIds } : {}) };
       if (confirm !== true) return dryRun("decide_round", tenant, { competitionId: id, roundId, ...body }, "Deciding locks the round for good. Check the winner and runners-up with the judges.");
       return call(tenant, path, send("POST", body));
@@ -198,8 +212,8 @@ export const competitionTools = [
       },
     },
     async handler({ id, roundId, status, tenant }) {
-      const q = new URLSearchParams({ ...(roundId ? { roundId: seg("roundId", roundId) } : {}), ...(status ? { status } : {}) }).toString();
-      const path = `/competitions/${seg("id", id)}/entries`;
+      const q = new URLSearchParams({ ...(roundId ? { roundId: seg(roundId) } : {}), ...(status ? { status } : {}) }).toString();
+      const path = `/competitions/${seg(id)}/entries`;
       const rows = await call(tenant, q ? `${path}?${q}` : path);
       // The list carries no entrant details, reasons or photo links (Lucas, uiiq-mcp #97 L3).
       return Array.isArray(rows)
@@ -212,7 +226,7 @@ export const competitionTools = [
     description: "One entry: the entrant, the reason, the consents as ticked, the nominee's provisional answer and what was confirmed with them, the scores (photo as a 10-minute link).",
     inputSchema: { type: "object", required: ["entryId"], properties: { entryId: { type: "string" }, tenant: TENANT_PROP } },
     async handler({ entryId, tenant }) {
-      return call(tenant, `/competitions/entries/${seg("entryId", entryId)}`);
+      return call(tenant, `/competitions/entries/${seg(entryId)}`);
     },
   },
   {
@@ -230,7 +244,7 @@ export const competitionTools = [
       },
     },
     async handler({ entryId, tenant, ...body }) {
-      return call(tenant, `/competitions/entries/${seg("entryId", entryId)}`, send("PATCH", body));
+      return call(tenant, `/competitions/entries/${seg(entryId)}`, send("PATCH", body));
     },
   },
   {
@@ -258,7 +272,7 @@ export const competitionTools = [
       },
     },
     async handler({ entryId, tenant, ...body }) {
-      return call(tenant, `/competitions/entries/${seg("entryId", entryId)}/nominee-confirmation`, send("POST", body));
+      return call(tenant, `/competitions/entries/${seg(entryId)}/nominee-confirmation`, send("POST", body));
     },
   },
   {
@@ -266,7 +280,7 @@ export const competitionTools = [
     description: "Erase one entry for good, its photo included, e.g. when a nominee asks (owner/admin). Can't be undone; the audit keeps only that it happened. Without confirm: true it's a dry run that changes nothing.",
     inputSchema: { type: "object", required: ["entryId"], properties: { entryId: { type: "string" }, confirm: CONFIRM_PROP, tenant: TENANT_PROP } },
     async handler({ entryId, tenant, confirm }) {
-      const path = `/competitions/entries/${seg("entryId", entryId)}`;
+      const path = `/competitions/entries/${seg(entryId)}`;
       if (confirm !== true) return dryRun("erase_entry", tenant, { entryId }, "Erasing can't be undone. Check it's the right entry (uiiq_competition_entry_get) and the right workspace.");
       return keptWarning(await call(tenant, path, { method: "DELETE" }));
     },

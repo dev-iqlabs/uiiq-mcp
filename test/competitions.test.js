@@ -3,7 +3,7 @@
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import http from "node:http";
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
+import fs, { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -28,6 +28,10 @@ before(async () => {
   process.env.HOME = home;
   process.env.USERPROFILE = home;
   process.env.UIIQ_BASE = base;
+  // Follow a stored impersonation (reads only: UIIQ_MCP_INHERIT_WRITE stays unset),
+  // so the dry run's "acting in" can be checked against one (Lucas, #97 L-b).
+  process.env.UIIQ_MCP_INHERIT_IMPERSONATION = "1";
+  delete process.env.UIIQ_MCP_INHERIT_WRITE;
   // Imported only now: auth.js and config.js read HOME and UIIQ_BASE at load.
   const { competitionTools } = await import("../src/tools/competitions.js");
   tools = Object.fromEntries(competitionTools.map((t) => [t.name, t]));
@@ -93,7 +97,7 @@ test("deciding and erasing are dry runs until confirm: true, and send nothing (L
   const dry = [
     ["uiiq_competition_round_decide", { id: "c1", roundId: "r1", winnerEntryId: "e1", runnerUpEntryIds: ["e2"] }, { wouldDo: "decide_round", competitionId: "c1", roundId: "r1", winnerEntryId: "e1", runnerUpEntryIds: ["e2"] }],
     ["uiiq_competition_entry_erase", { entryId: "e1", tenant: "ultimatecoins" }, { wouldDo: "erase_entry", entryId: "e1", tenant: "ultimatecoins" }],
-    ["uiiq_competition_erase_address", { email: "jo@example.com" }, { wouldDo: "erase_address", email: "jo@example.com", tenant: "your own" }],
+    ["uiiq_competition_erase_address", { email: "jo@example.com" }, { wouldDo: "erase_address", email: "jo@example.com", tenant: "your own workspace" }],
   ];
   for (const [name, args, expected] of dry) {
     for (const confirm of [undefined, false, "true", 1]) {
@@ -106,6 +110,32 @@ test("deciding and erasing are dry runs until confirm: true, and send nothing (L
     }
     assert.ok(tools[name].inputSchema.properties.confirm, name);
   }
+});
+
+test("the dry run names an inherited impersonation, and says when its write would be refused (Lucas, #97 L-b)", async () => {
+  const creds = join(home, ".uiiq", "credentials.json");
+  const plain = { base: process.env.UIIQ_BASE, sessionToken: "test", cookieName: "authjs.session-token" };
+  const imp = (writeEnabled) => ({ cookie: "uiiq-impersonation=x", tenantName: "Ultimate Coins", tenantSlug: "ultimatecoins", writeEnabled, expiresAt: new Date(Date.now() + 10 * 60_000).toISOString() });
+  try {
+    writeFileSync(creds, JSON.stringify({ ...plain, impersonation: imp(false) }));
+    let r = await call("uiiq_competition_erase_address", { email: "jo@example.com" });
+    assert.equal(r.result.tenant, "Ultimate Coins (inherited impersonation)");
+    writeFileSync(creds, JSON.stringify({ ...plain, impersonation: imp(true) }));
+    r = await call("uiiq_competition_round_decide", { id: "c1", roundId: "r1", winnerEntryId: "e1" });
+    assert.match(r.result.tenant, /^Ultimate Coins \(inherited; the change would be refused without UIIQ_MCP_INHERIT_WRITE=1\)$/);
+    // A tenant named on the call wins.
+    r = await call("uiiq_competition_entry_erase", { entryId: "e1", tenant: "sbda" });
+    assert.equal(r.result.tenant, "sbda");
+    assert.equal(r.requests.length, 0);
+  } finally {
+    writeFileSync(creds, JSON.stringify(plain));
+  }
+});
+
+test("runners-up must be a list: a string is refused, never walked letter by letter (Lucas, #97 L-a)", async () => {
+  seen = [];
+  await assert.rejects(tools.uiiq_competition_round_decide.handler({ id: "c1", roundId: "r1", winnerEntryId: "e1", runnerUpEntryIds: "e2", confirm: true }), /runnerUpEntryIds must be a list/);
+  assert.equal(seen.length, 0);
 });
 
 test("ids must be ids: no empty, dot or slashed segment reaches a route (Lucas, #97 L1)", async () => {
@@ -146,6 +176,18 @@ test("an erasure that kept entries says so, whichever way UiiQ answers", async (
     call("uiiq_competition_erase_address", { email: "jo@example.com", confirm: true }, [503, { error: "1 entry was kept.", erased: 1, kept: ["e9"] }]),
     /Erased 1; kept e9/,
   );
+  // As #950 answers, without the ids: UiiQ's own words.
+  await assert.rejects(
+    call("uiiq_competition_entry_erase", { entryId: "e1", confirm: true }, [503, { error: "Its photo couldn't be deleted, so the entry was kept. Try again shortly." }]),
+    /Its photo couldn't be deleted/,
+  );
+});
+
+test("every route path is a plain template, so UiiQ's client-coverage scan reads it whole", () => {
+  const src = fs.readFileSync(new URL("../src/tools/competitions.js", import.meta.url), "utf8");
+  const paths = [...src.matchAll(/`(\/competitions[^`]*)`/g)].map((m) => m[1]);
+  assert.ok(paths.length >= 9, String(paths.length));
+  for (const path of paths) assert.doesNotMatch(path, /"/, path);
 });
 
 test("rounds: one round, or weekly with themes", async () => {
