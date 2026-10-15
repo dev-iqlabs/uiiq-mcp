@@ -234,6 +234,37 @@ export const competitionTools = [
       return call(tenant, path, send("POST", body));
     },
   },
+  // A DRAW round's draw (UiiQ-platform competitions v2, 2b): lock, then draw.
+  // The lock commits to a secret seed and the draw spends it, so neither can
+  // be undone: each is a dry run until confirm: true, like Decide.
+  {
+    name: "uiiq_competition_round_lock",
+    description: "Lock a comment-to-enter (DRAW) round's entries for its draw: step 1 of 2, then uiiq_competition_round_draw at least a minute later. Allowed after the round closes, once its comments have been read at least 30 minutes after the close (lastCollectedAt on uiiq_competition_get). It freezes the round's entries as a list (no entry's status can change after this), makes a secret seed, and publishes the list's fingerprint and the seed's commitment straight away; it can't be undone. A judge's (or, when the competition names none, an owner's or admin's); audited. Returns { drawId, entryCount, listHash, seedCommitment, lockedAt }. Once drawn, the seed and the order are public, for anyone to check, at GET /api/v1/competitions/{slug}/draws/{round number}?vendor={workspace slug}. Without confirm: true it's a dry run that changes nothing.",
+    inputSchema: {
+      type: "object",
+      required: ["id", "roundId"],
+      properties: { id: { type: "string" }, roundId: { type: "string" }, confirm: CONFIRM_PROP, tenant: TENANT_PROP },
+    },
+    async handler({ id, roundId, confirm, tenant }) {
+      const path = `/competitions/${seg(id)}/rounds/${seg(roundId)}/lock`;
+      if (confirm !== true) return dryRun("lock_round", tenant, { competitionId: id, roundId }, "Locking freezes the round's entries for its draw and publishes the list's fingerprint and the seed's commitment: it can't be undone. Check it's the right round, that it has closed, and that its comments have been read since.");
+      return call(tenant, path, { method: "POST" });
+    },
+  },
+  {
+    name: "uiiq_competition_round_draw",
+    description: "Draw a comment-to-enter (DRAW) round's winner: step 2 of 2, at least a minute after uiiq_competition_round_lock. Once only, and it can't be undone: the order follows from the locked list and the seed alone, the first entry still there wins, the next are reserves in order, the seed is published and the round is decided. A judge's (or, when the competition names none, an owner's or admin's); audited. Returns { drawId, order (entry ids, the winner first), winnerEntryId (null if every drawn entry has been erased since the lock), reserveEntryIds, seed, drawnAt }. Once drawn, the seed and the order are public, for anyone to check, at GET /api/v1/competitions/{slug}/draws/{round number}?vendor={workspace slug}. Without confirm: true it's a dry run that changes nothing.",
+    inputSchema: {
+      type: "object",
+      required: ["id", "roundId"],
+      properties: { id: { type: "string" }, roundId: { type: "string" }, confirm: CONFIRM_PROP, tenant: TENANT_PROP },
+    },
+    async handler({ id, roundId, confirm, tenant }) {
+      const path = `/competitions/${seg(id)}/rounds/${seg(roundId)}/draw`;
+      if (confirm !== true) return dryRun("draw_round", tenant, { competitionId: id, roundId }, "Drawing picks the winner and reserves once and for all, publishes the seed and the order, and decides the round: it can't be undone or made again. Check it's the right round, locked at least a minute ago.");
+      return call(tenant, path, { method: "POST" });
+    },
+  },
   {
     name: "uiiq_competition_post_draft",
     description: "A round's post as a DRAFT social post, or the one already drafted: never scheduled or published here. stage: call (the call to enter), shortlist (before Decide: only shortlisted nominees who agreed, by first name, never a photo, with the round's card for Instagram), winner (after Decide: named only as far as they agreed). Goes to the competition's social accounts. A DRAW has no shortlist post (refused, 409), and its call goes only to the Facebook and Instagram accounts, since entries are comments on it: any others are left out with a warning. Returns { postId, created, warnings }; check it and schedule it in Social.",
