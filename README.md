@@ -1117,12 +1117,12 @@ Needs the `competitions` feature. Setting up, rounds, the nominee confirmation a
 | `uiiq_competition_post_taken_down` | Clear a marked shortlist or winner post once it's down (or checked); owner/admin. A dry run until `confirm: true`. |
 | `uiiq_competition_entries` | Entries, ranked by score; by round and status; each with its `source` (FORM or COMMENT). No entrant details: `uiiq_competition_entry_get` has one in full. |
 | `uiiq_competition_entry_get` | One entry, its consents, the nominee's answer and what was confirmed. A COMMENT entry has the commenter's name, `authorHandle` and `authorKey`, their comment as `reason`, no email until they claim, and `claimedAt` and `drawRank`. |
-| `uiiq_competition_entry_update` | Status, notes, or your own scores; locked once its round is decided. A DRAW has no shortlist. |
+| `uiiq_competition_entry_update` | Status, notes, or your own scores; locked once its round is decided. A DRAW has no shortlist. Answers with the entry's id, status, score, what's publishable and any post warnings; `uiiq_competition_entry_get` has the rest. |
 | `uiiq_competition_prize_get` | A winner's or runner-up's prize code, when it was made and any failure; owner/admin; each look is recorded, never the code. |
 | `uiiq_competition_prize_issue` | Make a winner's or runner-up's prize code now (after a failure, or one Decide had no time for); one that has its code is left as it is. A dry run until `confirm: true`. |
-| `uiiq_competition_nominee_confirm` | What was agreed directly with the nominee (or a parent or guardian): the only thing that lets anything about them be published. |
+| `uiiq_competition_nominee_confirm` | What was agreed directly with the nominee (or a parent or guardian): the only thing that lets anything about them be published. Answers with the entry's id, status, score, what's publishable and any post warnings; `uiiq_competition_entry_get` has the rest. |
 | `uiiq_competition_entry_erase` | Erase one entry for good, photo included. A dry run until `confirm: true`. |
-| `uiiq_competition_erase_address` | Erase everything an email address sent to the workspace's competitions, or (with `author`: the key on their entry, e.g. `FACEBOOK:123`, or their @handle) a commenter's entries and their comments in the socials inbox (`messagesDeleted`; IQEX keeps its own copy up to 90 days); exactly one of the two. Says what was kept. A dry run until `confirm: true`. |
+| `uiiq_competition_erase_address` | Erase everything an email address sent to the workspace's competitions, or (with `author`: the key on their entry, e.g. `FACEBOOK:123`, or their @handle, checked before anything is sent) a commenter's entries and their comments in the socials inbox (`messagesDeleted`; IQEX keeps its own copy up to 90 days); exactly one of the two. Says what was kept. A dry run until `confirm: true`. |
 
 ### Auctions — `src/tools/auctions.js`
 

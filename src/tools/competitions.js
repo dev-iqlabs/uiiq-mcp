@@ -59,6 +59,26 @@ function keptWarning(out) {
   return kept ? { ...out, warning: `${kept} ${kept === 1 ? "entry was" : "entries were"} kept because ${kept === 1 ? "its photo" : "their photos"} couldn't be deleted. Erase again shortly.` } : out;
 }
 
+// A commenter as UiiQ reads one (rules parseCommenter, UiiQ-platform #975): the
+// key on their entry, or a handle. A handle of only dots and underscores is
+// refused here too (Lucas, uiiq-mcp #100 L1). Checked, and trimmed, before
+// anything is sent.
+const COMMENTER_KEY = /^(FACEBOOK|INSTAGRAM):\d{1,40}$/;
+const COMMENTER_HANDLE = /^@?[A-Za-z0-9._]{1,60}$/;
+function commenterOf(value) {
+  const s = value.trim();
+  if (COMMENTER_KEY.test(s) || (COMMENTER_HANDLE.test(s) && /[A-Za-z0-9]/.test(s))) return s;
+  throw new Error("Give the commenter's @handle, or the key shown on their entry (e.g. FACEBOOK:123)");
+}
+
+// What a change to an entry answers with: never the entrant's or commenter's
+// details or words (Lucas, uiiq-mcp #100 L2); uiiq_competition_entry_get has
+// the entry in full. postWarnings are UiiQ's own words about the round's posts.
+function entrySummary(e) {
+  if (!e || typeof e !== "object" || Array.isArray(e)) return e;
+  return { id: e.id, status: e.status, weightedScore: e.weightedScore, publishable: e.publishable, ...(Array.isArray(e.postWarnings) ? { postWarnings: e.postWarnings } : {}) };
+}
+
 // A round's posts (UiiQ-platform #953): the call, the shortlist and the winner; only the last two name anyone.
 const POST_STAGES = ["call", "shortlist", "winner"];
 const NAMING_STAGES = ["shortlist", "winner"];
@@ -298,7 +318,7 @@ export const competitionTools = [
   },
   {
     name: "uiiq_competition_entry_update",
-    description: "An entry's status (NEW, SHORTLISTED, REJECTED, WITHDRAWN: only a confirmed entry can be New or Shortlisted; a DRAW has no shortlist, so SHORTLISTED is refused there), staff notes, or your own judge's scores ({ criterionKey: 0-10 }). Locked once its round is decided. Audited.",
+    description: "An entry's status (NEW, SHORTLISTED, REJECTED, WITHDRAWN: only a confirmed entry can be New or Shortlisted; a DRAW has no shortlist, so SHORTLISTED is refused there), staff notes, or your own judge's scores ({ criterionKey: 0-10 }). Locked once its round is decided. Audited. Answers with the entry's id, status, weightedScore and publishable, and any postWarnings (what changed on the round's posts); the full entry is on uiiq_competition_entry_get.",
     inputSchema: {
       type: "object",
       required: ["entryId"],
@@ -311,12 +331,12 @@ export const competitionTools = [
       },
     },
     async handler({ entryId, tenant, ...body }) {
-      return call(tenant, `/competitions/entries/${seg(entryId)}`, send("PATCH", body));
+      return entrySummary(await call(tenant, `/competitions/entries/${seg(entryId)}`, send("PATCH", body)));
     },
   },
   {
     name: "uiiq_competition_nominee_confirm",
-    description: "Record what was agreed directly with the nominee, or with their parent or guardian if under 18, e.g. at the prize handover (owner/admin): the only thing that lets their name, the quote or a photo be published. All four items must be given; a later record replaces this one, a withdrawal included. Audited.",
+    description: "Record what was agreed directly with the nominee, or with their parent or guardian if under 18, e.g. at the prize handover (owner/admin): the only thing that lets their name, the quote or a photo be published. All four items must be given; a later record replaces this one, a withdrawal included. Audited. Answers with the entry's id, status, weightedScore and publishable, and any postWarnings (what changed on the round's posts); the full entry is on uiiq_competition_entry_get.",
     inputSchema: {
       type: "object",
       required: ["entryId", "answeredBy", "how", "items"],
@@ -339,7 +359,7 @@ export const competitionTools = [
       },
     },
     async handler({ entryId, tenant, ...body }) {
-      return call(tenant, `/competitions/entries/${seg(entryId)}/nominee-confirmation`, send("POST", body));
+      return entrySummary(await call(tenant, `/competitions/entries/${seg(entryId)}/nominee-confirmation`, send("POST", body)));
     },
   },
   {
@@ -377,7 +397,7 @@ export const competitionTools = [
       type: "object",
       properties: {
         email: { type: "string", description: "An entrant's address. Not with author" },
-        author: { type: "string", description: "A commenter: the key on their entry (FACEBOOK:123 or INSTAGRAM:123) or their @handle. Not with email" },
+        author: { type: "string", description: "A commenter: the key on their entry (FACEBOOK:123 or INSTAGRAM:123) or their @handle (letters, numbers, . and _, up to 60). Not with email" },
         confirm: CONFIRM_PROP,
         tenant: TENANT_PROP,
       },
@@ -386,7 +406,7 @@ export const competitionTools = [
       const given = (v) => typeof v === "string" && v.trim() !== "";
       // One person at a time: UiiQ would take the commenter and quietly ignore the address.
       if (given(email) === given(author)) throw new Error("Give exactly one of email (an entrant's address) or author (a commenter's key, e.g. FACEBOOK:123, or their @handle)");
-      const who = given(author) ? { author } : { email };
+      const who = given(author) ? { author: commenterOf(author) } : { email };
       if (confirm !== true) {
         const note = "author" in who
           ? "Erasing can't be undone, and the commenter's comments in UiiQ's socials inbox go too. Check the key or handle (uiiq_competition_entry_get shows it) and the workspace."
