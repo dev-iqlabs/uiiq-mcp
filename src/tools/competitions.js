@@ -91,6 +91,11 @@ const COMPETITION_PROPS = {
   postTemplates: { type: "object", description: "{ call, shortlist, winner, delivery }: the wording of each of the round's posts. Placeholders: {competition} {round} {closes} {prize} {promoter} {eligibility} {link} {rules}" },
   entriesPerEmail: { type: "number", description: "1-20, per round" },
   retentionDays: { type: "number", description: "7-90" },
+  // Prize codes (UiiQ-platform #966): a workspace given the competition_prizes feature only.
+  prizeAction: { type: "string", enum: ["NONE", "COUPON"], description: "COUPON: Decide makes the winner's and runners-up' single-use codes on prizeSiteId through UiiQ Connect (4.51.0 or newer) and emails each to the nominator. Needs the workspace's competition_prizes feature" },
+  prizeSiteId: { type: ["string", "null"], description: "The shop the codes are made on: an active site this workspace owns, with UiiQ Connect's Prize codes module" },
+  prizeWinner: { type: ["object", "null"], description: "The winner's coupon: { percent 1-100, categoryIds, productIds (WooCommerce ids; at least one between them: never the whole shop), expiryDays 1-365 }" },
+  prizeRunnerUp: { type: ["object", "null"], description: "Each runner-up's coupon, the same shape; null for none" },
 };
 
 // COMPETITIONS: a competition that runs in rounds (e.g. Ultimate Coins'
@@ -327,6 +332,22 @@ export const competitionTools = [
     },
     async handler({ entryId, tenant, ...body }) {
       return call(tenant, `/competitions/entries/${seg(entryId)}/nominee-confirmation`, send("POST", body));
+    },
+  },
+  {
+    name: "uiiq_competition_prize_get",
+    description: "A winner's or runner-up's prize code, when it was made and any failure (owner/admin; refused to read-only impersonation). Each look is recorded, without the code. Treat the code as a secret: it's already been emailed to the nominator.",
+    inputSchema: { type: "object", required: ["entryId"], properties: { entryId: { type: "string" }, tenant: TENANT_PROP } },
+    async handler({ entryId, tenant }) {
+      return call(tenant, `/competitions/entries/${seg(entryId)}/prize`, { method: "GET" });
+    },
+  },
+  {
+    name: "uiiq_competition_prize_issue",
+    description: "Make a winner's or runner-up's prize code now: after a failure, or one Decide had no time for (owner/admin). An entry that has its code is left as it is: nothing is made or emailed again. Returns { ok, existing, emailed }.",
+    inputSchema: { type: "object", required: ["entryId"], properties: { entryId: { type: "string" }, tenant: TENANT_PROP } },
+    async handler({ entryId, tenant }) {
+      return call(tenant, `/competitions/entries/${seg(entryId)}/prize`, { method: "POST" });
     },
   },
   {

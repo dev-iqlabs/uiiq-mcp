@@ -1116,6 +1116,8 @@ Needs the `competitions` feature. Setting up, rounds, the nominee confirmation a
 | `uiiq_competition_entries` | Entries, ranked by score; by round and status. No entrant details: `uiiq_competition_entry_get` has one in full. |
 | `uiiq_competition_entry_get` | One entry, its consents, the nominee's answer and what was confirmed. |
 | `uiiq_competition_entry_update` | Status, notes, or your own scores; locked once its round is decided. |
+| `uiiq_competition_prize_get` | A winner's or runner-up's prize code, when it was made and any failure; owner/admin; each look is recorded, never the code. |
+| `uiiq_competition_prize_issue` | Make a winner's or runner-up's prize code now (after a failure, or one Decide had no time for); one that has its code is left as it is. |
 | `uiiq_competition_nominee_confirm` | What was agreed directly with the nominee (or a parent or guardian): the only thing that lets anything about them be published. |
 | `uiiq_competition_entry_erase` | Erase one entry for good, photo included. A dry run until `confirm: true`. |
 | `uiiq_competition_erase_address` | Erase everything an email address sent to the workspace's competitions; says what was kept. A dry run until `confirm: true`. |
@@ -1696,4 +1698,4 @@ Needs the `competitions` feature. Setting up, rounds, the nominee confirmation a
 | `uiiq_workflow_order_assign` | Assign a workflow order to a user in the tenant (assignedUserId null unassigns). |
 | `uiiq_workflow_order_request_approval` | Ask the customer to approve a stage of their order: creates an approval link, moves the order to AWAITING_APPROVAL and EMAILS the customer. |
 
-1176 tools.
+1181 tools.
