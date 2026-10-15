@@ -67,6 +67,7 @@ UIIQ is one subscription whose modules are grouped as **Sell**, **Grow** and **R
 | Materials and legacy films | `uiiq_material_*`, `uiiq_legacy_*` | Discover, verify and watch materials, check whether each lead's link leads anywhere, edit or delete a material; list legacy films |
 | Postroom | `uiiq_postroom_*`, `uiiq_admin_postroom_*` | The parcels board: product ready, label printed, dispatch, corrections, add recent orders, the return address (needs the `postroom` feature). Postroom HQ: every tenant's parcels for platform admins. A shop gets on it by REQUESTING it with a click in UiiQ (its owner or admin accepts the in-app terms in Postroom settings, and a code is generated), or a platform admin raises it for the shop in the admin UI with the evidence. Those are an Art 28 acceptance, so no tool can make them; `uiiq_postroom_hq_request_status` / `_withdraw` and the admin status / withdraw tools read and stop them. `postroom_hq` can then be switched on via `uiiq_tenant_features`. Per-tenant HQ log: `uiiq_postroom_hq_log`, `uiiq_admin_postroom_hq_log` |
 | Appeals | `uiiq_appeal_*`, `uiiq_admin_appeal_suspend` | Fundraising appeals on a cause: draft, publish under the Fundraising Regulator's Code, match pledges, updates emailed to supporters (needs the `appeals` feature) |
+| Competitions | `uiiq_competition_*` | Competitions in rounds: set up, rounds, entries, judges' scores, Decide, what a nominee agreed to, erasure, the call to enter as a draft post (needs the `competitions` feature; nothing publishes) |
 | Auctions | `uiiq_auction_*` | The seller's side: draft, lots, publish, bids, withdraw, defaults (needs the `auctions` feature; buyers bid through the public API) |
 | NX2U live streaming | `uiiq_nx2u_*` | Channels, events, the control room (provision, running order, slate, end, replay), the video library, usage (needs the `nx2u` feature; platform switches OFF until Steve turns them on) |
 | Funding, estimates, integrations | `uiiq_funding_*`, `uiiq_estimates_*`, `uiiq_integrations_*`, `uiiq_virtual_office_*` | Funding projects, headings, allocations and claims (Xero invoices); estimates with lines and proposals; integration sources and Xero config; compliance reminders |
@@ -1095,6 +1096,27 @@ Every product's target against its actual, by week, month or fiscal year, colour
 | `uiiq_appeal_update_delete` | Delete an update. |
 | `uiiq_appeal_update_email` | Email a published update, once, to the supporters who asked for updates when they gave (owner/admin). |
 | `uiiq_admin_appeal_suspend` | SUPER_ADMIN only, not while impersonating: suspend an appeal at once (stops gifts, shows a neutral 'paused' notice — the takedown duty under the Code of Fundraising Practice) with a reason, or lift a suspension with suspend: false. |
+
+### Competitions — `src/tools/competitions.js`
+
+Needs the `competitions` feature. Setting up, rounds, the nominee confirmation and erasure are an owner/admin's; entry status and notes any staff login's; scores and Decide the competition's judges'. Nothing here publishes: the call to enter is a draft in Social.
+
+| Tool | What it does |
+|---|---|
+| `uiiq_competition_list` | The workspace's competitions, with their round and entry counts. |
+| `uiiq_competition_get` | One competition with its rounds, each with its phase and its round's entry form link. |
+| `uiiq_competition_create` | A new competition (DRAFT unless said otherwise); ACTIVE needs the form links, rules and promoter. |
+| `uiiq_competition_update` | Change a competition, including going live or archiving. Photos stay off until the photo terms are signed off. |
+| `uiiq_competition_rounds_add` | One round, or weekly rounds with a theme each. |
+| `uiiq_competition_round_update` | A round's theme and times, until it's decided. |
+| `uiiq_competition_round_decide` | The winner and runners-up of a closed round, from its confirmed entries; locks the round. |
+| `uiiq_competition_call_post_draft` | The round's call to enter as a DRAFT social post (never scheduled or published). |
+| `uiiq_competition_entries` | Entries, ranked by score; by round and status. |
+| `uiiq_competition_entry_get` | One entry, its consents, the nominee's answer and what was confirmed. |
+| `uiiq_competition_entry_update` | Status, notes, or your own scores; locked once its round is decided. |
+| `uiiq_competition_nominee_confirm` | What was agreed directly with the nominee (or a parent or guardian): the only thing that lets anything about them be published. |
+| `uiiq_competition_entry_erase` | Erase one entry for good, photo included. |
+| `uiiq_competition_erase_address` | Erase everything an email address sent to the workspace's competitions. |
 
 ### Auctions — `src/tools/auctions.js`
 
