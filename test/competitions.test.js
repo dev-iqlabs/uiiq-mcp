@@ -56,7 +56,7 @@ test("every tool is named uiiq_competition_* and describes itself", () => {
     assert.ok(t.description.length > 20, name);
     assert.equal(t.inputSchema.type, "object", name);
   }
-  assert.equal(Object.keys(tools).length, 18);
+  assert.equal(Object.keys(tools).length, 20);
 });
 
 test("each tool calls its own route, with its own method and body", async () => {
@@ -80,6 +80,8 @@ test("each tool calls its own route, with its own method and body", async () => 
     ["uiiq_competition_post_taken_down", { id: "c1", roundId: "r1", stage: "winner", confirm: true }, "PATCH", "/competitions/c1/rounds/r1/posts/winner", { takenDown: true }],
     ["uiiq_competition_prize_get", { entryId: "e1" }, "GET", "/competitions/entries/e1/prize", undefined],
     ["uiiq_competition_prize_issue", { entryId: "e1", confirm: true }, "POST", "/competitions/entries/e1/prize", undefined],
+    ["uiiq_competition_round_lock", { id: "c1", roundId: "r1", confirm: true }, "POST", "/competitions/c1/rounds/r1/lock", undefined],
+    ["uiiq_competition_round_draw", { id: "c1", roundId: "r1", confirm: true }, "POST", "/competitions/c1/rounds/r1/draw", undefined],
     ["uiiq_competition_update", { id: "c1", prizeAction: "COUPON", prizeSiteId: "site_uc", prizeWinner: { percent: 100, categoryIds: [31], productIds: [], expiryDays: 30 } }, "PATCH", "/competitions/c1", { prizeAction: "COUPON", prizeSiteId: "site_uc", prizeWinner: { percent: 100, categoryIds: [31], productIds: [], expiryDays: 30 } }],
   ];
   for (const [name, args, method, path, body] of cases) {
@@ -417,4 +419,81 @@ test("a change to an entry answers without the entrant's or commenter's details 
   // No postWarnings from UiiQ: none is made up.
   const { result } = await call("uiiq_competition_entry_update", { entryId: "e7", notes: "x" }, [200, { ...full, postWarnings: undefined }]);
   assert.deepEqual(result, { id: "e7", status: "REJECTED", weightedScore: 8, publishable: { firstName: false, quote: false, photo: false } });
+});
+
+// ── A DRAW round's draw: lock, then draw (UiiQ-platform competitions v2, 2b) ──
+
+test("lock and draw are dry runs until confirm: true: nothing is sent, and the dry run says it can't be undone", async () => {
+  for (const [name, wouldDo, says] of [
+    ["uiiq_competition_round_lock", "lock_round", /Locking freezes the round's entries for its draw and publishes the list's fingerprint and the seed's commitment: it can't be undone/],
+    ["uiiq_competition_round_draw", "draw_round", /Drawing picks the winner and reserves once and for all, publishes the seed and the order, and decides the round: it can't be undone or made again/],
+  ]) {
+    assert.ok(tools[name].inputSchema.properties.confirm, name);
+    assert.deepEqual(tools[name].inputSchema.required, ["id", "roundId"], name);
+    for (const confirm of [undefined, false, "true", 1, "yes"]) {
+      const { result, requests } = await call(name, { id: "c1", roundId: "r1", ...(confirm === undefined ? {} : { confirm }) }, [200, { drawId: "d1" }]);
+      assert.equal(requests.length, 0, `${name} confirm=${confirm}`);
+      assert.equal(result.dryRun, true, name);
+      assert.equal(result.changed, false, name);
+      assert.equal(result.wouldDo, wouldDo, name);
+      assert.equal(result.competitionId, "c1", name);
+      assert.equal(result.roundId, "r1", name);
+      assert.equal(result.tenant, "your own workspace", name);
+      assert.match(result.note, says, name);
+      assert.match(result.note, /Nothing was changed.*confirm: true/, name);
+    }
+    // Ids are checked even for the dry run: nothing that isn't an id reaches a route.
+    for (const bad of ["", "..", "a/b"]) {
+      for (const args of [{ id: bad, roundId: "r1" }, { id: "c1", roundId: bad }]) {
+        for (const confirm of [undefined, true]) {
+          seen = [];
+          await assert.rejects(tools[name].handler({ ...args, confirm }), /must be an id/, `${name} ${JSON.stringify(args)} confirm=${confirm}`);
+          assert.equal(seen.length, 0, name);
+        }
+      }
+    }
+  }
+});
+
+test("lock and draw answer with UiiQ's own result, and UiiQ's refusals come back in its own words", async () => {
+  const locked = { drawId: "d1", entryCount: 42, listHash: "a".repeat(64), seedCommitment: "b".repeat(64), lockedAt: "2026-11-06T19:00:00.000Z" };
+  let r = await call("uiiq_competition_round_lock", { id: "c1", roundId: "r1", confirm: true }, [200, locked]);
+  assert.deepEqual(r.requests, [{ method: "POST", path: "/competitions/c1/rounds/r1/lock" }]);
+  assert.deepEqual(r.result, locked);
+  const drawn = { drawId: "d1", order: ["e9", "e2", "e5", "e1"], winnerEntryId: null, reserveEntryIds: ["e2", "e5"], seed: "c".repeat(64), drawnAt: "2026-11-06T19:02:00.000Z" };
+  r = await call("uiiq_competition_round_draw", { id: "c1", roundId: "r1", confirm: true }, [200, drawn]);
+  assert.deepEqual(r.requests, [{ method: "POST", path: "/competitions/c1/rounds/r1/draw" }]);
+  assert.deepEqual(r.result, drawn);
+
+  for (const [name, status, error] of [
+    ["uiiq_competition_round_lock", 404, "Not found"],
+    ["uiiq_competition_round_lock", 403, "Only this competition's judges can lock and draw"],
+    ["uiiq_competition_round_lock", 409, "Only a comment-to-enter round is drawn"],
+    ["uiiq_competition_round_lock", 409, "The last comments are still being read: entries can be locked once they've been read after 2026-11-06T18:30:00.000Z"],
+    ["uiiq_competition_round_lock", 409, "There are no entries to draw from"],
+    ["uiiq_competition_round_draw", 409, "Lock the entries first: the draw is made from the locked list"],
+    ["uiiq_competition_round_draw", 409, "The draw can be made a minute after the lock, once its commitment is published"],
+    ["uiiq_competition_round_draw", 409, "This round has already been drawn"],
+    ["uiiq_competition_round_draw", 500, "This draw's seed can't be read or doesn't match its commitment: nothing was drawn"],
+  ]) {
+    reply = () => [status, { error }];
+    seen = [];
+    await assert.rejects(tools[name].handler({ id: "c1", roundId: "r1", confirm: true }), (e) => e.message === error, `${name} ${status}`);
+    assert.equal(seen.length, 1, name);
+  }
+});
+
+test("lock and draw say who may, that they're audited, lock first then draw a minute later, and where the draw is public; never a schedule", () => {
+  for (const name of ["uiiq_competition_round_lock", "uiiq_competition_round_draw"]) {
+    const { description } = tools[name];
+    assert.match(description, /A judge's \(or, when the competition names none, an owner's or admin's\); audited\./, name);
+    assert.match(description, /Once drawn, the seed and the order are public, for anyone to check, at GET \/api\/v1\/competitions\/\{slug\}\/draws\/\{round number\}\?vendor=\{workspace slug\}/, name);
+    assert.match(description, /can't be undone/, name);
+    assert.match(description, /Without confirm: true it's a dry run that changes nothing/, name);
+    assert.doesNotMatch(description, /schedul|automatic|cron|every (day|hour|minute)/i, name);
+  }
+  assert.match(tools.uiiq_competition_round_lock.description, /step 1 of 2, then uiiq_competition_round_draw at least a minute later/);
+  assert.match(tools.uiiq_competition_round_lock.description, /once its comments have been read at least 30 minutes after the close/);
+  assert.match(tools.uiiq_competition_round_draw.description, /step 2 of 2, at least a minute after uiiq_competition_round_lock\. Once only/);
+  assert.match(tools.uiiq_competition_round_draw.description, /winnerEntryId \(null if every drawn entry has been erased since the lock\)/);
 });
