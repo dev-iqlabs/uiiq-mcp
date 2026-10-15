@@ -199,7 +199,8 @@ export const competitionTools = [
     },
     async handler({ id, roundId, status, tenant }) {
       const q = new URLSearchParams({ ...(roundId ? { roundId } : {}), ...(status ? { status } : {}) }).toString();
-      return call(tenant, `/competitions/${enc(id)}/entries${q ? `?${q}` : ""}`);
+      const path = `/competitions/${enc(id)}/entries`;
+      return call(tenant, q ? `${path}?${q}` : path);
     },
   },
   {
