@@ -344,10 +344,12 @@ export const competitionTools = [
   },
   {
     name: "uiiq_competition_prize_issue",
-    description: "Make a winner's or runner-up's prize code now: after a failure, or one Decide had no time for (owner/admin). An entry that has its code is left as it is: nothing is made or emailed again. Returns { ok, existing, emailed }.",
-    inputSchema: { type: "object", required: ["entryId"], properties: { entryId: { type: "string" }, tenant: TENANT_PROP } },
-    async handler({ entryId, tenant }) {
-      return call(tenant, `/competitions/entries/${seg(entryId)}/prize`, { method: "POST" });
+    description: "Make a winner's or runner-up's prize code now: after a failure, or one Decide had no time for (owner/admin). It is a real single-use coupon on the shop, emailed to the nominator, so without confirm: true it's a dry run that makes and sends nothing. An entry that has its code is left as it is: nothing is made or emailed again. Returns { ok, existing, emailed }.",
+    inputSchema: { type: "object", required: ["entryId"], properties: { entryId: { type: "string" }, confirm: CONFIRM_PROP, tenant: TENANT_PROP } },
+    async handler({ entryId, confirm, tenant }) {
+      const path = `/competitions/entries/${seg(entryId)}/prize`;
+      if (confirm !== true) return dryRun("issue_prize", tenant, { entryId }, "This makes a real coupon on the competition's shop and emails it to the nominator. Check it's the winner or runner-up you mean.");
+      return call(tenant, path, { method: "POST" });
     },
   },
   {

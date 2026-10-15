@@ -79,7 +79,7 @@ test("each tool calls its own route, with its own method and body", async () => 
     ["uiiq_competition_round_posts", { id: "c1", roundId: "r1" }, "GET", "/competitions/c1/rounds/r1/posts", undefined],
     ["uiiq_competition_post_taken_down", { id: "c1", roundId: "r1", stage: "winner", confirm: true }, "PATCH", "/competitions/c1/rounds/r1/posts/winner", { takenDown: true }],
     ["uiiq_competition_prize_get", { entryId: "e1" }, "GET", "/competitions/entries/e1/prize", undefined],
-    ["uiiq_competition_prize_issue", { entryId: "e1" }, "POST", "/competitions/entries/e1/prize", undefined],
+    ["uiiq_competition_prize_issue", { entryId: "e1", confirm: true }, "POST", "/competitions/entries/e1/prize", undefined],
     ["uiiq_competition_update", { id: "c1", prizeAction: "COUPON", prizeSiteId: "site_uc", prizeWinner: { percent: 100, categoryIds: [31], productIds: [], expiryDays: 30 } }, "PATCH", "/competitions/c1", { prizeAction: "COUPON", prizeSiteId: "site_uc", prizeWinner: { percent: 100, categoryIds: [31], productIds: [], expiryDays: 30 } }],
   ];
   for (const [name, args, method, path, body] of cases) {
@@ -244,5 +244,15 @@ test("the form numbers aren't sent: UiiQ reads them from the links (UiiQ-platfor
 test("a prize entry id must be an id: nothing else reaches the route", async () => {
   for (const name of ["uiiq_competition_prize_get", "uiiq_competition_prize_issue"]) {
     for (const bad of ["", "..", "e1/../../x"]) await assert.rejects(() => tools[name].handler({ entryId: bad }), /must be an id/, `${name} ${bad}`);
+  }
+});
+
+test("issuing a prize code is a dry run until confirm: true, and sends nothing (it makes a real coupon and emails it)", async () => {
+  for (const confirm of [undefined, false, "true", 1]) {
+    const { result, requests } = await call("uiiq_competition_prize_issue", { entryId: "e1", ...(confirm === undefined ? {} : { confirm }) });
+    assert.equal(requests.length, 0, String(confirm));
+    assert.equal(result.dryRun, true, String(confirm));
+    assert.equal(result.wouldDo, "issue_prize");
+    assert.match(result.note, /real coupon/);
   }
 });
