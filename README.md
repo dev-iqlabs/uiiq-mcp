@@ -422,7 +422,8 @@ Needs the workspace's `sister_organisations` feature (404 when off). Changes are
 | `uiiq_social_post_duplicate` | Copy a post (content, media, hashtags, same target accounts) as a new DRAFT. |
 | `uiiq_social_post_publish` | PUBLISH a post now (irreversible). A dry run unless `confirm: true`: shows the post and where it would go. |
 | `uiiq_social_promo_templates` | The promo layouts this workspace can use (the shop collection ad among them): their text fields with limits, colours and photo slots. |
-| `uiiq_social_promo_create` | Make a promo layout into a DRAFT post (IQEX renders and publishes the image; credits are spent). Words are printed as sent or refused, never cut; the same requestId retries without a second charge. |
+| `uiiq_social_promo_products` | The workspace's shop products (its Connect product feed) for promo photos: title, price and the photos with their mockups. |
+| `uiiq_social_promo_create` | Make a promo layout into a DRAFT post (IQEX renders the image; credits are spent; the image stays private until the post is published). Words are printed as sent or refused, never cut; the same requestId retries without a second charge. |
 | `uiiq_social_post_insights` | Refresh a published post's Facebook and Instagram figures through IQEX now; a figure Meta didn't give is listed as unavailable, never 0. Reads only. |
 | `uiiq_social_account_remove` | REMOVE a connected social account (Facebook/Instagram disconnected in IQEX and kept inactive for history). |
 | `uiiq_social_hashtag_groups` | The workspace's saved hashtag groups (name + hashtags). |
@@ -1708,4 +1709,4 @@ Needs the `competitions` feature. Setting up, rounds, the nominee confirmation a
 | `uiiq_workflow_order_assign` | Assign a workflow order to a user in the tenant (assignedUserId null unassigns). |
 | `uiiq_workflow_order_request_approval` | Ask the customer to approve a stage of their order: creates an approval link, moves the order to AWAITING_APPROVAL and EMAILS the customer. |
 
-1187 tools.
+1188 tools.

@@ -101,10 +101,18 @@ test("UiiQ's refusals come back in its own words", async () => {
   await assert.rejects(call("uiiq_social_promo_templates", {}, [403, { error: "Feature not available on your current plan" }]), (e) => e.message === "Feature not available on your current plan");
 });
 
+test("products: one GET /socials/promo-products, UiiQ's answer back unchanged", async () => {
+  const PRODUCTS = { products: [{ id: "UC-ROBIN", title: "Robin", price: "£19.99", link: "https://shop.test/p", images: ["https://shop.test/a.jpg"] }], source: "https://shop.test/wp-json/uiiq/v1/feed/meta.csv" };
+  const { result, requests } = await call("uiiq_social_promo_products", {}, [200, PRODUCTS]);
+  assert.deepEqual(requests.map(({ method, path }) => ({ method, path })), [{ method: "GET", path: "/socials/promo-products" }]);
+  assert.deepEqual(result, PRODUCTS);
+});
+
 test("the descriptions say it's a draft only, never cut, and how a retry works", () => {
   const c = tools.uiiq_social_promo_create.description;
   assert.match(c, /DRAFT social post/);
-  assert.match(c, /Nothing is posted\./);
+  assert.match(c, /Nothing is posted, and the image stays PRIVATE until the post is published/);
+  assert.doesNotMatch(c, /permanent URL/);
   assert.match(c, /never cut/);
   assert.match(c, /pass the SAME one to retry/);
   assert.deepEqual(tools.uiiq_social_promo_create.inputSchema.required, ["template"]);

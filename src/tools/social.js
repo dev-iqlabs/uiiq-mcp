@@ -225,8 +225,18 @@ export const socialTools = [
     },
   },
   {
+    name: "uiiq_social_promo_products",
+    description: "The workspace's shop products for promo photos, from its UiiQ Connect product feed on its own website: [{ id, title, price (as a card shows it, e.g. £19.99), link, images (the main photo, then the mockups) }]. Pass an image as { url } in uiiq_social_promo_create's photos; for a collection's cards, title and price are what item1_name/item1_price etc. take.",
+    inputSchema: { type: "object", properties: { tenant: TENANT_PROP } },
+    async handler({ tenant } = {}) {
+      const res = await api(tenant)("/socials/promo-products");
+      if (!res.ok) throw await fail(res);
+      return res.json();
+    },
+  },
+  {
     name: "uiiq_social_promo_create",
-    description: "Make a promo layout into a DRAFT social post: IQEX renders it with these words and photos (charging the workspace's credits), publishes the image to a permanent URL, and UiiQ saves a draft carrying it. Nothing is posted. template: a slug from uiiq_social_promo_templates. fields: its text fields only; words are printed exactly as sent or refused with a 400 naming the field (about how many characters fit), never cut. photos: in slot order, each { assetId } (a media-library image) or { url } (https); a collection needs five, the main product first. colours: the layout's colour fields as hex. requestId: leave it out for a fresh one; pass the SAME one to retry a Create that failed or timed out, and it isn't charged twice. Returns { success, post_id, media_url, template, charged }.",
+    description: "Make a promo layout into a DRAFT social post: IQEX renders it with these words and photos (charging the workspace's credits) and UiiQ saves a draft carrying it. Nothing is posted, and the image stays PRIVATE until the post is published (it is made public only then, and private again if the post is deleted): media_url is UiiQ's own address for it, which only the workspace's signed-in members can open. At most 30 an hour per workspace. template: a slug from uiiq_social_promo_templates. fields: its text fields only; words are printed exactly as sent or refused with a 400 naming the field (about how many characters fit), never cut. photos: in slot order, each { assetId } (a media-library image) or { url } (https); a collection needs five, the main product first. colours: the layout's colour fields as hex. requestId: leave it out for a fresh one; pass the SAME one to retry a Create that failed or timed out, and it isn't charged twice. Returns { success, post_id, media_url, template, charged }.",
     inputSchema: {
       type: "object",
       required: ["template"],
