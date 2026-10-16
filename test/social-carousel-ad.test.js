@@ -51,7 +51,7 @@ async function call(args, response) {
   return { result, requests: seen };
 }
 
-const AD = { pageId: "555", name: "Coins", dailyBudgetPence: 500, countries: ["GB"], primaryText: "New", headline: "Shop", ctaType: "SHOP_NOW", linkUrl: "https://shop.test", collectionName: "The collection", products: [{ imageUrl: "https://shop.test/a.jpg", name: "Robin · £19.99", linkUrl: "https://shop.test/p" }] };
+const AD = { pageId: "555", name: "Coins", dailyBudgetPence: 500, countries: ["GB"], primaryText: "New", headline: "Shop", ctaType: "SHOP_NOW", linkUrl: "https://shop.test", collectionName: "The collection", products: [{ productId: "UC-ROBIN", photoIndex: 1, name: "Robin · £19.99" }] };
 const CONTEXT = { adAccount: true, pages: [{ id: "555", name: "Ultimate Coins" }], collectionImage: "https://media.test/public/901.png", defaults: { dailyBudgetPence: 500 } };
 
 test("without confirm: a dry run that only reads the context; nothing is made", async () => {
@@ -96,7 +96,18 @@ test("the description says it's paused, the ad set and ad need switching on, and
   const t = tools.uiiq_social_post_carousel_ad;
   assert.match(t.description, /ALL PAUSED/);
   assert.match(t.description, /ad set AND its ad/);
-  assert.match(t.description, /never retry it with a new requestId/);
+  assert.match(t.description, /409 "still being made": retry the SAME requestId/);
+  assert.match(t.description, /use a new requestId only if it isn't there/);
+  assert.equal(t.inputSchema.additionalProperties, false);
+  assert.equal(t.inputSchema.properties.products.items.additionalProperties, false);
+  assert.deepEqual(t.inputSchema.properties.products.items.required, ["productId"]);
   assert.equal(t.inputSchema.properties.dailyBudgetPence.maximum, 1000);
   assert.equal(t.inputSchema.properties.dailyBudgetPence.minimum, 100);
+});
+
+test("only named fields are sent: a stray top-level key or a product's imageUrl/linkUrl never reach UiiQ (Lucas, on #109 L1)", async () => {
+  const { requests } = await call({ id: "post_1", ...AD, adAccountId: "act_999", products: [{ productId: "UC-ROBIN", photoIndex: 0, imageUrl: "https://evil.test/x.jpg", linkUrl: "https://evil.test" }], confirm: true }, [200, { adId: "a1" }]);
+  const body = requests[0].body;
+  assert.equal("adAccountId" in body, false);
+  assert.deepEqual(body.products, [{ productId: "UC-ROBIN", photoIndex: 0 }]);
 });
