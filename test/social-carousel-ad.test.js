@@ -89,6 +89,10 @@ test("a passed requestId is sent as is (a retry after a timeout never makes a se
 
 test("UiiQ's refusal is thrown with its words (IQEX's ceiling, 'may already exist')", async () => {
   await assert.rejects(call({ id: "post_1", ...AD, confirm: true }, [503, { error: "The Meta daily budget ceiling isn't set" }]), /ceiling isn't set/);
+  // The id this call made is in the error, to retry a 504 or a "still being made" 409 with (Lucas, on #111 L-D).
+  let made;
+  await assert.rejects(call({ id: "post_1", ...AD, confirm: true }, [504, { error: "IQEX didn't answer in time" }]).catch((e) => { made = seen[0].body.requestId; throw e; }), (e) => e.message === `IQEX didn't answer in time (requestId: ${made}, retry with this one)`);
+  await assert.rejects(call({ id: "post_1", ...AD, requestId: "ad-mine", confirm: true }, [409, { error: "Still being made" }]), /Still being made \(requestId: ad-mine, retry with this one\)/);
   await assert.rejects(call({ id: "post_1", ...AD }, [409, { error: "Publish the post first" }]), /Publish the post first/);
 });
 

@@ -308,7 +308,12 @@ export const socialTools = [
       }
       const rid = requestId || `ad-${randomUUID()}`;
       const res = await send(tenant, path, "POST", { ...body, requestId: rid });
-      if (!res.ok) throw await fail(res);
+      if (!res.ok) {
+        // The id this call made, so a 504 or a "still being made" 409 can be retried with it, never a second ad (Lucas, on #111 L-D).
+        const e = await fail(res);
+        e.message += ` (requestId: ${rid}, retry with this one)`;
+        throw e;
+      }
       return { ...(await res.json()), requestId: rid, note: CAROUSEL_RUN_IT };
     },
   },
