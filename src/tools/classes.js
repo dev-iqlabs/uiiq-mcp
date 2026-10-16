@@ -325,8 +325,8 @@ export const classesTools = [
   },
   {
     name: "uiiq_classes_policies_set",
-    description: "Replace the WHOLE parent-policy list (max 25; each needs a unique key and a title; url must be https://). OWNER/ADMIN only. Bumping a policy's version re-raises the banner for every guardian until they acknowledge again — old acknowledgements stay on file.",
-    inputSchema: { type: "object", required: ["policies"], properties: { policies: { type: "array", items: { type: "object", required: ["key", "title"], properties: { key: { type: "string" }, title: { type: "string" }, version: { type: "string", description: "Default \"1\"" }, url: { type: "string" } } } }, tenant: TENANT_PROP } },
+    description: "Replace the WHOLE parent-policy list (max 25; each needs a unique key and a title; url must be https://). A policy's document is a link (url) or a Document Vault file (documentId, from uiiq_document_list; it must be this workspace's): a vault file is served only to signed-in guardians, by a short-lived link. OWNER/ADMIN only. Bumping a policy's version re-raises the banner for every guardian until they acknowledge again — old acknowledgements stay on file. To change a vault file without re-asking, uiiq_document_replace keeps the old file on record.",
+    inputSchema: { type: "object", required: ["policies"], properties: { policies: { type: "array", items: { type: "object", required: ["key", "title"], properties: { key: { type: "string" }, title: { type: "string" }, version: { type: "string", description: "Default \"1\"" }, url: { type: "string" }, documentId: { type: ["string", "null"], description: "A Document Vault document id; wins over url" } } } }, tenant: TENANT_PROP } },
     async handler({ policies, tenant }) {
       const res = await send(tenant, "PUT", "/classes/parent-policies", { policies });
       if (!res.ok) throw await fail(res);

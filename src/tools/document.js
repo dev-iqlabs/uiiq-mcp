@@ -78,6 +78,28 @@ async function loadFile({ path, url }) {
   return { bytes, filename, mime };
 }
 
+/**
+ * Steps 1 and 2 of an upload: a key minted server-side inside this tenant's
+ * prefix (the register and replace steps refuse anything else, so it is never
+ * invented here), then the bytes straight to S3. Not through the platform, no
+ * auth: the presigned fields ARE the authorisation. Every field first, `file`
+ * last — S3 ignores anything after the file part. Returns the key.
+ */
+async function putInVault(client, { bytes, filename, mime }) {
+  const presign = await client("/upload/document", {
+    method: "POST",
+    body: JSON.stringify({ fileName: filename, contentType: mime, fileSize: bytes.length }),
+  });
+  if (!presign.ok) throw new Error(await presign.text());
+  const { post, key } = await presign.json();
+  const form = new FormData();
+  for (const [k, v] of Object.entries(post.fields)) form.append(k, v);
+  form.append("file", new Blob([bytes], { type: mime }), filename);
+  const s3 = await fetch(post.url, { method: "POST", body: form });
+  if (!s3.ok) throw new Error(`Storage refused the upload: HTTP ${s3.status} ${(await s3.text()).slice(0, 200)}`);
+  return key;
+}
+
 export const documentTools = [
   {
     name: "uiiq_document_list",
@@ -130,25 +152,8 @@ export const documentTools = [
     async handler({ path, url, name, description, category, tenant } = {}) {
       const { bytes, filename, mime } = await loadFile({ path, url });
       const client = api(tenant);
-
-      // 1. A key and a presigned POST. The key is minted server-side inside
-      //    this tenant's prefix; the register step refuses anything else, so
-      //    it is never invented here.
-      const presign = await client("/upload/document", {
-        method: "POST",
-        body: JSON.stringify({ fileName: filename, contentType: mime, fileSize: bytes.length }),
-      });
-      if (!presign.ok) throw new Error(await presign.text());
-      const { post, key } = await presign.json();
-
-      // 2. The bytes, straight to S3. Not through the platform, no auth: the
-      //    presigned fields ARE the authorisation. Every field first, `file`
-      //    last — S3 ignores anything after the file part.
-      const form = new FormData();
-      for (const [k, v] of Object.entries(post.fields)) form.append(k, v);
-      form.append("file", new Blob([bytes], { type: mime }), filename);
-      const s3 = await fetch(post.url, { method: "POST", body: form });
-      if (!s3.ok) throw new Error(`Storage refused the upload: HTTP ${s3.status} ${(await s3.text()).slice(0, 200)}`);
+      // 1 and 2: the key and the bytes.
+      const key = await putInVault(client, { bytes, filename, mime });
 
       // 3. The row.
       const res = await client("/documents", {
@@ -161,6 +166,39 @@ export const documentTools = [
           fileSize: bytes.length,
           category: category || undefined,
         }),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    },
+  },
+  {
+    name: "uiiq_document_replace",
+    description:
+      "Replace a vault document's file from a local path or a URL, keeping the document (its id, name and category). Anything that points at it shows the new file from then on; the old file is kept on record as a revision. " +
+      "A parent policy's document is consent evidence: only an owner or admin may replace it (403 otherwise), and each such policy's version goes up so every parent confirms the new file (policyVersions in the answer); keepVersion true (owner/admin, for a typo fix) keeps the version and is audited. " +
+      "Same file types and 10 MB limit as uiiq_document_create. Not in read-only impersonation. Returns the updated document with revisionId and policyVersions.",
+    inputSchema: {
+      type: "object",
+      required: ["id"],
+      properties: {
+        id: { type: "string", description: "The vault document to replace the file of." },
+        path: { type: "string", description: "Local file path. One of path or url is required." },
+        url: { type: "string", description: "http(s) URL to fetch and store. One of path or url is required." },
+        keepVersion: { type: "boolean", description: "Owner/admin only: a parent policy using this document keeps its version (a typo fix). Default false: the version goes up and parents confirm again." },
+        tenant: TENANT_PROP,
+      },
+    },
+    async handler({ id, path, url, keepVersion, tenant }) {
+      const { bytes, filename, mime } = await loadFile({ path, url });
+      const client = api(tenant);
+      // The document first: a wrong id fails before anything is uploaded.
+      const meta = await client(`/documents/${encodeURIComponent(id)}`);
+      if (meta.status === 404) throw new Error(`No document with id ${id} in this vault.`);
+      if (!meta.ok) throw new Error(await meta.text());
+      const key = await putInVault(client, { bytes, filename, mime });
+      const res = await client(`/documents/${encodeURIComponent(id)}/replace`, {
+        method: "POST",
+        body: JSON.stringify({ fileKey: key, fileType: fileTypeOf(mime), fileSize: bytes.length, ...(keepVersion === true ? { keepVersion: true } : {}) }),
       });
       if (!res.ok) throw new Error(await res.text());
       return res.json();
