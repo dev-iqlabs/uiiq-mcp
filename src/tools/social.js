@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { apiClient } from "../auth.js";
 
 // Every tool takes an optional `tenant` (id, slug or exact name). Without it the
@@ -210,6 +211,51 @@ export const socialTools = [
       const res = await send(tenant, `/socials/posts/${encodeURIComponent(id)}/insights`, "POST");
       if (!res.ok) throw await fail(res);
       return res.json();
+    },
+  },
+
+  {
+    name: "uiiq_social_promo_templates",
+    description: "The promo layouts this workspace can use (IQEX's promo-media templates: headline, big figure, steps, collage, compare, timeline, end card, and the shop 'collection' ad: a large product photo, headline, price and a CTA bar, then four product cards). Each: { slug, name, layout, size, width, height, fields: { name: { type text|colour|image, label, max_chars, default } }, photoSlots, previewUrl }, plus brandDefaults and maxPhotos. Needs the Social Templates feature switched on.",
+    inputSchema: { type: "object", properties: { tenant: TENANT_PROP } },
+    async handler({ tenant } = {}) {
+      const res = await api(tenant)("/socials/promo-templates");
+      if (!res.ok) throw await fail(res);
+      return res.json();
+    },
+  },
+  {
+    name: "uiiq_social_promo_products",
+    description: "The workspace's shop products for promo photos, from its UiiQ Connect product feed on its own website: [{ id, title, price (as a card shows it, e.g. £19.99), link, images (the main photo, then the mockups) }]. Pass an image as { url } in uiiq_social_promo_create's photos; for a collection's cards, title and price are what item1_name/item1_price etc. take.",
+    inputSchema: { type: "object", properties: { tenant: TENANT_PROP } },
+    async handler({ tenant } = {}) {
+      const res = await api(tenant)("/socials/promo-products");
+      if (!res.ok) throw await fail(res);
+      return res.json();
+    },
+  },
+  {
+    name: "uiiq_social_promo_create",
+    description: "Make a promo layout into a DRAFT social post: IQEX renders it with these words and photos (charging the workspace's credits) and UiiQ saves a draft carrying it. Nothing is posted, and the image stays PRIVATE until the post is published (it is made public only then, and private again if the post is deleted): media_url is UiiQ's own address for it, which only the workspace's signed-in members can open. At most 30 an hour per workspace. template: a slug from uiiq_social_promo_templates. fields: its text fields only; words are printed exactly as sent or refused with a 400 naming the field (about how many characters fit), never cut. photos: in slot order, each { assetId } (a media-library image) or { url } (https); a collection needs five, the main product first. colours: the layout's colour fields as hex. requestId: leave it out for a fresh one; pass the SAME one to retry a Create that failed or timed out, and it isn't charged twice. Returns { success, post_id, media_url, template, charged }.",
+    inputSchema: {
+      type: "object",
+      required: ["template"],
+      properties: {
+        template: { type: "string", description: "A slug from uiiq_social_promo_templates, e.g. promo-collection-4x5" },
+        fields: { type: "object", additionalProperties: { type: "string" }, description: "The layout's text fields, e.g. { headline, price_line, cta, item1_name, item1_price }" },
+        photos: { type: "array", items: { type: "object", properties: { assetId: { type: "integer" }, url: { type: "string" } } }, description: "In slot order: { assetId } or { url } (https)" },
+        colours: { type: "object", additionalProperties: { type: "string" }, description: "The layout's colour fields as hex, e.g. { bg_colour: '#020017' }" },
+        content: { type: "string", description: "The post's own text" },
+        hashtags: { type: "array", items: { type: "string" } },
+        requestId: { type: "string", description: "Leave out for a fresh one; the same one retries without a second charge" },
+        tenant: TENANT_PROP,
+      },
+    },
+    async handler({ tenant, requestId, ...body }) {
+      const id = requestId || `promo-${randomUUID()}`;
+      const res = await send(tenant, "/socials/promo-templates", "POST", { ...body, requestId: id });
+      if (!res.ok) throw await fail(res);
+      return { ...(await res.json()), requestId: id };
     },
   },
 
