@@ -17,6 +17,8 @@ async function fail(res) {
 }
 const send = (tenant, path, method, body) => api(tenant)(path, body === undefined ? { method } : { method, body: JSON.stringify(body) });
 const POST_STATUS = ["DRAFT", "QUEUED", "SCHEDULED"];
+// Enabling the campaign alone runs nothing (iqex-backend #1384): said wherever a carousel ad is made.
+const CAROUSEL_RUN_IT = "To run it, the campaign, its ad set AND its ad must each be switched on in Ads Manager: enabling the campaign alone runs nothing. A budget changed in Ads Manager isn't held to UiiQ's £10 a day.";
 
 // Scheduling is a publish path: on a workspace with auto-publish on, the
 // 5-minute cron publishes a SCHEDULED post once it is due (a past scheduledAt
@@ -256,6 +258,51 @@ export const socialTools = [
       const res = await send(tenant, "/socials/promo-templates", "POST", { ...body, requestId: id });
       if (!res.ok) throw await fail(res);
       return { ...(await res.json()), requestId: id };
+    },
+  },
+  {
+    name: "uiiq_social_post_carousel_ad",
+    description: `Make a Meta carousel ad from a PUBLISHED promo post (its image is public then; a draft's never is): a NEW campaign, ad set and ad in the workspace's own Meta ad account, ALL PAUSED. Card 1 is the post's collection image; then 1 to 9 products (uiiq_social_promo_products gives their photo, "title · price" and page). Without confirm: true this is a DRY RUN: it returns the form's context (adAccount, the connected Facebook pages to pick pageId from, collectionImage, defaults) and what would be sent, and nothing is made. Only pass confirm: true once the person responsible has seen it and said to make it. ${CAROUSEL_RUN_IT} dailyBudgetPence: 100 to 1000 (£1 to £10 a day). Owners and admins only, at most 10 an hour, needs the Social Templates feature. requestId: leave it out for a fresh one; after a timeout (504) retry with the SAME one, which never makes a second ad. A 409 saying Meta may already have made it means check Ads Manager: never retry it with a new requestId. IQEX's refusals (its budget ceiling not set: 503; Meta's reason: 502, with detail) come back as given. Returns { campaignId, adSetId, adId, adsManagerUrl, status: PAUSED, duplicate, requestId }.`,
+    inputSchema: {
+      type: "object",
+      required: ["id"],
+      properties: {
+        id: { type: "string", description: "The published promo post" },
+        pageId: { type: "string", description: "One of the context's pages[].id: the Facebook Page the ad runs as" },
+        name: { type: "string", description: "The campaign/ad name, at most 200 characters" },
+        dailyBudgetPence: { type: "integer", minimum: 100, maximum: 1000, description: "100 to 1000 (£1 to £10 a day)" },
+        countries: { type: "array", items: { type: "string" }, description: "Two-letter codes, e.g. [\"GB\"]" },
+        primaryText: { type: "string", description: "The ad's text, at most 2000 characters" },
+        headline: { type: "string", description: "At most 255 characters" },
+        ctaType: { type: "string", enum: ["SHOP_NOW", "LEARN_MORE", "ORDER_NOW", "BUY_NOW", "SIGN_UP", "SUBSCRIBE", "GET_OFFER", "CONTACT_US", "BOOK_TRAVEL"] },
+        linkUrl: { type: "string", description: "https: where the collection card (card 1) goes, usually the shop" },
+        collectionName: { type: "string", description: "Card 1's name, at most 100 characters" },
+        products: {
+          type: "array", minItems: 1, maxItems: 9,
+          items: { type: "object", required: ["imageUrl", "name", "linkUrl"], properties: { imageUrl: { type: "string" }, name: { type: "string", description: "At most 100 characters" }, description: { type: "string", description: "At most 200 characters" }, linkUrl: { type: "string" } } },
+          description: "Cards 2 to 10, in order",
+        },
+        requestId: { type: "string", description: "Leave out for a fresh one; the same one retries without making a second" },
+        confirm: { type: "boolean", description: "true to really make the (paused) ad; anything else is a dry run" },
+        tenant: TENANT_PROP,
+      },
+    },
+    async handler({ id, tenant, confirm, requestId, ...body }) {
+      const path = `/socials/posts/${encodeURIComponent(id)}/carousel-ad`;
+      if (confirm !== true) {
+        const preview = await api(tenant)(path);
+        if (!preview.ok) throw await fail(preview);
+        return {
+          dryRun: true,
+          message: `Nothing was made. Pass confirm: true to make it, only once the person responsible has seen this. ${CAROUSEL_RUN_IT}`,
+          context: await preview.json(),
+          wouldSend: body,
+        };
+      }
+      const rid = requestId || `ad-${randomUUID()}`;
+      const res = await send(tenant, path, "POST", { ...body, requestId: rid });
+      if (!res.ok) throw await fail(res);
+      return { ...(await res.json()), requestId: rid, note: CAROUSEL_RUN_IT };
     },
   },
 
