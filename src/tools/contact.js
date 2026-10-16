@@ -14,22 +14,31 @@ const api = (tenant) => apiClient(tenant ? { tenant } : {});
 export const contactTools = [
   {
     name: "uiiq_contact_list",
-    description: "List UIIQ contacts. Optionally search by name or email.",
+    description:
+      "List UIIQ contacts, each with where it came from (source). Optionally search by name or email, " +
+      "and filter by source (e.g. website_signup for the website newsletter form), subscribed (true/false) " +
+      "or a tag (e.g. newsletter), so 'did any newsletter sign-ups arrive?' is one call.",
     inputSchema: {
       type: "object",
       properties: {
         search: { type: "string" },
+        source: { type: "string", description: "Where the contact came from, exactly: website_signup (newsletter form), woo_checkout, iqex-enquiry, ..." },
+        subscribed: { type: "boolean", description: "Only subscribed (true) or unsubscribed (false) contacts" },
+        tag: { type: "string", description: "Only contacts with this tag, e.g. newsletter" },
         limit: { type: "number", description: "Max results (default 50)" },
         tenant: TENANT_PROP,
       }
     },
-    async handler({ search, limit = 50, tenant } = {}) {
+    async handler({ search, source, subscribed, tag, limit = 50, tenant } = {}) {
       const params = new URLSearchParams({ limit });
       // The API reads `q`, not `search`. This sent `search`, which the API
       // ignored — so a filtered call returned page one alphabetically with a
       // clean 200, and looked like the contact simply wasn't there. Silently
       // wrong is the dangerous kind of broken; send the name the API reads.
       if (search) params.set("q", search);
+      if (source) params.set("source", source);
+      if (typeof subscribed === "boolean") params.set("subscribed", String(subscribed));
+      if (tag) params.set("tag", tag);
       const res = await api(tenant)(`/contacts?${params}`);
       const data = await res.json();
       return Array.isArray(data) ? data : data.contacts ?? [];
