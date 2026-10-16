@@ -202,6 +202,17 @@ export const socialTools = [
     },
   },
 
+  {
+    name: "uiiq_social_post_insights",
+    description: "Refresh a published post's engagement figures now. Each Facebook and Instagram target is read through IQEX (not if it was read in the last 5 minutes), and every target comes back as { id, platform, outcome: updated | failed | fresh | skipped, insights }. insights is { fetchedAt, metrics: { name: count }, missing: [names], error?, errorAt? }, or null when never read (other platforms, targets not published). A name in missing is a figure Meta didn't give: show it as unavailable, never as 0. On a failed read, error says why and the last good figures are kept. The latest figures are also on uiiq_social_post_get's targets[].metrics; UiiQ reads the last 30 days' posts once a day by itself. Reads only: nothing is posted.",
+    inputSchema: { type: "object", required: ["id"], properties: { id: { type: "string" }, tenant: TENANT_PROP } },
+    async handler({ id, tenant }) {
+      const res = await send(tenant, `/socials/posts/${encodeURIComponent(id)}/insights`, "POST");
+      if (!res.ok) throw await fail(res);
+      return res.json();
+    },
+  },
+
   // ── Accounts ──
   {
     name: "uiiq_social_account_remove",
