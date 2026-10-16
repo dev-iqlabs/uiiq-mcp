@@ -110,7 +110,7 @@ export const workflowTools = [
   // ── Workflow types + tiers (SUPER_ADMIN) ──
   {
     name: "uiiq_workflow_type_list",
-    description: "Workflow types (what a site sells, e.g. a legacy film) with their tiers and order counts, across tenants or for one tenantId. SUPER_ADMIN only.",
+    description: "Workflow types (what a site sells, e.g. a legacy film) with their tiers and order counts, across tenants or for one tenantId. SUPER_ADMIN only. A workspace's own short list is uiiq_workflow_types_mine.",
     inputSchema: { type: "object", properties: { tenantId: { type: "string" } } },
     async handler({ tenantId } = {}) { return op(`/admin/workflow/types${tenantQs(tenantId)}`); },
   },
@@ -158,6 +158,12 @@ export const workflowTools = [
   },
 
   // ── The working board (tenant) ──
+  {
+    name: "uiiq_workflow_types_mine",
+    description: "This workspace's own workflow types, for picking one (e.g. an email trigger's workflowTypeId): [{ id, name, slug, status }], by sort order then name. Any login of the workspace. The full rows across tenants, with tiers and order counts, are the operator's: uiiq_workflow_type_list (SUPER_ADMIN only).",
+    inputSchema: { type: "object", properties: { tenant: TENANT_PROP } },
+    async handler({ tenant } = {}) { return req(tenant, "/workflow/types"); },
+  },
   {
     name: "uiiq_workflow_board",
     description: "The tenant's workflow order board: columns (intake, in progress, review, fulfilment, complete, issues) with the live orders in each and any pending approval.",

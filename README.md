@@ -71,7 +71,7 @@ UIIQ is one subscription whose modules are grouped as **Sell**, **Grow** and **R
 | Auctions | `uiiq_auction_*` | The seller's side: draft, lots, publish, bids, withdraw, defaults (needs the `auctions` feature; buyers bid through the public API) |
 | NX2U live streaming | `uiiq_nx2u_*` | Channels, events, the control room (provision, running order, slate, end, replay), the video library, usage (needs the `nx2u` feature; platform switches OFF until Steve turns them on) |
 | Funding, estimates, integrations | `uiiq_funding_*`, `uiiq_estimates_*`, `uiiq_integrations_*`, `uiiq_virtual_office_*` | Funding projects, headings, allocations and claims (Xero invoices); estimates with lines and proposals; integration sources and Xero config; compliance reminders |
-| Workflow config | `uiiq_workflow_*` | Workflow types, tiers and keepsakes, connected sites (tokens shown once), the board, email triggers, order assignment and approval requests |
+| Workflow config | `uiiq_workflow_*` | Workflow types, tiers and keepsakes, connected sites (tokens shown once), the workspace's own types list, the board, email triggers, order assignment and approval requests |
 | Mail | `uiiq_mail_*` | The Office → Mail log: items received, scanned, forwarded, shredded |
 | Assistant and team | `uiiq_assistant_*`, `uiiq_team_*` | Ask the assistant (spends credits), chat with a Mastermind agent, provision the team |
 | Agents | `uiiq_agent_*` | Read, edit and sync agent definitions, skills and references (writes are SUPER_ADMIN; evolve spends the platform's Anthropic budget) |
@@ -1688,7 +1688,7 @@ Needs the `competitions` feature. Setting up, rounds, the nominee confirmation a
 | `uiiq_workflow_site_rotate` | Rotate a site's API token: the old token stops working immediately and the new one is returned once. |
 | `uiiq_workflow_site_update` | Rename a site or set its status (ACTIVE / REVOKED — revoked sites can't push orders). |
 | `uiiq_workflow_site_delete` | Delete a site registration; its token stops working. |
-| `uiiq_workflow_type_list` | Workflow types (what a site sells, e.g. |
+| `uiiq_workflow_type_list` | Workflow types (what a site sells, e.g. a legacy film) with their tiers and order counts, across tenants or for one tenantId. SUPER_ADMIN only; a workspace's own short list is `uiiq_workflow_types_mine`. |
 | `uiiq_workflow_type_get` | One workflow type with its tiers (and their keepsakes) and order count. |
 | `uiiq_workflow_type_create` | Create a workflow type for a tenant's site. |
 | `uiiq_workflow_type_update` | Edit a workflow type; only the fields sent change. |
@@ -1696,6 +1696,7 @@ Needs the `competitions` feature. Setting up, rounds, the nominee confirmation a
 | `uiiq_workflow_tier_create` | Add a price tier to a workflow type (name, slug, priceGbp required). |
 | `uiiq_workflow_tier_update` | Edit a tier; only the fields sent change. |
 | `uiiq_workflow_tier_delete` | Delete a tier. |
+| `uiiq_workflow_types_mine` | This workspace's own workflow types, for pickers: id, name, slug and status, by sort order then name. The full cross-tenant rows are `uiiq_workflow_type_list` (SUPER_ADMIN). |
 | `uiiq_workflow_board` | The tenant's workflow order board: columns (intake, in progress, review, fulfilment, complete, issues) with the live orders in each and any pending approval. |
 | `uiiq_workflow_email_trigger_list` | The tenant's status-change email triggers (which order status emails whom, with what template). |
 | `uiiq_workflow_email_trigger_create` | Add an email trigger: when an order reaches `status`, email the recipient with subject + bodyTemplate. |
@@ -1704,4 +1705,4 @@ Needs the `competitions` feature. Setting up, rounds, the nominee confirmation a
 | `uiiq_workflow_order_assign` | Assign a workflow order to a user in the tenant (assignedUserId null unassigns). |
 | `uiiq_workflow_order_request_approval` | Ask the customer to approve a stage of their order: creates an approval link, moves the order to AWAITING_APPROVAL and EMAILS the customer. |
 
-1183 tools.
+1184 tools.
