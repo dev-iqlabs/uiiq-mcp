@@ -262,9 +262,10 @@ export const socialTools = [
   },
   {
     name: "uiiq_social_post_carousel_ad",
-    description: `Make a Meta carousel ad from a PUBLISHED promo post (its image is public then; a draft's never is): a NEW campaign, ad set and ad in the workspace's own Meta ad account, ALL PAUSED. Card 1 is the post's collection image; then 1 to 9 products (uiiq_social_promo_products gives their photo, "title · price" and page). Without confirm: true this is a DRY RUN: it returns the form's context (adAccount, the connected Facebook pages to pick pageId from, collectionImage, defaults) and what would be sent, and nothing is made. Only pass confirm: true once the person responsible has seen it and said to make it. ${CAROUSEL_RUN_IT} dailyBudgetPence: 100 to 1000 (£1 to £10 a day). Owners and admins only, at most 10 an hour, needs the Social Templates feature. requestId: leave it out for a fresh one; after a timeout (504) retry with the SAME one, which never makes a second ad. A 409 saying Meta may already have made it means check Ads Manager: never retry it with a new requestId. IQEX's refusals (its budget ceiling not set: 503; Meta's reason: 502, with detail) come back as given. Returns { campaignId, adSetId, adId, adsManagerUrl, status: PAUSED, duplicate, requestId }.`,
+    description: `Make a Meta carousel ad from a PUBLISHED promo post (its image is public then; a draft's never is): a NEW campaign, ad set and ad in the workspace's own Meta ad account, ALL PAUSED. Card 1 is the post's collection image; then 1 to 9 of the shop's products, each { productId, photoIndex } from uiiq_social_promo_products (photoIndex 0 = the main photo, then the mockups): UiiQ reads each one's photo and page from the shop's feed itself, so no other image or link can get into an ad. Without confirm: true this is a DRY RUN: it returns the form's context (adAccount, the connected Facebook pages to pick pageId from, collectionImage, defaults) and what would be sent, and nothing is made. Only pass confirm: true once the person responsible has seen it and said to make it. ${CAROUSEL_RUN_IT} dailyBudgetPence: 100 to 1000 (£1 to £10 a day). Owners and admins only, at most 10 an hour, needs the Social Templates feature. requestId: leave it out for a fresh one; after a timeout (504) retry with the SAME one, which never makes a second ad. A 409 "still being made": retry the SAME requestId shortly. A 409 "may already have made": check Ads Manager, and use a new requestId only if it isn't there. A 503 means Meta ads aren't switched on yet and a 403 that the ad account or Page isn't registered: both are for UiiQ support. Meta's own reason comes back as a 502, with detail. Returns { campaignId, adSetId, adId, adsManagerUrl, status: PAUSED, duplicate, requestId }.`,
     inputSchema: {
       type: "object",
+      additionalProperties: false,
       required: ["id"],
       properties: {
         id: { type: "string", description: "The published promo post" },
@@ -279,16 +280,22 @@ export const socialTools = [
         collectionName: { type: "string", description: "Card 1's name, at most 100 characters" },
         products: {
           type: "array", minItems: 1, maxItems: 9,
-          items: { type: "object", required: ["imageUrl", "name", "linkUrl"], properties: { imageUrl: { type: "string" }, name: { type: "string", description: "At most 100 characters" }, description: { type: "string", description: "At most 200 characters" }, linkUrl: { type: "string" } } },
-          description: "Cards 2 to 10, in order",
+          items: { type: "object", additionalProperties: false, required: ["productId"], properties: { productId: { type: "string", description: "A product id from uiiq_social_promo_products" }, photoIndex: { type: "integer", minimum: 0, description: "Which of its photos: 0 = the main one (default), then the mockups" }, name: { type: "string", description: "The card's name, at most 100 characters (default: \"title · price\")" }, description: { type: "string", description: "At most 200 characters" } } },
+          description: "Cards 2 to 10, in order: the shop's products",
         },
         requestId: { type: "string", description: "Leave out for a fresh one; the same one retries without making a second" },
         confirm: { type: "boolean", description: "true to really make the (paused) ad; anything else is a dry run" },
         tenant: TENANT_PROP,
       },
     },
-    async handler({ id, tenant, confirm, requestId, ...body }) {
+    async handler({ id, tenant, confirm, requestId, pageId, name, dailyBudgetPence, countries, primaryText, headline, ctaType, linkUrl, collectionName, products }) {
       const path = `/socials/posts/${encodeURIComponent(id)}/carousel-ad`;
+      // Named fields only, whatever else a caller passes (Lucas, on #109 L1).
+      const defined = (o) => Object.fromEntries(Object.entries(o).filter(([, v]) => v !== undefined));
+      const body = defined({
+        pageId, name, dailyBudgetPence, countries, primaryText, headline, ctaType, linkUrl, collectionName,
+        products: Array.isArray(products) ? products.map((p) => defined({ productId: p?.productId, photoIndex: p?.photoIndex, name: p?.name, description: p?.description })) : products,
+      });
       if (confirm !== true) {
         const preview = await api(tenant)(path);
         if (!preview.ok) throw await fail(preview);
