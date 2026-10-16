@@ -386,10 +386,14 @@ export const adsTools = [
   // ── Channel controls and alerts ──
   {
     name: "uiiq_ads_google_campaign_control",
-    description: "Pause or enable a Google Ads campaign, or set its daily budget (budgetMicros = pounds × 1,000,000). Needs a connected Google Ads account.",
-    inputSchema: { type: "object", required: ["id", "action"], properties: { id: { type: "string", description: "campaign id" }, action: { type: "string", enum: ["pause", "enable", "budget"] }, budgetMicros: { type: "number" }, tenant: TENANT_PROP } },
-    async handler({ id, action, budgetMicros, tenant }) {
-      const res = await api(tenant)(`/ads/google/campaigns/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify({ action, budget_micros: budgetMicros }) });
+    description: "Pause or enable a Google Ads campaign, or set its daily budget (budgetMicros = pounds × 1,000,000, a whole number; IQEX holds it to the workspace's daily limit). ENABLING starts spending: without confirm: true an enable is a dry run and nothing changes; pass confirm: true only once the person responsible has said to switch it on. A change counts only when Google confirmed it: otherwise UiiQ answers 502 and nothing changed. Returns { campaign_id, status } or { campaign_id, budget_micros }. Needs a connected Google Ads account registered with IQEX.",
+    inputSchema: { type: "object", additionalProperties: false, required: ["id", "action"], properties: { id: { type: "string", description: "campaign id (digits)" }, action: { type: "string", enum: ["pause", "enable", "budget"] }, budgetMicros: { type: "integer", minimum: 10000 }, confirm: { type: "boolean", description: "true to really enable (it starts spending); anything else is a dry run. Ignored for pause and budget" }, tenant: TENANT_PROP } },
+    async handler({ id, action, budgetMicros, confirm, tenant }) {
+      if (action === "enable" && confirm !== true) {
+        return { dryRun: true, message: `Nothing was changed. Enabling campaign ${id} starts spending its daily budget on Google Ads: pass confirm: true only once the person responsible has said to switch it on.` };
+      }
+      const body = action === "budget" ? { action, budget_micros: budgetMicros } : action === "enable" ? { action, confirm: true } : { action };
+      const res = await api(tenant)(`/ads/google/campaigns/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify(body) });
       if (!res.ok) throw await fail(res);
       return res.json();
     },
