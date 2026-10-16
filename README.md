@@ -596,6 +596,7 @@ Dashboard → Ads → Competitors. Needs the `ads_search` feature and the ads ti
 | `uiiq_document_list` | List documents in the tenant's vault, newest first (up to 100). |
 | `uiiq_document_get` | One vault document's record by id: name, description, category, type, size, date. |
 | `uiiq_document_create` | Put a file into the tenant's Document Vault from a local path or a URL, and register it. |
+| `uiiq_document_replace` | Replace a vault document's file from a local path or a URL, keeping the document (its id, name and category); the old file is kept on record. |
 | `uiiq_document_download` | Fetch a vault document's file to a local path and return that path. |
 | `uiiq_document_delete` | Delete a vault document permanently. |
 
@@ -1419,7 +1420,7 @@ Needs the `competitions` feature. Setting up, rounds, the nominee confirmation a
 | `uiiq_classes_notice_update` | Replace a notice's title, body, audience, publishedAt and expiresAt (full replace — all of title/body/audience are required). |
 | `uiiq_classes_notice_delete` | DELETE a parent notice (it disappears from every family portal at once). |
 | `uiiq_classes_policies_get` | The policies guardians are asked to acknowledge in the family portal (key, title, version, url) with how many have acknowledged each at its current version. |
-| `uiiq_classes_policies_set` | Replace the WHOLE parent-policy list (max 25; each needs a unique key and a title; url must be https://). |
+| `uiiq_classes_policies_set` | Replace the WHOLE parent-policy list (max 25; each needs a unique key and a title; url must be https://, or documentId a Document Vault file). |
 | `uiiq_classes_registration_form_get` | The school's public "Register your family" IQForm (enabled, iqformId, url); enabled=false when family registration is switched off. |
 | `uiiq_classes_registration_form_set` | Set (IQForm id or form-id= link; must be Public and the venue's own) or clear (null / "") the public "Register your family" form. OWNER/ADMIN; 404 unless family registration is switched on. |
 | `uiiq_classes_enrolments_list` | Enrolments (newest first), filtered by classId and/or studentId: student and class names, term, status, payment mode, fee/paid/owed and instalment arrears. |
@@ -1709,4 +1710,4 @@ Needs the `competitions` feature. Setting up, rounds, the nominee confirmation a
 | `uiiq_workflow_order_assign` | Assign a workflow order to a user in the tenant (assignedUserId null unassigns). |
 | `uiiq_workflow_order_request_approval` | Ask the customer to approve a stage of their order: creates an approval link, moves the order to AWAITING_APPROVAL and EMAILS the customer. |
 
-1188 tools.
+1189 tools.
