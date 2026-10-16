@@ -315,7 +315,7 @@ export const classesTools = [
   // ── Parent policies ──
   {
     name: "uiiq_classes_policies_get",
-    description: "The policies guardians are asked to acknowledge in the family portal (key, title, version, url) with how many have acknowledged each at its current version.",
+    description: "The policies guardians are asked to acknowledge in the family portal (key, title, version, url, documentId) with how many have acknowledged each at its current version, and the list's revision (send it back with uiiq_classes_policies_set).",
     inputSchema: { type: "object", properties: { tenant: TENANT_PROP } },
     async handler({ tenant } = {}) {
       const res = await api(tenant)("/classes/parent-policies");
@@ -325,10 +325,14 @@ export const classesTools = [
   },
   {
     name: "uiiq_classes_policies_set",
-    description: "Replace the WHOLE parent-policy list (max 25; each needs a unique key and a title; url must be https://). A policy's document is a link (url) or a Document Vault file (documentId, from uiiq_document_list; it must be this workspace's): a vault file is served only to signed-in guardians, by a short-lived link. OWNER/ADMIN only. Bumping a policy's version re-raises the banner for every guardian until they acknowledge again — old acknowledgements stay on file. To change a vault file without re-asking, uiiq_document_replace keeps the old file on record.",
-    inputSchema: { type: "object", required: ["policies"], properties: { policies: { type: "array", items: { type: "object", required: ["key", "title"], properties: { key: { type: "string" }, title: { type: "string" }, version: { type: "string", description: "Default \"1\"" }, url: { type: "string" }, documentId: { type: ["string", "null"], description: "A Document Vault document id; wins over url" } } } }, tenant: TENANT_PROP } },
-    async handler({ policies, tenant }) {
-      const res = await send(tenant, "PUT", "/classes/parent-policies", { policies });
+    description: "Replace the WHOLE parent-policy list (max 25; each needs a unique key and a title; url must be https://). A policy's document is a link (url) or a Document Vault file (documentId, from uiiq_document_list; it must be this workspace's): a vault file is served only to signed-in guardians, by a short-lived link. OWNER/ADMIN only. Bumping a policy's version re-raises the banner for every guardian until they acknowledge again — old acknowledgements stay on file. A policy left out of the list is removed; its acknowledgements stay on file. A version guardians already confirmed is refused (409), and so is a new link or vault file under such a version: on a 409, give the policy a NEW version; set reuseVersion only when the admin confirms the text is unchanged (it is audited). Replacing a linked vault file (uiiq_document_replace) re-asks too: it bumps the policy's version unless keepVersion is set. Send revision (from uiiq_classes_policies_get): a list parents have confirmed is refused without it, and a list changed since you read it is a 409 (read it again).",
+    inputSchema: { type: "object", additionalProperties: false, required: ["policies"], properties: { policies: { type: "array", items: { type: "object", required: ["key", "title"], properties: { key: { type: "string" }, title: { type: "string" }, version: { type: "string", description: "Default \"1\"" }, url: { type: "string" }, documentId: { type: ["string", "null"], description: "A Document Vault document id; wins over url" } } } }, revision: { type: "string", description: "The revision uiiq_classes_policies_get returned: refused (409) if the list changed since" }, reuseVersion: { type: "boolean", description: "Allow a version guardians already confirmed (audited). Default false." }, tenant: TENANT_PROP } },
+    async handler({ policies, revision, reuseVersion, tenant }) {
+      const res = await send(tenant, "PUT", "/classes/parent-policies", {
+        policies,
+        ...(typeof revision === "string" ? { revision } : {}),
+        ...(reuseVersion === true ? { reuseVersion: true } : {}),
+      });
       if (!res.ok) throw await fail(res);
       return res.json();
     },

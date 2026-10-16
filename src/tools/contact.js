@@ -17,9 +17,11 @@ export const contactTools = [
     description:
       "List UIIQ contacts, each with where it came from (source). Optionally search by name or email, " +
       "and filter by source (e.g. website_signup for the website newsletter form), subscribed (true/false) " +
-      "or a tag (e.g. newsletter), so 'did any newsletter sign-ups arrive?' is one call.",
+      "or a tag (e.g. newsletter), so 'did any newsletter sign-ups arrive?' is one call. Tag and source match as typed or " +
+      "in lower case. subscribed is the contact's own flag: it doesn't check the do-not-email list, which every send checks again.",
     inputSchema: {
       type: "object",
+      additionalProperties: false,
       properties: {
         search: { type: "string" },
         source: { type: "string", description: "Where the contact came from, exactly: website_signup (newsletter form), woo_checkout, iqex-enquiry, ..." },
