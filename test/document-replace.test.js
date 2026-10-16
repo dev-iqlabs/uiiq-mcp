@@ -84,3 +84,12 @@ test("policies_set passes documentId through", async () => {
   assert.deepEqual(JSON.parse(seen[0].body), { policies });
   assert.ok(classTools.uiiq_classes_policies_set.inputSchema.properties.policies.items.properties.documentId);
 });
+
+test("policies_set sends revision and reuseVersion only when given, and its schema is closed", async () => {
+  const policies = [{ key: "photo", title: "Photo consent", version: "2" }];
+  await classTools.uiiq_classes_policies_set.handler({ policies, revision: "abc", reuseVersion: true });
+  assert.deepEqual(JSON.parse(seen[0].body), { policies, revision: "abc", reuseVersion: true });
+  await classTools.uiiq_classes_policies_set.handler({ policies, reuseVersion: false });
+  assert.deepEqual(JSON.parse(seen[1].body), { policies });
+  assert.equal(classTools.uiiq_classes_policies_set.inputSchema.additionalProperties, false);
+});
