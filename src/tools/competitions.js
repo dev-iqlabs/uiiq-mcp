@@ -469,6 +469,27 @@ export const competitionTools = [
     },
   },
   {
+    name: "uiiq_competition_claim_naming",
+    description: "A drawn (DRAW) winner's naming in public, changed on their word (owner/admin; audited with codes only): naming none (not named), handle (their @handle from their comment) or firstName (the first word of the name they gave); and townApproved, whether the town they gave may be shown with their name. Taking anything back brings the round's posts that could name them into line. Only an entry with a claim (not one held or refused).",
+    inputSchema: {
+      type: "object",
+      required: ["entryId"],
+      properties: {
+        entryId: { type: "string" },
+        naming: { type: "string", enum: ["none", "handle", "firstName"] },
+        townApproved: { type: "boolean" },
+        tenant: TENANT_PROP,
+      },
+    },
+    async handler({ entryId, naming, townApproved, tenant }) {
+      const body = {};
+      if (naming !== undefined) body.naming = naming;
+      if (townApproved !== undefined) body.townApproved = townApproved;
+      if (!Object.keys(body).length) throw new Error("Give naming, townApproved, or both");
+      return call(tenant, `/competitions/entries/${seg(entryId)}/claim-naming`, send("POST", body));
+    },
+  },
+  {
     name: "uiiq_competition_entry_erase",
     description: "Erase one entry for good, its photo included, e.g. when a nominee asks (owner/admin). Can't be undone; the audit keeps only that it happened. Without confirm: true it's a dry run that changes nothing.",
     inputSchema: { type: "object", required: ["entryId"], properties: { entryId: { type: "string" }, confirm: CONFIRM_PROP, tenant: TENANT_PROP } },
