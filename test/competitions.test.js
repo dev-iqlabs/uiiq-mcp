@@ -547,9 +547,16 @@ test("private-checked needs went; retry and cleanup-done go at once", async () =
   await assert.rejects(() => tools.uiiq_competition_offer_act.handler({ id: "c1", roundId: "r1", offerId: "../x", action: "retry" }), /must be an id/);
 });
 
-test("a drawn winner's naming: only the two fields, at least one", async () => {
+test("a drawn winner's naming: only its own fields, at least one; taking back goes at once, widening only with confirm", async () => {
   await assert.rejects(() => tools.uiiq_competition_claim_naming.handler({ entryId: "e1" }), /naming, townApproved/);
   const { requests } = await call("uiiq_competition_claim_naming", { entryId: "e1", naming: "none", townApproved: false, name: "x" });
   assert.deepEqual(requests, [{ method: "POST", path: "/competitions/entries/e1/claim-naming", body: { naming: "none", townApproved: false } }]);
+  // Naming them, or showing their town: a dry run that sends nothing, without confirm.
+  for (const args of [{ naming: "handle", basis: "winner_email" }, { townApproved: true }]) {
+    const dry = await call("uiiq_competition_claim_naming", { entryId: "e1", ...args });
+    assert.deepEqual(dry.requests, []);
+  }
+  const done = await call("uiiq_competition_claim_naming", { entryId: "e1", naming: "firstName", basis: "winner_message", confirm: true });
+  assert.deepEqual(done.requests, [{ method: "POST", path: "/competitions/entries/e1/claim-naming", body: { naming: "firstName", basis: "winner_message" } }]);
   await assert.rejects(() => tools.uiiq_competition_claim_naming.handler({ entryId: "../x", naming: "none" }), /must be an id/);
 });

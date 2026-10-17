@@ -470,7 +470,7 @@ export const competitionTools = [
   },
   {
     name: "uiiq_competition_claim_naming",
-    description: "A drawn (DRAW) winner's naming in public, changed on their word (owner/admin; audited with codes only): naming none (not named), handle (their @handle from their comment) or firstName (the first word of the name they gave); and townApproved, whether the town they gave may be shown with their name. Taking anything back brings the round's posts that could name them into line. Only an entry with a claim (not one held or refused).",
+    description: "A drawn (DRAW) winner's naming in public, changed on their word (owner/admin; audited with codes only): naming none (not named), handle (their @handle from their comment) or firstName (the first word of the name they gave); and townApproved, whether the town they gave may be shown with their name. Naming them more widely than their claim said needs basis, how they asked (winner_email or winner_message); their own answer is kept. Only a claim waiting for its email or claimed (not one held, refused or reopened). Taking anything back (naming none, townApproved false) goes at once and brings the round's posts that could name them into line; naming them or showing their town is a dry run without confirm: true.",
     inputSchema: {
       type: "object",
       required: ["entryId"],
@@ -478,14 +478,21 @@ export const competitionTools = [
         entryId: { type: "string" },
         naming: { type: "string", enum: ["none", "handle", "firstName"] },
         townApproved: { type: "boolean" },
+        basis: { type: "string", enum: ["winner_email", "winner_message"], description: "How the winner asked to be named more widely than their claim said" },
+        confirm: CONFIRM_PROP,
         tenant: TENANT_PROP,
       },
     },
-    async handler({ entryId, naming, townApproved, tenant }) {
+    async handler({ entryId, naming, townApproved, basis, confirm, tenant }) {
       const body = {};
       if (naming !== undefined) body.naming = naming;
       if (townApproved !== undefined) body.townApproved = townApproved;
       if (!Object.keys(body).length) throw new Error("Give naming, townApproved, or both");
+      if (basis !== undefined) body.basis = basis;
+      seg(entryId);
+      // Naming them, or showing their town, puts more of them in public: said out loud first (Lucas, on #117).
+      const widens = (naming !== undefined && naming !== "none") || townApproved === true;
+      if (widens && confirm !== true) return dryRun("claim_naming", tenant, { entryId, ...body }, "This names them in public (or shows their town) on the draw's posts and pages. Only on their own word: give basis, how they asked.");
       return call(tenant, `/competitions/entries/${seg(entryId)}/claim-naming`, send("POST", body));
     },
   },
