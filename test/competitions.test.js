@@ -56,7 +56,7 @@ test("every tool is named uiiq_competition_* and describes itself", () => {
     assert.ok(t.description.length > 20, name);
     assert.equal(t.inputSchema.type, "object", name);
   }
-  assert.equal(Object.keys(tools).length, 23);
+  assert.equal(Object.keys(tools).length, 22);
 });
 
 test("each tool calls its own route, with its own method and body", async () => {
@@ -514,7 +514,7 @@ test("prize offers: the list, read as is", async () => {
   assert.deepEqual(requests, [{ method: "GET", path: "/competitions/c1/rounds/r1/offers" }]);
 });
 
-test("an offer action: never the claim link (web only), whatever is asked", async () => {
+test("an offer action: never the claim link (not offered here), whatever is asked", async () => {
   for (const action of ["claim-link", "delete", "", undefined]) {
     await assert.rejects(() => tools.uiiq_competition_offer_act.handler({ id: "c1", roundId: "r1", offerId: "o1", action, confirm: true }), /action must be one of/, String(action));
   }
@@ -545,11 +545,4 @@ test("private-checked needs went; retry and cleanup-done go at once", async () =
     assert.deepEqual(requests, [{ method: "POST", path: "/competitions/c1/rounds/r1/offers/o1", body: { action } }], action);
   }
   await assert.rejects(() => tools.uiiq_competition_offer_act.handler({ id: "c1", roundId: "r1", offerId: "../x", action: "retry" }), /must be an id/);
-});
-
-test("a drawn winner's naming: only the two fields, at least one", async () => {
-  await assert.rejects(() => tools.uiiq_competition_claim_naming.handler({ entryId: "e1" }), /naming, townApproved/);
-  const { requests } = await call("uiiq_competition_claim_naming", { entryId: "e1", naming: "none", townApproved: false, name: "x" });
-  assert.deepEqual(requests, [{ method: "POST", path: "/competitions/entries/e1/claim-naming", body: { naming: "none", townApproved: false } }]);
-  await assert.rejects(() => tools.uiiq_competition_claim_naming.handler({ entryId: "../x", naming: "none" }), /must be an id/);
 });

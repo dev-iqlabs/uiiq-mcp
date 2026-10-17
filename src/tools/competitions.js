@@ -403,9 +403,11 @@ export const competitionTools = [
     },
   },
   // A DRAW round's prize offers (UiiQ-platform competitions 2c): one per drawn
-  // position, told, claimed or passed over in turn. Never the claim link: that
-  // is given only by hand, on the web, after checking who's asking (Lucas, 2c
-  // review H3), so no tool offers it.
+  // position, told, claimed or passed over in turn. No tool here offers the
+  // claim link: that's this client's choice, not a server control (UiiQ's own
+  // checks guard it: a judge, staff's note of how they checked who's asking,
+  // replies switched on). Staff give it from the claims card (Lucas, 2c review
+  // H3; #1026).
   {
     name: "uiiq_competition_offers",
     description: "A drawn (DRAW) round's prize offers, in the published draw order (the competition's judges only): each position's state (PENDING waiting its turn, READY to be told, CHECK needs staff, TOLD, CLAIM_SUBMITTED waiting for the claimant's email, CLAIMED, PASSED with its reason REMOVED, EXPIRED or INELIGIBLE), its deadline, its replies as codes (privateState, publicState), lastError (why it needs staff), cleanupPending (a reply under an erased comment still to take down), the commenter's handle, the claim's name and email once they've claimed, and the public words to use when replying by hand. noOneClaimed is true when every position was passed over. mode is send (UiiQ replies through IQEX), hand (staff reply from Meta's inbox) or off.",
@@ -416,7 +418,7 @@ export const competitionTools = [
   },
   {
     name: "uiiq_competition_offer_act",
-    description: "One action on a drawn round's prize offer (a judge's, or with none named an owner's or admin's; audited, as the signed-in user). tell: tell a READY offer now, as the 10-minute job would (a private reply with the claim link, then one public reply). public-reply: post the one public reply UiiQ couldn't; when it may already have posted (publicState unknown), only with checked: true after looking under the comment. private-checked: a private reply that may have gone: went true (told) or false (told again). retry: an offer held for staff with nothing gone out, told again from the start. reopen: an email typo, or an under-18 or not-in-the-UK answer that was a mis-click: the claim cleared and its link stopped; give a new link by hand on the web. pass: doesn't meet the entry rules: passed over in public (INELIGIBLE) and the next reserve offered; a held claim gets one refusal email, then its address is deleted. cleanup-done: the reply under an erased comment has been taken down. Not the claim link: that is web only. tell, public-reply, reopen and pass are dry runs without confirm: true.",
+    description: "One action on a drawn round's prize offer (a judge's, or with none named an owner's or admin's; audited, as the signed-in user). tell: tell a READY offer now, as the 10-minute job would (a private reply with the claim link, then one public reply). public-reply: post the one public reply UiiQ couldn't; when it may already have posted (publicState unknown), only with checked: true after looking under the comment. private-checked: a private reply that may have gone: went true (told) or false (told again). retry: an offer held for staff with nothing gone out, told again from the start. reopen: an email typo, or an under-18 or not-in-the-UK answer that was a mis-click: the claim cleared and its link stopped; give a new link from the claims card. pass: doesn't meet the entry rules: passed over in public (INELIGIBLE) and the next reserve offered; a held claim gets one refusal email, then its address is deleted. cleanup-done: the reply under an erased comment has been taken down. The claim link isn't offered here: staff give it from the claims card, after checking who's asking. tell, public-reply, reopen and pass are dry runs without confirm: true.",
     inputSchema: {
       type: "object",
       required: ["id", "roundId", "offerId", "action"],
@@ -434,7 +436,7 @@ export const competitionTools = [
     },
     async handler({ id, roundId, offerId, action, went, checked, note, confirm, tenant }) {
       const ACTIONS = ["tell", "public-reply", "private-checked", "retry", "reopen", "pass", "cleanup-done"];
-      // Never claim-link here, whatever is asked: it's given by hand on the web.
+      // No claim-link here, whatever is asked: staff give it from the claims card.
       if (!ACTIONS.includes(action)) throw new Error(`action must be one of ${ACTIONS.join(", ")}`);
       const path = `/competitions/${seg(id)}/rounds/${seg(roundId)}/offers/${seg(offerId)}`;
       const body = { action };
@@ -449,7 +451,7 @@ export const competitionTools = [
       const WEIGHTY = {
         tell: "This sends real replies to the commenter through Facebook or Instagram: a private message with their claim link, then a public reply under their comment.",
         "public-reply": "This posts a real public reply under the commenter's comment.",
-        reopen: "This clears their claim, and stops their claim link; a new one must be given by hand on the web.",
+        reopen: "This clears their claim, and stops their claim link; a new one is given from the claims card.",
         pass: "This passes them over for good, in public (the draw page says so), offers the prize to the next reserve, and emails a held claim its refusal.",
       };
       if (WEIGHTY[action] && confirm !== true) return dryRun(`offer_${action}`, tenant, { competitionId: id, roundId, offerId, ...body }, WEIGHTY[action]);
@@ -464,27 +466,6 @@ export const competitionTools = [
       const path = `/competitions/entries/${seg(entryId)}/prize`;
       if (confirm !== true) return dryRun("issue_prize", tenant, { entryId }, "This makes a real coupon on the competition's shop and emails it to the nominator. Check it's the winner or runner-up you mean.");
       return call(tenant, path, { method: "POST" });
-    },
-  },
-  {
-    name: "uiiq_competition_claim_naming",
-    description: "A drawn (DRAW) winner's naming in public, changed on their word (owner/admin; audited with codes only): naming none (not named), handle (their @handle from their comment) or firstName (the first word of the name they gave); and townApproved, whether the town they gave may be shown with their name. Taking anything back brings the round's posts that could name them into line. Only an entry with a claim (not one held or refused).",
-    inputSchema: {
-      type: "object",
-      required: ["entryId"],
-      properties: {
-        entryId: { type: "string" },
-        naming: { type: "string", enum: ["none", "handle", "firstName"] },
-        townApproved: { type: "boolean" },
-        tenant: TENANT_PROP,
-      },
-    },
-    async handler({ entryId, naming, townApproved, tenant }) {
-      const body = {};
-      if (naming !== undefined) body.naming = naming;
-      if (townApproved !== undefined) body.townApproved = townApproved;
-      if (!Object.keys(body).length) throw new Error("Give naming, townApproved, or both");
-      return call(tenant, `/competitions/entries/${seg(entryId)}/claim-naming`, send("POST", body));
     },
   },
   {

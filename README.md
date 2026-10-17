@@ -1115,9 +1115,8 @@ Needs the `competitions` feature. Setting up, rounds, the nominee confirmation a
 |---|---|
 | `uiiq_competition_list` | The workspace's competitions, with their round and entry counts. |
 | `uiiq_competition_get` | One competition with its rounds, each with its phase and its round's entry form link; a DRAW's rounds say when comments were last read in (`lastCollectedAt`). |
-| `uiiq_competition_claim_naming` | A drawn winner's naming in public, changed on their word: `naming` none, handle or firstName; `townApproved`. Owner/admin. |
 | `uiiq_competition_offers` | A drawn round's prize offers in draw order: each position's state, deadline, replies (as codes), why it needs staff, the claim once made, and the public words for replying by hand. |
-| `uiiq_competition_offer_act` | One action on a prize offer: `tell`, `public-reply` (over one that may have posted only with `checked: true`), `private-checked`, `retry`, `reopen`, `pass` (INELIGIBLE), `cleanup-done`. Never the claim link (web only, after checking who's asking). `tell`, `public-reply`, `reopen` and `pass` are dry runs without `confirm: true`. |
+| `uiiq_competition_offer_act` | One action on a prize offer: `tell`, `public-reply` (over one that may have posted only with `checked: true`), `private-checked`, `retry`, `reopen`, `pass` (INELIGIBLE), `cleanup-done`. Not the claim link: staff give it from the claims card, after checking who's asking. `tell`, `public-reply`, `reopen` and `pass` are dry runs without `confirm: true`. |
 | `uiiq_competition_create` | A new competition (DRAFT unless said otherwise); ACTIVE needs the form links, rules and promoter. A DRAW needs `competition_social`, no entry form, the social accounts and `claimFormUrl`; with `entryKeyword`, `excludedAuthors`, `pastWinnerRounds` and `claimDays`. |
 | `uiiq_competition_update` | Change a competition, including going live or archiving. Photos stay off until the photo terms are signed off. One with entries can't change to or from DRAW. |
 | `uiiq_competition_rounds_add` | One round, or weekly rounds with a theme each. A DRAW's round is open at most 6 days. |
