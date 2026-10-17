@@ -408,7 +408,7 @@ export const competitionTools = [
   // review H3), so no tool offers it.
   {
     name: "uiiq_competition_offers",
-    description: "A drawn (DRAW) round's prize offers, in the published draw order: each position's state (PENDING waiting its turn, READY to be told, CHECK needs staff, TOLD, CLAIM_SUBMITTED waiting for the claimant's email, CLAIMED, PASSED with its reason REMOVED, EXPIRED or INELIGIBLE), its deadline, its replies as codes (privateState, publicState), lastError (why it needs staff), cleanupPending (a reply under an erased comment still to take down), the commenter's handle, the claim's name and email once they've claimed, and the public words to use when replying by hand. noOneClaimed is true when every position was passed over. mode is send (UiiQ replies through IQEX), hand (staff reply from Meta's inbox) or off.",
+    description: "A drawn (DRAW) round's prize offers, in the published draw order (the competition's judges only): each position's state (PENDING waiting its turn, READY to be told, CHECK needs staff, TOLD, CLAIM_SUBMITTED waiting for the claimant's email, CLAIMED, PASSED with its reason REMOVED, EXPIRED or INELIGIBLE), its deadline, its replies as codes (privateState, publicState), lastError (why it needs staff), cleanupPending (a reply under an erased comment still to take down), the commenter's handle, the claim's name and email once they've claimed, and the public words to use when replying by hand. noOneClaimed is true when every position was passed over. mode is send (UiiQ replies through IQEX), hand (staff reply from Meta's inbox) or off.",
     inputSchema: { type: "object", required: ["id", "roundId"], properties: { id: { type: "string", description: "The competition" }, roundId: { type: "string" }, tenant: TENANT_PROP } },
     async handler({ id, roundId, tenant }) {
       return call(tenant, `/competitions/${seg(id)}/rounds/${seg(roundId)}/offers`);
@@ -444,6 +444,8 @@ export const competitionTools = [
       }
       if (action === "public-reply" && checked === true) body.checked = true;
       if (action === "pass" && typeof note === "string" && note.trim()) body.note = note.trim().slice(0, 500);
+      // UiiQ wants a pass said out loud too: it is public and for good.
+      if (action === "pass") body.confirm = true;
       const WEIGHTY = {
         tell: "This sends real replies to the commenter through Facebook or Instagram: a private message with their claim link, then a public reply under their comment.",
         "public-reply": "This posts a real public reply under the commenter's comment.",

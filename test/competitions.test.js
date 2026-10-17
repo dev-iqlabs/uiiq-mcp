@@ -531,7 +531,7 @@ test("tell, public-reply, reopen and pass are dry runs until confirm: true; then
     }
   }
   const pass = await call("uiiq_competition_offer_act", { id: "c1", roundId: "r1", offerId: "o1", action: "pass", note: "  under 18, checked by phone  ", checked: true, went: true, confirm: true });
-  assert.deepEqual(pass.requests, [{ method: "POST", path: "/competitions/c1/rounds/r1/offers/o1", body: { action: "pass", note: "under 18, checked by phone" } }]);
+  assert.deepEqual(pass.requests, [{ method: "POST", path: "/competitions/c1/rounds/r1/offers/o1", body: { action: "pass", note: "under 18, checked by phone", confirm: true } }]);
   const pub = await call("uiiq_competition_offer_act", { id: "c1", roundId: "r1", offerId: "o1", action: "public-reply", checked: true, confirm: true });
   assert.deepEqual(pub.requests[0].body, { action: "public-reply", checked: true });
 });
