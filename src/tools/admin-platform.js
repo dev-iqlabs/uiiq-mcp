@@ -88,6 +88,25 @@ export const adminPlatformTools = [
     },
   },
   {
+    name: "uiiq_admin_ad_accounts_get",
+    description: "A tenant's ad connections: [{ platform, accountId, connectedAt, bySignIn }] (tokens are never returned), and which platforms an admin can set here (META, GOOGLE, LINKEDIN). SUPER_ADMIN.",
+    inputSchema: { type: "object", additionalProperties: false, required: ["tenantId"], properties: { tenantId: TENANT_ID } },
+    async handler({ tenantId }) {
+      return send(null, `/admin/tenants/${enc(tenantId)}/ad-accounts`, "GET");
+    },
+  },
+  {
+    name: "uiiq_admin_ad_account_set",
+    description: "Set which Meta, Google or LinkedIn ad account is a tenant's, or remove it (accountId null). One spelling per account: Meta act_<digits>, Google the 10-digit customer id (dashes or not), LinkedIn the sponsored account number. Refused: an account another tenant already has (an ad account belongs to one workspace, as IQEX gives it to one org), and a connection made by signing in. Audited. IQEX acts on the account only once it's registered to the tenant's IQEX org there (link_ad_account). SUPER_ADMIN, the role read live, never while impersonating.",
+    inputSchema: {
+      type: "object", additionalProperties: false, required: ["tenantId", "platform", "accountId"],
+      properties: { tenantId: TENANT_ID, platform: { type: "string", enum: ["META", "GOOGLE", "LINKEDIN"] }, accountId: { type: ["string", "null"], description: "The account id, or null to remove it" } },
+    },
+    async handler({ tenantId, platform, accountId }) {
+      return send(null, `/admin/tenants/${enc(tenantId)}/ad-accounts`, "PUT", { platform, accountId });
+    },
+  },
+  {
     name: "uiiq_admin_iqex_delivery_get",
     description: "Whether a tenant's IQEX delivery connection (how IQEX sends briefs back to UIIQ) is in place: state = unlinked | no_connect_key | blocked | not_connected | connected, plus the connection count. SUPER_ADMIN.",
     inputSchema: { type: "object", required: ["tenantId"], properties: { tenantId: TENANT_ID } },

@@ -1263,6 +1263,8 @@ Needs the `competitions` feature. Setting up, rounds, the nominee confirmation a
 | `uiiq_admin_gift_programme_list` | A tenant's Gift Programme registry (Garden Plan Gift and any others): key, label, enabled, value ladder, journey form, outcome. |
 | `uiiq_admin_gift_programme_create` | Create a Gift Programme for a tenant. |
 | `uiiq_admin_gift_programme_update` | Update one of a tenant's Gift Programmes by key — only the fields you send change (journey and outcome are merged). |
+| `uiiq_admin_ad_accounts_get` | A tenant's ad connections (platform, account, connected by sign-in or not; never a token). |
+| `uiiq_admin_ad_account_set` | Set or remove a tenant's Meta, Google or LinkedIn ad account (one spelling, one workspace per account, audited). |
 | `uiiq_admin_iqex_link_set` | Link a tenant to an IQEX organisation (orgId) or unlink it (orgId null). |
 | `uiiq_admin_iqex_delivery_get` | Whether a tenant's IQEX delivery connection (how IQEX sends briefs back to UIIQ) is in place: state = unlinked \| no_connect_key \| blocked \| not_connected \| connected, plus the connection count. |
 | `uiiq_admin_iqex_delivery_connect` | Create or refresh a tenant's IQEX delivery connection: sends the tenant's Connect key to IQEX server-to-server (it never comes back here) and maps every active brief form as a destination. |
@@ -1711,4 +1713,4 @@ Needs the `competitions` feature. Setting up, rounds, the nominee confirmation a
 | `uiiq_workflow_order_assign` | Assign a workflow order to a user in the tenant (assignedUserId null unassigns). |
 | `uiiq_workflow_order_request_approval` | Ask the customer to approve a stage of their order: creates an approval link, moves the order to AWAITING_APPROVAL and EMAILS the customer. |
 
-1190 tools.
+1192 tools.
