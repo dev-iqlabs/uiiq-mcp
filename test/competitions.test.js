@@ -56,7 +56,7 @@ test("every tool is named uiiq_competition_* and describes itself", () => {
     assert.ok(t.description.length > 20, name);
     assert.equal(t.inputSchema.type, "object", name);
   }
-  assert.equal(Object.keys(tools).length, 20);
+  assert.equal(Object.keys(tools).length, 22);
 });
 
 test("each tool calls its own route, with its own method and body", async () => {
@@ -507,4 +507,42 @@ test("lock and draw say who may, that they're audited, lock first then draw a mi
   assert.match(tools.uiiq_competition_round_lock.description, /once its comments have been read at least 30 minutes after the close/);
   assert.match(tools.uiiq_competition_round_draw.description, /step 2 of 2, at least a minute after uiiq_competition_round_lock\. Once only/);
   assert.match(tools.uiiq_competition_round_draw.description, /winnerEntryId \(null if every drawn entry has been erased since the lock\)/);
+});
+
+test("prize offers: the list, read as is", async () => {
+  const { requests } = await call("uiiq_competition_offers", { id: "c1", roundId: "r1" });
+  assert.deepEqual(requests, [{ method: "GET", path: "/competitions/c1/rounds/r1/offers" }]);
+});
+
+test("an offer action: never the claim link (not offered here), whatever is asked", async () => {
+  for (const action of ["claim-link", "delete", "", undefined]) {
+    await assert.rejects(() => tools.uiiq_competition_offer_act.handler({ id: "c1", roundId: "r1", offerId: "o1", action, confirm: true }), /action must be one of/, String(action));
+  }
+  assert.ok(!tools.uiiq_competition_offer_act.inputSchema.properties.action.enum.includes("claim-link"));
+  assert.ok(!("senderId" in tools.uiiq_competition_offer_act.inputSchema.properties));
+});
+
+test("tell, public-reply, reopen and pass are dry runs until confirm: true; then only the action's own options are sent", async () => {
+  for (const action of ["tell", "public-reply", "reopen", "pass"]) {
+    for (const confirm of [undefined, false, "true", 1]) {
+      const { result, requests } = await call("uiiq_competition_offer_act", { id: "c1", roundId: "r1", offerId: "o1", action, ...(confirm === undefined ? {} : { confirm }) });
+      assert.equal(requests.length, 0, `${action} ${String(confirm)}`);
+      assert.equal(result.dryRun, true, `${action} ${String(confirm)}`);
+    }
+  }
+  const pass = await call("uiiq_competition_offer_act", { id: "c1", roundId: "r1", offerId: "o1", action: "pass", note: "  under 18, checked by phone  ", checked: true, went: true, confirm: true });
+  assert.deepEqual(pass.requests, [{ method: "POST", path: "/competitions/c1/rounds/r1/offers/o1", body: { action: "pass", note: "under 18, checked by phone", confirm: true } }]);
+  const pub = await call("uiiq_competition_offer_act", { id: "c1", roundId: "r1", offerId: "o1", action: "public-reply", checked: true, confirm: true });
+  assert.deepEqual(pub.requests[0].body, { action: "public-reply", checked: true });
+});
+
+test("private-checked needs went; retry and cleanup-done go at once", async () => {
+  await assert.rejects(() => tools.uiiq_competition_offer_act.handler({ id: "c1", roundId: "r1", offerId: "o1", action: "private-checked" }), /went/);
+  const went = await call("uiiq_competition_offer_act", { id: "c1", roundId: "r1", offerId: "o1", action: "private-checked", went: false });
+  assert.deepEqual(went.requests[0].body, { action: "private-checked", went: false });
+  for (const action of ["retry", "cleanup-done"]) {
+    const { requests } = await call("uiiq_competition_offer_act", { id: "c1", roundId: "r1", offerId: "o1", action });
+    assert.deepEqual(requests, [{ method: "POST", path: "/competitions/c1/rounds/r1/offers/o1", body: { action } }], action);
+  }
+  await assert.rejects(() => tools.uiiq_competition_offer_act.handler({ id: "c1", roundId: "r1", offerId: "../x", action: "retry" }), /must be an id/);
 });
