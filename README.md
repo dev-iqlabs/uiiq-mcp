@@ -481,6 +481,9 @@ Needs the workspace's `sister_organisations` feature (404 when off). Changes are
 | `uiiq_seo_audit_get` | One SEO audit in full: scores, AIO scores and the issue list (title, fix, page per issue). |
 | `uiiq_seo_pagespeed` | Run a PageSpeed check (mobile + desktop); pass auditId to fold the score into that audit. |
 | `uiiq_seo_fix` | Turn one audit issue into a DRAFT Website Pages change request (nothing goes live). |
+| `uiiq_seo_meta_fix` | For a category, tag or product page: propose its SEO title, meta description or canonical (finds it on the live site through UiiQ Connect 4.54.0+; writes nothing). |
+| `uiiq_seo_meta_fix_apply` | Write the reviewed value to the LIVE site, keeping the old one for Undo (owner/admin; dry run without `confirm: true`). |
+| `uiiq_seo_meta_fix_undo` | Put back what an applied fix replaced, unless the site has changed it since (dry run without `confirm: true`). |
 | `uiiq_seo_crawl` | Crawl the tenant's website and save an SEO + AIO audit (scores, issues, pages crawled). |
 
 ### Competitors — `src/tools/competitor.js`
