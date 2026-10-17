@@ -239,8 +239,18 @@ test("the form numbers aren't sent: UiiQ reads them from the links (UiiQ-platfor
     const props = tools[name].inputSchema.properties;
     assert.equal(props.entryFormId, undefined, name);
     assert.equal(props.consentFormId, undefined, name);
+    assert.equal(props.claimFormId, undefined, name);
     assert.match(props.entryFormUrl.description, /data\?form-id=<number>/, name);
+    // A DRAW's prize claim form (competitions 2c), by its link the same way.
+    assert.deepEqual(props.claimFormUrl.type, ["string", "null"], name);
+    assert.match(props.claimFormUrl.description, /Claim your prize/, name);
   }
+});
+
+test("a DRAW's claim form link reaches UiiQ as claimFormUrl, untouched", async () => {
+  const link = "https://www.iqex.co.uk/data?form-id=703";
+  const { requests } = await call("uiiq_competition_update", { id: "c1", claimFormUrl: link });
+  assert.deepEqual(requests, [{ method: "PATCH", path: "/competitions/c1", body: { claimFormUrl: link } }]);
 });
 
 test("a prize entry id must be an id: nothing else reaches the route", async () => {
@@ -301,7 +311,8 @@ test("the entries list says each entry's source, and still carries no commenter'
 test("the descriptions say how a DRAW differs: the feature, no forms, 6-day rounds, drawn not Decided, no shortlist, Facebook and Instagram only", () => {
   const d = (name) => tools[name].description;
   assert.match(d("uiiq_competition_create"), /type DRAW \(comment to enter\) needs the workspace's competition_social feature/);
-  assert.match(d("uiiq_competition_create"), /takes no entry or consent form, and goes ACTIVE with rulesUrl, promoterName and socialAccountIds/);
+  assert.match(d("uiiq_competition_create"), /takes no entry or consent form, and goes ACTIVE with rulesUrl, promoterName, socialAccountIds and claimFormUrl/);
+  assert.match(d("uiiq_competition_create"), /privacy notice/);
   assert.match(d("uiiq_competition_create"), /rounds are open at most 6 days/);
   assert.match(d("uiiq_competition_update"), /can't change to or from DRAW/);
   assert.match(tools.uiiq_competition_create.inputSchema.properties.type.description, /needs the workspace's competition_social feature, takes no entry or consent form, and its rounds are open at most 6 days/);

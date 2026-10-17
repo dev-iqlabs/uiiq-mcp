@@ -105,6 +105,7 @@ const COMPETITION_PROPS = {
   // The forms' numbers are read from their links by UiiQ (UiiQ-platform #954): no separate number is sent.
   entryFormUrl: { type: ["string", "null"], description: "The entry IQForm's page, exactly https://www.iqex.co.uk/data?form-id=<number> (nothing else after the number); UiiQ reads the form's number from it and checks it's one of the workspace's own Public forms" },
   consentFormUrl: { type: ["string", "null"], description: "The nominee consent IQForm's page, in the same form as entryFormUrl" },
+  claimFormUrl: { type: ["string", "null"], description: "DRAW: the \"Claim your prize\" IQForm's page (slug competition-claim), in the same form as entryFormUrl: a drawn winner claims through it. Needed to go live, and checked as one of the workspace's own Public forms" },
   criteria: { type: "array", items: { type: "object", properties: { key: { type: "string" }, label: { type: "string" }, weight: { type: "number" } } }, description: "Up to 10 judging criteria, each with a weight 1-100 (relative)" },
   judgeUserIds: { type: "array", items: { type: "string" }, description: "This workspace's people (uiiq_task_members); none = owners/admins judge" },
   socialAccountIds: { type: "array", items: { type: "string" }, description: "This workspace's social accounts the round's posts are for (uiiq_social_accounts). A DRAW is entered by commenting on them, so it needs at least one to go live, and its call goes only to the Facebook and Instagram ones" },
@@ -154,7 +155,7 @@ export const competitionTools = [
   },
   {
     name: "uiiq_competition_create",
-    description: "A new competition, DRAFT unless status says otherwise (owner/admin). ACTIVE needs entryFormUrl, rulesUrl, promoterName, and for a NOMINATION consentFormUrl. type DRAW (comment to enter) needs the workspace's competition_social feature (refused without it), takes no entry or consent form, and goes ACTIVE with rulesUrl, promoterName and socialAccountIds; its rounds are open at most 6 days, and its winner is drawn at random, not Decided. entryKeyword, excludedAuthors, pastWinnerRounds and claimDays set which comments count and the claim time.",
+    description: "A new competition, DRAFT unless status says otherwise (owner/admin). ACTIVE needs entryFormUrl, rulesUrl, promoterName, and for a NOMINATION consentFormUrl. type DRAW (comment to enter) needs the workspace's competition_social feature (refused without it), takes no entry or consent form, and goes ACTIVE with rulesUrl, promoterName, socialAccountIds and claimFormUrl (the prize claim form), once the workspace has its privacy notice link set (the claim page links it); its rounds are open at most 6 days, and its winner is drawn at random, not Decided. entryKeyword, excludedAuthors, pastWinnerRounds and claimDays set which comments count and the claim time.",
     inputSchema: {
       type: "object",
       required: ["name", "slug"],
