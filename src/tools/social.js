@@ -317,6 +317,31 @@ export const socialTools = [
       return { ...(await res.json()), requestId: rid, note: CAROUSEL_RUN_IT };
     },
   },
+  {
+    name: "uiiq_social_carousel_post",
+    description: "Make a DRAFT carousel post from a shop collection promo post (any status): slide 1 is its promo card, then 1 to 9 of the shop's products in the order given, each { productId, photoIndex } from uiiq_social_promo_products (photoIndex 0 = the main photo, then the mockups). UiiQ reads each photo from the shop's feed itself, so no other image can get in. The new draft gets the promo post's text, hashtags and accounts. NOTHING IS PUBLISHED: a person reviews and publishes it in UiiQ. Facebook and Instagram take a post of 2 or more images only once UiiQ's multi-image switch is on; until then publishing it to them is refused (409). A post that isn't a collection promo's is refused (400). Needs the Social Templates feature; at most 30 an hour. Returns { postId, mediaUrls, slides }.",
+    inputSchema: {
+      type: "object",
+      additionalProperties: false,
+      required: ["id", "products"],
+      properties: {
+        id: { type: "string", description: "The shop collection promo post" },
+        products: {
+          type: "array", minItems: 1, maxItems: 9,
+          items: { type: "object", additionalProperties: false, required: ["productId"], properties: { productId: { type: "string", description: "A product id from uiiq_social_promo_products" }, photoIndex: { type: "integer", minimum: 0, description: "Which of its photos: 0 = the main one (default), then the mockups" } } },
+          description: "Slides 2 to 10, in order: the shop's products",
+        },
+        tenant: TENANT_PROP,
+      },
+    },
+    async handler({ id, tenant, products }) {
+      // Only each product's id and photo number, whatever else a caller passes.
+      const picks = Array.isArray(products) ? products.map((p) => Object.fromEntries(Object.entries({ productId: p?.productId, photoIndex: p?.photoIndex }).filter(([, v]) => v !== undefined))) : products;
+      const res = await send(tenant, `/socials/posts/${encodeURIComponent(id)}/carousel-post`, "POST", { products: picks });
+      if (!res.ok) throw await fail(res);
+      return { ...(await res.json()), note: "A DRAFT: nothing was published. A person reviews and publishes it in UiiQ." };
+    },
+  },
 
   // ── Accounts ──
   {
