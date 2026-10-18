@@ -107,6 +107,25 @@ export const adminPlatformTools = [
     },
   },
   {
+    name: "uiiq_admin_sender_bindings_get",
+    description: "The sending domains (or, on a shared mail provider like gmail.com, exact addresses) linked to a tenant: [{ value, kind: domain | address, createdAt }]. A tenant sends from its own address only when it's linked here AND verified with SendGrid; otherwise its email goes from noreply@uiiq.co.uk as \"<name> via UiiQ\". SUPER_ADMIN.",
+    inputSchema: { type: "object", additionalProperties: false, required: ["tenantId"], properties: { tenantId: TENANT_ID } },
+    async handler({ tenantId }) {
+      return send(null, `/admin/tenants/${enc(tenantId)}/sender-bindings`, "GET");
+    },
+  },
+  {
+    name: "uiiq_admin_sender_binding_set",
+    description: "Link a sending domain to a tenant (bound true) or unlink it (bound false). A domain (example.co.uk); on a shared mail provider (gmail.com, outlook.com…) the exact address instead. Refused: a domain another tenant already has (one workspace per domain), a single address on a domain that isn't a shared provider. Our own companies are linked the same way. Audited. SUPER_ADMIN, the role read live, never while impersonating.",
+    inputSchema: {
+      type: "object", additionalProperties: false, required: ["tenantId", "value", "bound"],
+      properties: { tenantId: TENANT_ID, value: { type: "string", description: "The domain, or on a shared provider the exact address" }, bound: { type: "boolean", description: "true links it, false unlinks it" } },
+    },
+    async handler({ tenantId, value, bound }) {
+      return send(null, `/admin/tenants/${enc(tenantId)}/sender-bindings`, "PUT", { value, bound });
+    },
+  },
+  {
     name: "uiiq_admin_iqex_delivery_get",
     description: "Whether a tenant's IQEX delivery connection (how IQEX sends briefs back to UIIQ) is in place: state = unlinked | no_connect_key | blocked | not_connected | connected, plus the connection count. SUPER_ADMIN.",
     inputSchema: { type: "object", required: ["tenantId"], properties: { tenantId: TENANT_ID } },
