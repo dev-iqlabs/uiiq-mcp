@@ -55,17 +55,26 @@ test("get: one GET for the tenant", async () => {
 });
 
 test("set: one PUT with only the value and bound; false unlinks it", async () => {
-  let r = await call("uiiq_admin_sender_binding_set", { tenantId: "ten_1", value: "ultimatecoins.co.uk", bound: true }, [200, { value: "ultimatecoins.co.uk", kind: "domain", bound: true }]);
+  let r = await call("uiiq_admin_sender_binding_set", { tenantId: "ten_1", value: "ultimatecoins.co.uk", bound: true, confirm: true }, [200, { value: "ultimatecoins.co.uk", kind: "domain", bound: true }]);
   assert.deepEqual(r.requests, [{ method: "PUT", path: "/admin/tenants/ten_1/sender-bindings", body: { value: "ultimatecoins.co.uk", bound: true } }]);
-  r = await call("uiiq_admin_sender_binding_set", { tenantId: "ten_1", value: "ultimatecoins.co.uk", bound: false }, [200, { value: "ultimatecoins.co.uk", kind: "domain", bound: false }]);
+  r = await call("uiiq_admin_sender_binding_set", { tenantId: "ten_1", value: "ultimatecoins.co.uk", bound: false, confirm: true }, [200, { value: "ultimatecoins.co.uk", kind: "domain", bound: false }]);
   assert.deepEqual(r.requests[0].body, { value: "ultimatecoins.co.uk", bound: false });
 });
 
 test("UiiQ's refusal is thrown with its words", async () => {
-  await assert.rejects(call("uiiq_admin_sender_binding_set", { tenantId: "ten_1", value: "milestoneranch.co.uk", bound: true }, [409, { error: "milestoneranch.co.uk is already linked to milestoneranch" }]), /already linked to milestoneranch/);
+  await assert.rejects(call("uiiq_admin_sender_binding_set", { tenantId: "ten_1", value: "milestoneranch.co.uk", bound: true, confirm: true }, [409, { error: "milestoneranch.co.uk is already linked to milestoneranch" }]), /already linked to milestoneranch/);
 });
 
 test("the schemas are closed; bound is a boolean", () => {
   for (const n of ["uiiq_admin_sender_bindings_get", "uiiq_admin_sender_binding_set"]) assert.equal(tools[n].inputSchema.additionalProperties, false);
   assert.equal(tools.uiiq_admin_sender_binding_set.inputSchema.properties.bound.type, "boolean");
+});
+
+test("without confirm: true, a dry run: nothing is sent (Lucas, #1039 L-4)", async () => {
+  for (const extra of [{}, { confirm: false }, { confirm: "yes" }]) {
+    const { result, requests } = await call("uiiq_admin_sender_binding_set", { tenantId: "ten_1", value: "ultimatecoins.co.uk", bound: true, ...extra }, [200, {}]);
+    assert.deepEqual(requests, []);
+    assert.equal(result.dryRun, true);
+    assert.match(result.wouldDo, /link ultimatecoins\.co\.uk to tenant ten_1/);
+  }
 });

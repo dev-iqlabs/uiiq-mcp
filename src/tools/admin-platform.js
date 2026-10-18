@@ -116,12 +116,21 @@ export const adminPlatformTools = [
   },
   {
     name: "uiiq_admin_sender_binding_set",
-    description: "Link a sending domain to a tenant (bound true) or unlink it (bound false). A domain (example.co.uk); on a shared mail provider (gmail.com, outlook.com…) the exact address instead. Refused: a domain another tenant already has (one workspace per domain), a single address on a domain that isn't a shared provider. Our own companies are linked the same way. Audited. SUPER_ADMIN, the role read live, never while impersonating.",
+    description: "Link a sending domain to a tenant (bound true) or unlink it (bound false). It decides whose name the tenant's email can go out in, so it needs confirm: true; anything else is a dry run that changes nothing. A domain (example.co.uk) covers the addresses on it SendGrid authenticated by domain; an exact address (on any domain, and the only kind on a shared provider like gmail.com) covers a single verified sender. Refused: a domain another tenant already has (one workspace per domain), an address on another tenant's domain, and our own platform domains (uiiq.co.uk, iqlabs.ltd, iqex.co.uk, ultimateimage.co.uk) except for their own workspace. Audited. SUPER_ADMIN, the role read live, never while impersonating.",
     inputSchema: {
       type: "object", additionalProperties: false, required: ["tenantId", "value", "bound"],
-      properties: { tenantId: TENANT_ID, value: { type: "string", description: "The domain, or on a shared provider the exact address" }, bound: { type: "boolean", description: "true links it, false unlinks it" } },
+      properties: {
+        tenantId: TENANT_ID,
+        value: { type: "string", description: "The domain, or the exact address" },
+        bound: { type: "boolean", description: "true links it, false unlinks it" },
+        confirm: { type: "boolean", description: "true to really change it; anything else is a dry run" },
+      },
     },
-    async handler({ tenantId, value, bound }) {
+    async handler({ tenantId, value, bound, confirm }) {
+      // A dry run sends nothing (Lucas, #1039 L-4).
+      if (confirm !== true) {
+        return { dryRun: true, wouldDo: `${bound ? "link" : "unlink"} ${value} ${bound ? "to" : "from"} tenant ${tenantId}`, hint: "Call again with confirm: true to make the change." };
+      }
       return send(null, `/admin/tenants/${enc(tenantId)}/sender-bindings`, "PUT", { value, bound });
     },
   },

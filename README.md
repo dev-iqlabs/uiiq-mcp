@@ -1272,7 +1272,7 @@ Needs the `competitions` feature. Setting up, rounds, the nominee confirmation a
 | `uiiq_admin_ad_accounts_get` | A tenant's ad connections (platform, account, connected by sign-in or not; never a token). |
 | `uiiq_admin_ad_account_set` | Set or remove a tenant's Meta, Google or LinkedIn ad account (one spelling, one workspace per account, audited). |
 | `uiiq_admin_sender_bindings_get` | The sending domains (or shared-provider addresses) linked to a tenant. |
-| `uiiq_admin_sender_binding_set` | Link or unlink a sending domain: one workspace per domain; the tenant sends from its own address only when linked and verified (audited). |
+| `uiiq_admin_sender_binding_set` | Link or unlink a sending domain or address (needs `confirm: true`, else a dry run): one workspace per domain, our platform domains only for their own workspace; the tenant sends from its own address only when linked and verified (audited). |
 | `uiiq_admin_iqex_link_set` | Link a tenant to an IQEX organisation (orgId) or unlink it (orgId null). |
 | `uiiq_admin_iqex_delivery_get` | Whether a tenant's IQEX delivery connection (how IQEX sends briefs back to UIIQ) is in place: state = unlinked \| no_connect_key \| blocked \| not_connected \| connected, plus the connection count. |
 | `uiiq_admin_iqex_delivery_connect` | Create or refresh a tenant's IQEX delivery connection: sends the tenant's Connect key to IQEX server-to-server (it never comes back here) and maps every active brief form as a destination. |
