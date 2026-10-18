@@ -51,8 +51,19 @@ const CLASS_FIELDS = {
   coveredByPlanIds: { type: "array", items: { type: "string" }, description: "MembershipPlan ids whose members attend on their plan" },
   coverSlots: { type: "integer", minimum: 1, maximum: 14, description: "How many of a weekly plan's slots one session uses (default 1): 2 for a double-length class, so it counts as two classes on a 'N classes a week' plan. Owner or admin only to change (403 otherwise). Kept as it is when omitted. Raising coverSlots can put existing 1-a-week members over their weekly limit; check atRisk." },
   active: { type: "boolean" },
+  imageMediaId: { type: ["integer", "null"], minimum: 1, description: "The class photo: an image id from the workspace's own media library (an id from uiiq_media_list or uiiq_media_upload), or null to remove it (its public copy goes offline). Public on the internet while the class is published and active. Needs photoPermissionConfirmed: true to pick or replace. Kept as it is when omitted." },
+  photoPermissionConfirmed: { type: "boolean", description: "Required true with a non-null imageMediaId: the user confirms the workspace has permission from the parent or carer of every child who can be identified in the photo, or that no child can be identified. Only send it after the user has said so; the confirmation is audited." },
 };
 const CLASS_REQUIRED = ["name", "dayOfWeek", "startTime", "durationMins", "capacity"];
+
+// The class photo (UiiQ-platform class photos, Kim C8): picking or replacing
+// one puts it on the internet, so the API refuses (400) without
+// photoPermissionConfirmed: true. Refused here too, before any request.
+const PHOTO_PERMISSION =
+  "A class photo is public on the internet (timetable, website and enrolment page). Ask the user to confirm that the workspace has permission from the parent or carer of every child who can be identified in it, or that no child can be identified; then send photoPermissionConfirmed: true with imageMediaId. Nothing was sent.";
+function checkPhoto(body) {
+  if (body.imageMediaId !== undefined && body.imageMediaId !== null && body.photoPermissionConfirmed !== true) throw new Error(PHOTO_PERMISSION);
+}
 
 export const classesTools = [
   // ── Classes ──
@@ -79,9 +90,10 @@ export const classesTools = [
   },
   {
     name: "uiiq_classes_create",
-    description: "Create a class. Requires name, dayOfWeek (0-6), startTime (HH:MM), durationMins and capacity; the slug is generated from the name. Linked ids (staffMemberId, venueId, showEventId, instructorResourceId) must belong to the tenant. Prices (dropInPricePence, termFeePence), coveredByPlanIds and coverSlots above 1 need an owner or admin (403).",
+    description: "Create a class. Requires name, dayOfWeek (0-6), startTime (HH:MM), durationMins and capacity; the slug is generated from the name. Linked ids (staffMemberId, venueId, showEventId, instructorResourceId) must belong to the tenant. Prices (dropInPricePence, termFeePence), coveredByPlanIds and coverSlots above 1 need an owner or admin (403). A photo (imageMediaId) needs photoPermissionConfirmed: true, sent only after the user confirms permission (400 otherwise).",
     inputSchema: { type: "object", required: CLASS_REQUIRED, properties: { ...CLASS_FIELDS, tenant: TENANT_PROP } },
     async handler({ tenant, ...body }) {
+      checkPhoto(body);
       const res = await post(tenant, "/classes", body);
       if (!res.ok) throw await fail(res);
       return res.json();
@@ -89,9 +101,10 @@ export const classesTools = [
   },
   {
     name: "uiiq_classes_update",
-    description: "Replace a class's details. NOT a partial update: the API validates the full class, so send every field you want kept (name, dayOfWeek, startTime, durationMins, capacity are required; an omitted staffMemberId/venueId is reset to empty). Teachers are only rewritten when `teachers` is sent. The owner/admin settings (dropInPricePence, termFeePence, coveredByPlanIds, coverSlots) are kept as they are when omitted, and changing any of them needs an owner or admin (403). Raising coverSlots can put existing 1-a-week members over their weekly limit; check atRisk. When a coverSlots change would newly put families on plans over their weekly classes, the API answers 409 { needsConfirmation: true, atRisk, error } and saves NOTHING. Only resend confirmAtRisk after the user explicitly agrees, and send the COUNT the 409 gave (confirmAtRisk: <n>): if more families are at risk by then, the API asks again. The answer's atRisk says how many families it put over.",
+    description: "Replace a class's details. NOT a partial update: the API validates the full class, so send every field you want kept (name, dayOfWeek, startTime, durationMins, capacity are required; an omitted staffMemberId/venueId is reset to empty). Teachers are only rewritten when `teachers` is sent. The owner/admin settings (dropInPricePence, termFeePence, coveredByPlanIds, coverSlots) are kept as they are when omitted, and changing any of them needs an owner or admin (403). Raising coverSlots can put existing 1-a-week members over their weekly limit; check atRisk. When a coverSlots change would newly put families on plans over their weekly classes, the API answers 409 { needsConfirmation: true, atRisk, error } and saves NOTHING. Only resend confirmAtRisk after the user explicitly agrees, and send the COUNT the 409 gave (confirmAtRisk: <n>): if more families are at risk by then, the API asks again. The answer's atRisk says how many families it put over. imageMediaId picks or replaces the photo and needs photoPermissionConfirmed: true, sent only after the user confirms permission (400 otherwise); null removes it; omitted keeps it.",
     inputSchema: { type: "object", required: ["id", ...CLASS_REQUIRED], properties: { id: { type: "string" }, ...CLASS_FIELDS, confirmAtRisk: { type: "integer", minimum: 0, description: "The atRisk count the user agreed to (from the 409): save the coverSlots change even though it puts that many families on plans over their weekly classes. Never send it without the user's explicit agreement." }, tenant: TENANT_PROP } },
     async handler({ id, tenant, ...body }) {
+      checkPhoto(body);
       const res = await send(tenant, "PATCH", `/classes/${encodeURIComponent(id)}`, body);
       if (!res.ok) throw await fail(res);
       return res.json();
