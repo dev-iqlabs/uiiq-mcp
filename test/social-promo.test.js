@@ -101,6 +101,20 @@ test("UiiQ's refusals come back in its own words", async () => {
   await assert.rejects(call("uiiq_social_promo_templates", {}, [403, { error: "Feature not available on your current plan" }]), (e) => e.message === "Feature not available on your current plan");
 });
 
+test("create: IQEX's warnings on the draft come back with it, and the description says to check the image", async () => {
+  const warnings = ["photo2: the photo could not be fetched; the card shows a placeholder"];
+  const { result } = await call("uiiq_social_promo_create", { template: "promo-collection-4x5" }, [200, { ...MADE, warnings }]);
+  assert.deepEqual(result.warnings, warnings);
+  assert.match(tools.uiiq_social_promo_create.description, /charged, warnings }/);
+  assert.match(tools.uiiq_social_promo_create.description, /check the image before publishing/);
+});
+
+test("create: photos sent and none placed is UiiQ's 422, in its own words (credits already spent said)", async () => {
+  const msg = "None of the photos could be placed in the layout, so no draft was kept: photo: gone. IQEX had already charged 6 credits for making the image.";
+  await assert.rejects(call("uiiq_social_promo_create", { template: "promo-collection-4x5", photos: [{ assetId: 11 }] }, [422, { error: msg, warnings: ["photo: gone"] }]), (e) => e.message === msg);
+  assert.match(tools.uiiq_social_promo_create.description, /NONE placed is a 422 and no draft is saved/);
+});
+
 test("products: one GET /socials/promo-products, UiiQ's answer back unchanged", async () => {
   const PRODUCTS = { products: [{ id: "UC-ROBIN", title: "Robin", price: "£19.99", link: "https://shop.test/p", images: ["https://shop.test/a.jpg"] }], source: "https://shop.test/wp-json/uiiq/v1/feed/meta.csv" };
   const { result, requests } = await call("uiiq_social_promo_products", {}, [200, PRODUCTS]);
