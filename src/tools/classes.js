@@ -50,6 +50,7 @@ const CLASS_FIELDS = {
   bookingUrl: { type: ["string", "null"], pattern: "^(https://|$)", maxLength: 500, description: "https link for the booking note. Kept as it is when omitted. With bookingNote, owner or admin only to change (403 otherwise): it replaces the public enrol link." },
   coveredByPlanIds: { type: "array", items: { type: "string" }, description: "MembershipPlan ids whose members attend on their plan" },
   coverSlots: { type: "integer", minimum: 1, maximum: 14, description: "How many of a weekly plan's slots one session uses (default 1): 2 for a double-length class, so it counts as two classes on a 'N classes a week' plan. Owner or admin only to change (403 otherwise). Kept as it is when omitted. Raising coverSlots can put existing 1-a-week members over their weekly limit; check atRisk." },
+  planCover: { type: "string", enum: ["AUTO", "COVERED", "NOT_COVERED"], description: "Covered by weekly plans (Steve, 19 Oct 2026). AUTO (the default): covered when the class is the workspace's own (academy), not when it is run for or billed through a sister organisation (college). COVERED / NOT_COVERED override that either way. A class that isn't covered is covered by no plan, listed ones included, and doesn't count towards a plan's classes a week; a free (funded) class is never covered and can't be set to COVERED. Owner or admin only to change (403 otherwise). Kept as it is when omitted." },
   active: { type: "boolean" },
   imageMediaId: { type: ["integer", "null"], minimum: 1, description: "The class photo: an image id from the workspace's own media library (an id from uiiq_media_list or uiiq_media_upload), or null to remove it (its public copy goes offline). Public on the internet while the class is published and active. Needs photoPermissionConfirmed: true to pick or replace. Kept as it is when omitted." },
   photoPermissionConfirmed: { type: "boolean", description: "Required true with a non-null imageMediaId: the user confirms the workspace has permission from the parent or carer of every child who can be identified in the photo, or that no child can be identified. Only send it after the user has said so; the confirmation is audited." },
@@ -69,7 +70,7 @@ export const classesTools = [
   // ── Classes ──
   {
     name: "uiiq_classes_list",
-    description: "List the school's classes (active only unless includeInactive) with teachers, venue, show, schedule type, prices and the active-enrolment count.",
+    description: "List the school's classes (active only unless includeInactive) with teachers, venue, show, schedule type, prices and the active-enrolment count. Each has planCover (AUTO | COVERED | NOT_COVERED) and coveredByWeeklyPlans: whether weekly membership plans cover it.",
     inputSchema: { type: "object", properties: { includeInactive: { type: "boolean" }, tenant: TENANT_PROP } },
     async handler({ includeInactive, tenant } = {}) {
       const qs = includeInactive ? "?includeInactive=1" : "";
@@ -80,7 +81,7 @@ export const classesTools = [
   },
   {
     name: "uiiq_classes_get",
-    description: "One class in full: editor fields, every teacher, its course runs, and the roster (enrolments with student names, guardian, fee/paid/owed). No medical data. coverSlots is how many of a weekly plan's slots one session uses (coverSlotsNote 'uses 2 slots' when more than one); canSetCoverSlots says whether you may change it. fundingMode (NONE | FREE | SUBSIDISED) and funding ('Funded, free' / 'Funded, subsidised' / null) say whether it is run for a sister organisation and whether families pay; set with uiiq_classes_billing_set.",
+    description: "One class in full: editor fields, every teacher, its course runs, and the roster (enrolments with student names, guardian, fee/paid/owed). No medical data. coverSlots is how many of a weekly plan's slots one session uses (coverSlotsNote 'uses 2 slots' when more than one); canSetCoverSlots says whether you may change it. fundingMode (NONE | FREE | SUBSIDISED) and funding ('Funded, free' / 'Funded, subsidised' / null) say whether it is run for a sister organisation and whether families pay; set with uiiq_classes_billing_set. planCover (AUTO | COVERED | NOT_COVERED) is the 'Covered by weekly plans' setting, coveredByWeeklyPlans what it comes to, planCoverAutomatic what AUTO would be, and organisation { id, name, sister } the organisation the class belongs to (the workspace's own, or the sister it is run for or billed through).",
     inputSchema: { type: "object", required: ["id"], properties: { id: { type: "string" }, tenant: TENANT_PROP } },
     async handler({ id, tenant }) {
       const res = await api(tenant)(`/classes/${encodeURIComponent(id)}`);
@@ -89,8 +90,18 @@ export const classesTools = [
     },
   },
   {
+    name: "uiiq_classes_plan_cover_impact",
+    description: "Who changes with 'Covered by weekly plans' (read-only): the classes weekly plans covered under the rule before planCover and don't now, with today's settings. Returns { classes: [{ classId, className, organisation { id, name, sister }, planCover, affectedFamilies }] }: affectedFamilies is how many families on plans it leaves paying at the register (a family on plans in two of them counts in each). Class and organisation names and counts only, never a family's or child's name. An empty list means nothing changed for anyone. Owner or admin only (403 otherwise).",
+    inputSchema: { type: "object", properties: { tenant: TENANT_PROP } },
+    async handler({ tenant } = {}) {
+      const res = await api(tenant)("/classes/plan-cover/impact");
+      if (!res.ok) throw await fail(res);
+      return res.json();
+    },
+  },
+  {
     name: "uiiq_classes_create",
-    description: "Create a class. Requires name, dayOfWeek (0-6), startTime (HH:MM), durationMins and capacity; the slug is generated from the name. Linked ids (staffMemberId, venueId, showEventId, instructorResourceId) must belong to the tenant. Prices (dropInPricePence, termFeePence), coveredByPlanIds and coverSlots above 1 need an owner or admin (403). A photo (imageMediaId) needs photoPermissionConfirmed: true, sent only after the user confirms permission (400 otherwise).",
+    description: "Create a class. Requires name, dayOfWeek (0-6), startTime (HH:MM), durationMins and capacity; the slug is generated from the name. Linked ids (staffMemberId, venueId, showEventId, instructorResourceId) must belong to the tenant. Prices (dropInPricePence, termFeePence), coveredByPlanIds, coverSlots above 1 and a planCover other than AUTO need an owner or admin (403). A photo (imageMediaId) needs photoPermissionConfirmed: true, sent only after the user confirms permission (400 otherwise).",
     inputSchema: { type: "object", required: CLASS_REQUIRED, properties: { ...CLASS_FIELDS, tenant: TENANT_PROP } },
     async handler({ tenant, ...body }) {
       checkPhoto(body);
@@ -101,8 +112,8 @@ export const classesTools = [
   },
   {
     name: "uiiq_classes_update",
-    description: "Replace a class's details. NOT a partial update: the API validates the full class, so send every field you want kept (name, dayOfWeek, startTime, durationMins, capacity are required; an omitted staffMemberId/venueId is reset to empty). Teachers are only rewritten when `teachers` is sent. The owner/admin settings (dropInPricePence, termFeePence, coveredByPlanIds, coverSlots) are kept as they are when omitted, and changing any of them needs an owner or admin (403). Raising coverSlots can put existing 1-a-week members over their weekly limit; check atRisk. When a coverSlots change would newly put families on plans over their weekly classes, the API answers 409 { needsConfirmation: true, atRisk, error } and saves NOTHING. Only resend confirmAtRisk after the user explicitly agrees, and send the COUNT the 409 gave (confirmAtRisk: <n>): if more families are at risk by then, the API asks again. The answer's atRisk says how many families it put over. imageMediaId picks or replaces the photo and needs photoPermissionConfirmed: true, sent only after the user confirms permission (400 otherwise); null removes it; omitted keeps it.",
-    inputSchema: { type: "object", required: ["id", ...CLASS_REQUIRED], properties: { id: { type: "string" }, ...CLASS_FIELDS, confirmAtRisk: { type: "integer", minimum: 0, description: "The atRisk count the user agreed to (from the 409): save the coverSlots change even though it puts that many families on plans over their weekly classes. Never send it without the user's explicit agreement." }, tenant: TENANT_PROP } },
+    description: "Replace a class's details. NOT a partial update: the API validates the full class, so send every field you want kept (name, dayOfWeek, startTime, durationMins, capacity are required; an omitted staffMemberId/venueId is reset to empty). Teachers are only rewritten when `teachers` is sent. The owner/admin settings (dropInPricePence, termFeePence, coveredByPlanIds, coverSlots, planCover) are kept as they are when omitted, and changing any of them needs an owner or admin (403). Raising coverSlots can put existing 1-a-week members over their weekly limit; check atRisk. When a coverSlots change would newly put families on plans over their weekly classes, the API answers 409 { needsConfirmation: true, atRisk, error } and saves NOTHING. Only resend confirmAtRisk after the user explicitly agrees, and send the COUNT the 409 gave (confirmAtRisk: <n>): if more families are at risk by then, the API asks again. The answer's atRisk says how many families it put over. Turning planCover so the class is no longer covered by weekly plans leaves the families on plans in it paying at the register: the API answers 409 { needsConfirmation: true, affected, confirmCoverChange, error } and saves NOTHING. Only resend confirmCoverChange after the user explicitly agrees, with the COUNT the 409 gave (confirmCoverChange: <n>); the API asks again if more by then. The answer's affected says how many families it left paying at the register. imageMediaId picks or replaces the photo and needs photoPermissionConfirmed: true, sent only after the user confirms permission (400 otherwise); null removes it; omitted keeps it.",
+    inputSchema: { type: "object", required: ["id", ...CLASS_REQUIRED], properties: { id: { type: "string" }, ...CLASS_FIELDS, confirmAtRisk: { type: "integer", minimum: 0, description: "The atRisk count the user agreed to (from the 409): save the coverSlots change even though it puts that many families on plans over their weekly classes. Never send it without the user's explicit agreement." }, confirmCoverChange: { type: "integer", minimum: 0, description: "The affected count the user agreed to (from the 409): save the planCover change even though it leaves that many families on plans paying at the register. Never send it without the user's explicit agreement." }, tenant: TENANT_PROP } },
     async handler({ id, tenant, ...body }) {
       checkPhoto(body);
       const res = await send(tenant, "PATCH", `/classes/${encodeURIComponent(id)}`, body);
