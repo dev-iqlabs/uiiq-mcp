@@ -1411,10 +1411,10 @@ Needs the `competitions` feature. Setting up, rounds, the nominee confirmation a
 
 | Tool | What it does |
 |---|---|
-| `uiiq_classes_list` | List the school's classes (active only unless includeInactive) with teachers, venue, show, schedule type, prices and the active-enrolment count. |
-| `uiiq_classes_get` | One class in full: editor fields, every teacher, its course runs, and the roster (enrolments with student names, guardian, fee/paid/owed); `fundingMode` / `funding` say whether it is run for a sister organisation, free or subsidised. |
-| `uiiq_classes_create` | Create a class. A photo (`imageMediaId`) needs `photoPermissionConfirmed: true`, after the user confirms permission. |
-| `uiiq_classes_update` | Replace a class's details. `imageMediaId` picks or replaces the photo (needs `photoPermissionConfirmed: true`, after the user confirms permission); null removes it. |
+| `uiiq_classes_list` | List the school's classes (active only unless includeInactive) with teachers, venue, show, schedule type, prices and the active-enrolment count; `planCover` / `coveredByWeeklyPlans` say whether weekly plans cover each. |
+| `uiiq_classes_get` | One class in full: editor fields, every teacher, its course runs, and the roster (enrolments with student names, guardian, fee/paid/owed); `fundingMode` / `funding` say whether it is run for a sister organisation, free or subsidised; `planCover`, `coveredByWeeklyPlans`, `planCoverAutomatic` and `organisation` say whether weekly plans cover it and why. |
+| `uiiq_classes_create` | Create a class. `planCover` (AUTO / COVERED / NOT_COVERED, owner or admin): covered by weekly plans. A photo (`imageMediaId`) needs `photoPermissionConfirmed: true`, after the user confirms permission. |
+| `uiiq_classes_update` | Replace a class's details. `planCover` turning plan cover off asks first (409 with `affected`; resend `confirmCoverChange: <n>` once the user agrees). `imageMediaId` picks or replaces the photo (needs `photoPermissionConfirmed: true`, after the user confirms permission); null removes it. |
 | `uiiq_classes_delete` | DELETE a class outright. |
 | `uiiq_classes_terms_list` | The school's terms (newest first) with dates, excluded dates and how many course runs each has. |
 | `uiiq_classes_term_create` | Create a term: name, startDate and endDate (YYYY-MM-DD), optional excludedDates (half-term etc.) and active. |
