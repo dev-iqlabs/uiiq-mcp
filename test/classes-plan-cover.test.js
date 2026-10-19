@@ -94,3 +94,14 @@ test("the schema: the three values, owner or admin, kept when omitted; the count
   assert.match(tools.uiiq_classes_get.description, /organisation \{ id, name, sister \}/);
   assert.match(tools.uiiq_classes_list.description, /coveredByWeeklyPlans/);
 });
+
+test("uiiq_classes_plan_cover_impact: a GET of the impact listing, returned as it is; a 403 is thrown", async () => {
+  const impact = { classes: [{ classId: "cls_hc", className: "Holiday Club", organisation: { id: "bo_college", name: "Street Beat College", sister: true }, planCover: "AUTO", affectedFamilies: 3 }] };
+  replies = [[200, impact]];
+  seen = [];
+  assert.deepEqual(await tools.uiiq_classes_plan_cover_impact.handler({}), impact);
+  assert.deepEqual(seen, [{ method: "GET", path: "/classes/plan-cover/impact" }]);
+  assert.match(tools.uiiq_classes_plan_cover_impact.description, /never a family's or child's name/);
+  replies = [[403, { error: "Only an owner or admin can see which classes weekly plans no longer cover." }]];
+  await assert.rejects(() => tools.uiiq_classes_plan_cover_impact.handler({}), /owner or admin/);
+});

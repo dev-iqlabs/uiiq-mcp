@@ -90,6 +90,16 @@ export const classesTools = [
     },
   },
   {
+    name: "uiiq_classes_plan_cover_impact",
+    description: "Who changes with 'Covered by weekly plans' (read-only): the classes weekly plans covered under the rule before planCover and don't now, with today's settings. Returns { classes: [{ classId, className, organisation { id, name, sister }, planCover, affectedFamilies }] }: affectedFamilies is how many families on plans it leaves paying at the register (a family on plans in two of them counts in each). Class and organisation names and counts only, never a family's or child's name. An empty list means nothing changed for anyone. Owner or admin only (403 otherwise).",
+    inputSchema: { type: "object", properties: { tenant: TENANT_PROP } },
+    async handler({ tenant } = {}) {
+      const res = await api(tenant)("/classes/plan-cover/impact");
+      if (!res.ok) throw await fail(res);
+      return res.json();
+    },
+  },
+  {
     name: "uiiq_classes_create",
     description: "Create a class. Requires name, dayOfWeek (0-6), startTime (HH:MM), durationMins and capacity; the slug is generated from the name. Linked ids (staffMemberId, venueId, showEventId, instructorResourceId) must belong to the tenant. Prices (dropInPricePence, termFeePence), coveredByPlanIds, coverSlots above 1 and a planCover other than AUTO need an owner or admin (403). A photo (imageMediaId) needs photoPermissionConfirmed: true, sent only after the user confirms permission (400 otherwise).",
     inputSchema: { type: "object", required: CLASS_REQUIRED, properties: { ...CLASS_FIELDS, tenant: TENANT_PROP } },
