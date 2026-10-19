@@ -20,8 +20,9 @@ before(async () => {
     req.on("data", (c) => (body += c));
     req.on("end", () => {
       const path = req.url.replace(/^\/api/, "");
-      seen.push({ method: req.method, path, ...(body ? { body: JSON.parse(body) } : {}) });
-      const [status, data] = reply;
+      const parsed = body ? JSON.parse(body) : undefined;
+      seen.push({ method: req.method, path, ...(parsed ? { body: parsed } : {}) });
+      const [status, data] = typeof reply === "function" ? reply(req.method, path, parsed) : reply;
       res.writeHead(status, { "content-type": "application/json" });
       res.end(JSON.stringify(data));
     });
@@ -53,18 +54,33 @@ async function call(name, args, response) {
 }
 const make = (args, response) => call("uiiq_social_post_collection_ad", args, response);
 
+const CALM = "Calm & Wellbeing Collection";
 const AD = { pageId: "555", instagramActorId: "777", name: "Calm coins", dailyBudgetPence: 500, countries: ["GB"], primaryText: "New", headline: "Shop", ctaType: "SHOP_NOW", linkUrl: "https://shop.test", productIds: ["UC-A", "UC-B", "UC-C", "UC-D"] };
-const CONTEXT = { adAccount: true, catalogue: false, pages: [{ id: "555", name: "Ultimate Coins" }], instagram: [], heroImage: "https://iqex-assets.s3.eu-west-2.amazonaws.com/x.png" };
+const CONTEXT = { adAccount: true, catalogue: true, pages: [{ id: "555", name: "Ultimate Coins" }], instagram: [], heroImage: "https://iqex-assets.s3.eu-west-2.amazonaws.com/x.png", collections: [{ label: CALM, count: 24 }], pixelId: "1108684204883533", defaults: { name: "Calm coins", primaryText: "New", linkUrl: "https://shop.test/calm/", ctaType: "SHOP_NOW", countries: ["GB"], dailyBudgetPence: 500 } };
+const WOULD = { dryRun: true, collection: CALM, products: [{ id: "UC-CALM-MYCALM" }], wouldSend: { request_id: "coll-dry-run" } };
+const dryRun = (method) => (method === "GET" ? [200, CONTEXT] : [200, WOULD]);
 
-test("without confirm: a dry run that only reads the context; nothing is made", async () => {
+test("without confirm: UiiQ's own dry run (dryRun: true, the context's defaults filled in); nothing is made", async () => {
   for (const confirm of [undefined, false, "true", 1]) {
-    const { result, requests } = await make({ id: "post 1", ...AD, confirm }, [200, CONTEXT]);
-    assert.deepEqual(requests, [{ method: "GET", path: "/socials/posts/post%201/collection-ad" }]);
+    const { result, requests } = await make({ id: "post 1", collection: CALM, headline: "Shop", confirm }, dryRun);
+    assert.deepEqual(requests.map((r) => `${r.method} ${r.path}`), ["GET /socials/posts/post%201/collection-ad", "POST /socials/posts/post%201/collection-ad"]);
+    assert.deepEqual(requests[1].body, { pageId: "555", name: "Calm coins", primaryText: "New", linkUrl: "https://shop.test/calm/", ctaType: "SHOP_NOW", countries: ["GB"], dailyBudgetPence: 500, collection: CALM, headline: "Shop", dryRun: true });
     assert.equal(result.dryRun, true);
     assert.deepEqual(result.context, CONTEXT);
-    assert.deepEqual(result.wouldSend, AD);
+    assert.deepEqual(result.wouldMake, WOULD);
     assert.match(result.message, /Nothing was made/);
   }
+});
+
+test("a dry run UiiQ refuses comes back with its words, still nothing made", async () => {
+  const { result } = await make({ id: "post_1", collection: "Memorial" }, (method) => (method === "GET" ? [200, CONTEXT] : [400, { error: "\"Memorial\" has 1 product: a collection ad needs at least 4" }]));
+  assert.equal(result.dryRun, true);
+  assert.deepEqual(result.wouldMake, { refused: "\"Memorial\" has 1 product: a collection ad needs at least 4" });
+});
+
+test("tracking, URL parameters, objective and the collection are sent as asked", async () => {
+  const { requests } = await make({ id: "post_1", collection: CALM, trackWebsiteEvents: false, urlTags: "", objective: "OUTCOME_TRAFFIC", confirm: true }, [202, {}]);
+  assert.deepEqual(requests[0].body, { collection: CALM, trackWebsiteEvents: false, urlTags: "", objective: "OUTCOME_TRAFFIC", requestId: requests[0].body.requestId });
 });
 
 test("confirm: true sends a fresh coll- requestId each time; a 202 says to follow it with the status tool", async () => {
@@ -90,14 +106,15 @@ test("made at once: the ids, and the note that the campaign alone runs nothing",
 });
 
 test("only named fields are sent: a stray key (an ad account, a catalogue, a hero) never reaches UiiQ", async () => {
-  const { requests } = await make({ id: "post_1", ...AD, adAccountId: "act_9", catalogId: "999", heroImageUrl: "https://evil.test/x.png", confirm: true }, [202, {}]);
+  const { requests } = await make({ id: "post_1", ...AD, adAccountId: "act_9", catalogId: "999", heroImageUrl: "https://evil.test/x.png", hero_thumbnail_url: "https://evil.test/t.jpg", pixelId: "1", confirm: true }, [202, {}]);
   const body = requests[0].body;
-  for (const k of ["adAccountId", "catalogId", "heroImageUrl", "confirm", "tenant", "id"]) assert.equal(k in body, false, k);
+  for (const k of ["adAccountId", "catalogId", "heroImageUrl", "hero_thumbnail_url", "pixelId", "confirm", "tenant", "id"]) assert.equal(k in body, false, k);
 });
 
 test("UiiQ's refusal is thrown with its words and the requestId", async () => {
   await assert.rejects(make({ id: "post_1", ...AD, requestId: "coll-mine", confirm: true }, [409, { error: "No product catalogue is connected yet" }]), /No product catalogue is connected yet \(requestId: coll-mine\)/);
   await assert.rejects(make({ id: "post_1", ...AD }, [409, { error: "Publish the post first" }]), /Publish the post first/);
+  // The dry run's context refused (a draft): thrown, nothing more asked.
 });
 
 test("the status tool asks the status route, with the requestId when given", async () => {

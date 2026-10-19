@@ -319,13 +319,15 @@ export const socialTools = [
   },
   {
     name: "uiiq_social_post_collection_ad",
-    description: `Make a Meta COLLECTION ad from a PUBLISHED promo post: the post's image as the hero picture, with 4 to 50 of the shop's products underneath, each opening its own product (an Instant Experience). A NEW campaign, ad set and ad in the workspace's own Meta ad account, ALL PAUSED. productIds are product ids from uiiq_social_promo_products (they are the Meta catalogue's ids: the catalogue is fed from the same shop feed). Needs the workspace's Meta product catalogue set by a platform admin (uiiq_admin_ad_account_set platform META_CATALOG); the context's catalogue: false means "No product catalogue is connected yet" and nothing can be made. Without confirm: true this is a DRY RUN: it returns the form's context (adAccount, catalogue, pages and instagram accounts to pick from, heroImage, defaults, limits) and what would be sent; nothing is made. Only pass confirm: true once the person responsible has seen it and said to make it. ${CAROUSEL_RUN_IT} dailyBudgetPence: 100 to 1000 (£1 to £10 a day). ctaType: SHOP_NOW, LEARN_MORE, BUY_NOW or ORDER_NOW. Owners and admins only, at most 10 an hour, needs the Social Templates feature. IQEX makes it in the background (about a minute): a 202 answers { status: running, requestId }; follow it with uiiq_social_post_collection_ad_status and that requestId, never by making it again. requestId: leave it out for a fresh one (coll-…); retrying the SAME one never makes a second ad. A failure carries Meta's own words; a 409 "may already have made" means check Ads Manager first. Done: { campaignId, adSetId, adId, creativeId, canvasId, productSetId, adsManagerUrl, status: PAUSED }.`,
+    description: `Make a Meta COLLECTION ad from a PUBLISHED promo post: the post's image as the hero picture, with a shop collection's products underneath (collection: one of the context's collections[].label, the feed's custom_label_0; IQEX keeps the set in step with the feed; at least 4 products) or 4 to 50 hand-picked productIds from uiiq_social_promo_products. Each opens its own product (an Instant Experience). A NEW campaign, ad set and ad in the workspace's own Meta ad account, ALL PAUSED. Needs the workspace's Meta product catalogue set by a platform admin (uiiq_admin_ad_account_set platform META_CATALOG); the context's catalogue: false means "No product catalogue is connected yet" and nothing can be made. Without confirm: true this is a DRY RUN: UiiQ checks everything and answers what would be made (wouldSend, the collection's products) plus the form's context (pages, instagram, collections with counts, pixelId, defaults); nothing is made. Only pass confirm: true once the person responsible has seen it and said to make it. ${CAROUSEL_RUN_IT} dailyBudgetPence: 100 to 1000 (£1 to £10 a day). ctaType: SHOP_NOW, LEARN_MORE, BUY_NOW or ORDER_NOW. Website events (trackWebsiteEvents) are only ever on the workspace's own pixel (default on when it has one); objective OUTCOME_SALES needs them; urlTags are added to every link (default UiiQ's utm tags, "" for none). Owners and admins only, at most 10 an hour, needs the Social Templates feature. IQEX makes it in the background (about a minute): a 202 answers { status: running, requestId }; follow it with uiiq_social_post_collection_ad_status and that requestId, never by making it again. requestId: leave it out for a fresh one (coll-…); retrying the SAME one never makes a second ad. A failure carries Meta's own words; a 409 "may already have made" means check Ads Manager first. Done: { campaignId, adSetId, adId, creativeId, canvasId, productSetId, adsManagerUrl, status: PAUSED }.`,
     inputSchema: {
       type: "object",
       additionalProperties: false,
       required: ["id"],
       properties: {
         id: { type: "string", description: "The published promo post" },
+        collection: { type: "string", maxLength: 100, description: "A shop collection: one of the context's collections[].label (e.g. \"Calm & Wellbeing Collection\")" },
+        productIds: { type: "array", minItems: 4, maxItems: 50, items: { type: "string" }, description: "Or 4 to 50 hand-picked product ids from uiiq_social_promo_products" },
         pageId: { type: "string", description: "One of the context's pages[].id: the Facebook Page the ad runs as" },
         instagramActorId: { type: "string", description: "Optional: one of the context's instagram[].id (on that Page)" },
         name: { type: "string", description: "The campaign/ad name, at most 200 characters" },
@@ -334,25 +336,35 @@ export const socialTools = [
         primaryText: { type: "string", description: "The ad's text, at most 2000 characters" },
         headline: { type: "string", description: "At most 255 characters" },
         ctaType: { type: "string", enum: ["SHOP_NOW", "LEARN_MORE", "BUY_NOW", "ORDER_NOW"] },
-        linkUrl: { type: "string", description: "https: where the button goes, usually the shop" },
-        productIds: { type: "array", minItems: 4, maxItems: 50, items: { type: "string" }, description: "4 to 50 product ids from uiiq_social_promo_products" },
+        linkUrl: { type: "string", description: "https: where the button goes (default: the collection's page from the post's text)" },
+        trackWebsiteEvents: { type: "boolean", description: "Website events on the workspace's own Meta pixel (default: on when it has one)" },
+        urlTags: { type: "string", maxLength: 1000, description: "URL parameters on every link; \"\" for none" },
+        objective: { type: "string", enum: ["OUTCOME_TRAFFIC", "OUTCOME_SALES"], description: "Traffic (default) or Sales (needs website events)" },
         requestId: { type: "string", description: "Leave out for a fresh one (coll-…); the same one retries without making a second" },
         confirm: { type: "boolean", description: "true to really make the (paused) ad; anything else is a dry run" },
         tenant: TENANT_PROP,
       },
     },
-    async handler({ id, tenant, confirm, requestId, pageId, instagramActorId, name, dailyBudgetPence, countries, primaryText, headline, ctaType, linkUrl, productIds }) {
+    async handler({ id, tenant, confirm, requestId, collection, productIds, pageId, instagramActorId, name, dailyBudgetPence, countries, primaryText, headline, ctaType, linkUrl, trackWebsiteEvents, urlTags, objective }) {
       const path = `/socials/posts/${encodeURIComponent(id)}/collection-ad`;
       const defined = (o) => Object.fromEntries(Object.entries(o).filter(([, v]) => v !== undefined));
-      const body = defined({ pageId, instagramActorId, name, dailyBudgetPence, countries, primaryText, headline, ctaType, linkUrl, productIds });
+      const body = defined({ collection, productIds, pageId, instagramActorId, name, dailyBudgetPence, countries, primaryText, headline, ctaType, linkUrl, trackWebsiteEvents, urlTags, objective });
       if (confirm !== true) {
         const preview = await api(tenant)(path);
         if (!preview.ok) throw await fail(preview);
+        const context = await preview.json();
+        // UiiQ's own dry run (nothing kept or sent), with the context's defaults for what wasn't given.
+        const d = context.defaults ?? {};
+        const dry = await send(tenant, path, "POST", {
+          pageId: context.pages?.[0]?.id, name: d.name, primaryText: d.primaryText, linkUrl: d.linkUrl, ctaType: d.ctaType, countries: d.countries, dailyBudgetPence: d.dailyBudgetPence,
+          ...body, dryRun: true,
+        });
+        const wouldMake = dry.ok ? await dry.json() : { refused: (await fail(dry)).message };
         return {
           dryRun: true,
           message: `Nothing was made. Pass confirm: true to make it, only once the person responsible has seen this. ${CAROUSEL_RUN_IT}`,
-          context: await preview.json(),
-          wouldSend: body,
+          context,
+          wouldMake,
         };
       }
       const rid = requestId || `coll-${randomUUID()}`;
