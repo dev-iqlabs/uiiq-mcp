@@ -41,6 +41,7 @@ async function videoDryRun(tenant, id, platforms, what) {
 // channel until the channels are connected (UiiQtask 9), and /ads/approve/
 // <token> is the emailed-approval link, a public HMAC flow.
 const ENGINES = ["topview", "runway", "wan"];
+const CATALOG_COST = "The cost grows with the number of products: 1 credit for every 100 products (or part of 100), every day it's checked (59 products = 1 a day; 50,000 = 500 a day). There's no daily limit.";
 const PLATFORMS = ["youtube", "instagram", "facebook", "tiktok", "linkedin", "pinterest", "x"];
 
 export const adsTools = [
@@ -394,6 +395,53 @@ export const adsTools = [
       }
       const body = action === "budget" ? { action, budget_micros: budgetMicros } : action === "enable" ? { action, confirm: true } : { action };
       const res = await api(tenant)(`/ads/google/campaigns/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify(body) });
+      if (!res.ok) throw await fail(res);
+      return res.json();
+    },
+  },
+  // ── Meta catalogue watching (UiiQ lib/ads/meta-catalog, on IQEX #1454) ──
+  // IQEX checks a watched catalogue every morning and charges IQEX credits:
+  // 1 per started 100 products, every day, with NO daily ceiling.
+  {
+    name: "uiiq_ads_meta_catalog",
+    description: `The workspace's Meta product catalogue as IQEX watches it: { connected, catalogs: [{ catalogId, enabled, checkedAt, ok, paused, problemSince, problems, warnings, catalog { productCount }, feeds [{ latestUpload, issues [{ summary, description, count, products: SKUs }] }], creditsPerCheck }], estimate }. creditsPerCheck is what each daily check costs once on; while off, estimate { products, creditsPerDay } is UiiQ's figure from the shop feed. ${CATALOG_COST} paused: monitoring stopped for lack of credits (buy credits). connected false: no catalogue is connected yet. Owners and admins only.`,
+    inputSchema: { type: "object", additionalProperties: false, properties: { catalogId: { type: "string", description: "One catalogue (its number), when the workspace has several" }, tenant: TENANT_PROP } },
+    async handler({ catalogId, tenant }) {
+      const res = await api(tenant)(`/ads/meta/catalog${catalogId ? `?catalogId=${encodeURIComponent(catalogId)}` : ""}`);
+      if (!res.ok) throw await fail(res);
+      return res.json();
+    },
+  },
+  {
+    name: "uiiq_ads_meta_catalog_check",
+    description: "Check the workspace's Meta catalogue at Meta now (\"Check now\"). At most once every 5 minutes per catalogue: sooner, the answer has tooSoon: true and the last check. A check is paid in IQEX credits, once a UK day, so a second check the same day costs nothing more. Same answer as uiiq_ads_meta_catalog. Owners and admins only, at most 12 an hour.",
+    inputSchema: { type: "object", additionalProperties: false, properties: { catalogId: { type: "string" }, tenant: TENANT_PROP } },
+    async handler({ catalogId, tenant }) {
+      const res = await post(tenant, "/ads/meta/catalog/check", catalogId ? { catalogId } : {});
+      if (!res.ok) throw await fail(res);
+      return res.json();
+    },
+  },
+  {
+    name: "uiiq_ads_meta_catalog_watch",
+    description: `Switch watching the workspace's Meta product catalogue on or off. ON SPENDS IQEX CREDITS EVERY DAY: ${CATALOG_COST} Without confirm: true, switching on is a DRY RUN: it returns what it would cost a day and changes nothing; pass confirm: true only once the person responsible has seen the cost and said to switch it on. Switching off needs no confirm. catalogId: one catalogue when the workspace has several. Returns { catalogId, enabled, enabledAt }. Owners and admins only.`,
+    inputSchema: { type: "object", additionalProperties: false, required: ["enabled"], properties: { enabled: { type: "boolean" }, catalogId: { type: "string" }, confirm: { type: "boolean", description: "true to really switch it on (it spends credits daily); anything else is a dry run. Ignored when switching off" }, tenant: TENANT_PROP } },
+    async handler({ enabled, catalogId, confirm, tenant }) {
+      if (enabled === true && confirm !== true) {
+        const res = await api(tenant)(`/ads/meta/catalog${catalogId ? `?catalogId=${encodeURIComponent(catalogId)}` : ""}`);
+        if (!res.ok) throw await fail(res);
+        const health = await res.json();
+        const c = (health.catalogs ?? []).find((x) => !catalogId || x.catalogId === catalogId);
+        const perDay = c?.enabled && c.creditsPerCheck != null ? c.creditsPerCheck : health.estimate?.creditsPerDay ?? null;
+        return {
+          dryRun: true,
+          message: `Nothing was changed. Watching would cost ${perDay != null ? `about ${perDay} credit(s) a day` : "1 credit a day for every 100 products"}. ${CATALOG_COST} Pass confirm: true only once the person responsible has seen this and said to switch it on.`,
+          creditsPerDay: perDay,
+          catalog: c ?? null,
+          estimate: health.estimate ?? null,
+        };
+      }
+      const res = await api(tenant)("/ads/meta/catalog/monitoring", { method: "PUT", body: JSON.stringify({ enabled, ...(catalogId ? { catalogId } : {}) }) });
       if (!res.ok) throw await fail(res);
       return res.json();
     },
