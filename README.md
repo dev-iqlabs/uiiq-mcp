@@ -1302,6 +1302,7 @@ Needs the `competitions` feature. Setting up, rounds, the nominee confirmation a
 | `uiiq_admin_feature_create` | Register a new feature flag in the platform catalogue (key is lower-cased, spaces to _; product GROW, RUN, SELL or AI). |
 | `uiiq_admin_elevenlabs_key_get` | Whether the workspace has its own ElevenLabs API key set, with a masked preview (first 8 and last 4 characters). |
 | `uiiq_admin_elevenlabs_key_set` | SET the workspace's ElevenLabs API key (a secret: sent, never shown or logged), or clear it with apiKey null. |
+| `uiiq_admin_gift_cards_legacy_count` | How many live gift cards still carry a pre-#1080 code, per workspace and format, with their outstanding balance (counts only). |
 | `uiiq_admin_vat_get` | The platform VAT rates (GB): standardPct, reducedPct, zeroPct and when they were last changed. |
 | `uiiq_admin_vat_set` | Change the platform VAT rates (each 0–100; only the ones you send change). |
 | `uiiq_admin_audit_log` | The platform audit log, newest first: filter by resource, resourceId, userId, action (prefix match, e.g. |
