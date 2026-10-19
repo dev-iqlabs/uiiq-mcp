@@ -90,7 +90,9 @@ test("a passed requestId is sent as is (a retry after a timeout never makes a se
 test("UiiQ's refusal is thrown with its words (IQEX's ceiling, 'may already exist')", async () => {
   await assert.rejects(call({ id: "post_1", ...AD, confirm: true }, [503, { error: "The Meta daily budget ceiling isn't set" }]), /ceiling isn't set/);
   // The id this call made is in the error, to retry a "still being made" 409 with (Lucas, on #111 L-D).
-  await assert.rejects(call({ id: "post_1", ...AD, requestId: "ad-mine", confirm: true }, [409, { error: "Still being made" }]), /Still being made \(requestId: ad-mine, retry with this one\)/);
+  await assert.rejects(call({ id: "post_1", ...AD, requestId: "ad-mine", confirm: true }, [409, { error: "Meta may already have made this ad" }]), /may already have made this ad \(requestId: ad-mine has ended: never send it again; a new requestId only if the person asks, after checking Ads Manager\)/);
+  await assert.rejects(call({ id: "post_1", ...AD, requestId: "ad-busy", confirm: true }, [429, { error: "IQEX is already making 3" }]), /\(requestId: ad-busy: nothing was made; the same one can go again in a minute\)/);
+  await assert.rejects(call({ id: "post_1", ...AD, requestId: "ad-x", confirm: true }, [400, { error: "headline too long" }]), (e) => e.message === "headline too long (requestId: ad-x)");
   await assert.rejects(call({ id: "post_1", ...AD }, [409, { error: "Publish the post first" }]), /Publish the post first/);
 });
 
@@ -98,8 +100,8 @@ test("the description says it's paused, the ad set and ad need switching on, and
   const t = tools.uiiq_social_post_carousel_ad;
   assert.match(t.description, /ALL PAUSED/);
   assert.match(t.description, /ad set AND its ad/);
-  assert.match(t.description, /409 "still being made": retry the SAME requestId/);
-  assert.match(t.description, /use a new requestId only if it isn't there/);
+  assert.match(t.description, /A 409 means that request has ENDED.*never sent again.*only for the person's own Try again/);
+  assert.match(t.description, /A 429 means IQEX has three going and nothing was made: the SAME requestId can go again/);
   assert.equal(t.inputSchema.additionalProperties, false);
   assert.equal(t.inputSchema.properties.products.items.additionalProperties, false);
   assert.deepEqual(t.inputSchema.properties.products.items.required, ["productId"]);
