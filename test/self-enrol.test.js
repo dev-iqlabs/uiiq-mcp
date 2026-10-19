@@ -82,6 +82,8 @@ test("registration form: autoApprove alone leaves the form; ref alone as before;
   await assert.rejects(tools.uiiq_classes_registration_form_set.handler({}), /ref, autoApprove or both/);
   assert.deepEqual(seen, []);
   assert.equal(tools.uiiq_classes_registration_form_set.inputSchema.required, undefined);
+  // Lucas F7: the description asks for the owner's agreement before switching it on.
+  assert.match(tools.uiiq_classes_registration_form_set.description, /only send autoApprove true after the owner has explicitly agreed/);
 });
 
 test("classes create and update carry byAudition", async () => {
