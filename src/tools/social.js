@@ -318,6 +318,67 @@ export const socialTools = [
     },
   },
   {
+    name: "uiiq_social_post_collection_ad",
+    description: `Make a Meta COLLECTION ad from a PUBLISHED promo post: the post's image as the hero picture, with 4 to 50 of the shop's products underneath, each opening its own product (an Instant Experience). A NEW campaign, ad set and ad in the workspace's own Meta ad account, ALL PAUSED. productIds are product ids from uiiq_social_promo_products (they are the Meta catalogue's ids: the catalogue is fed from the same shop feed). Needs the workspace's Meta product catalogue set by a platform admin (uiiq_admin_ad_account_set platform META_CATALOG); the context's catalogue: false means "No product catalogue is connected yet" and nothing can be made. Without confirm: true this is a DRY RUN: it returns the form's context (adAccount, catalogue, pages and instagram accounts to pick from, heroImage, defaults, limits) and what would be sent; nothing is made. Only pass confirm: true once the person responsible has seen it and said to make it. ${CAROUSEL_RUN_IT} dailyBudgetPence: 100 to 1000 (£1 to £10 a day). ctaType: SHOP_NOW, LEARN_MORE, BUY_NOW or ORDER_NOW. Owners and admins only, at most 10 an hour, needs the Social Templates feature. IQEX makes it in the background (about a minute): a 202 answers { status: running, requestId }; follow it with uiiq_social_post_collection_ad_status and that requestId, never by making it again. requestId: leave it out for a fresh one (coll-…); retrying the SAME one never makes a second ad. A failure carries Meta's own words; a 409 "may already have made" means check Ads Manager first. Done: { campaignId, adSetId, adId, creativeId, canvasId, productSetId, adsManagerUrl, status: PAUSED }.`,
+    inputSchema: {
+      type: "object",
+      additionalProperties: false,
+      required: ["id"],
+      properties: {
+        id: { type: "string", description: "The published promo post" },
+        pageId: { type: "string", description: "One of the context's pages[].id: the Facebook Page the ad runs as" },
+        instagramActorId: { type: "string", description: "Optional: one of the context's instagram[].id (on that Page)" },
+        name: { type: "string", description: "The campaign/ad name, at most 200 characters" },
+        dailyBudgetPence: { type: "integer", minimum: 100, maximum: 1000, description: "100 to 1000 (£1 to £10 a day)" },
+        countries: { type: "array", items: { type: "string" }, description: "Two-letter codes, e.g. [\"GB\"]" },
+        primaryText: { type: "string", description: "The ad's text, at most 2000 characters" },
+        headline: { type: "string", description: "At most 255 characters" },
+        ctaType: { type: "string", enum: ["SHOP_NOW", "LEARN_MORE", "BUY_NOW", "ORDER_NOW"] },
+        linkUrl: { type: "string", description: "https: where the button goes, usually the shop" },
+        productIds: { type: "array", minItems: 4, maxItems: 50, items: { type: "string" }, description: "4 to 50 product ids from uiiq_social_promo_products" },
+        requestId: { type: "string", description: "Leave out for a fresh one (coll-…); the same one retries without making a second" },
+        confirm: { type: "boolean", description: "true to really make the (paused) ad; anything else is a dry run" },
+        tenant: TENANT_PROP,
+      },
+    },
+    async handler({ id, tenant, confirm, requestId, pageId, instagramActorId, name, dailyBudgetPence, countries, primaryText, headline, ctaType, linkUrl, productIds }) {
+      const path = `/socials/posts/${encodeURIComponent(id)}/collection-ad`;
+      const defined = (o) => Object.fromEntries(Object.entries(o).filter(([, v]) => v !== undefined));
+      const body = defined({ pageId, instagramActorId, name, dailyBudgetPence, countries, primaryText, headline, ctaType, linkUrl, productIds });
+      if (confirm !== true) {
+        const preview = await api(tenant)(path);
+        if (!preview.ok) throw await fail(preview);
+        return {
+          dryRun: true,
+          message: `Nothing was made. Pass confirm: true to make it, only once the person responsible has seen this. ${CAROUSEL_RUN_IT}`,
+          context: await preview.json(),
+          wouldSend: body,
+        };
+      }
+      const rid = requestId || `coll-${randomUUID()}`;
+      const res = await send(tenant, path, "POST", { ...body, requestId: rid });
+      if (!res.ok) {
+        const e = await fail(res);
+        e.message += ` (requestId: ${rid})`;
+        throw e;
+      }
+      const out = await res.json();
+      if (res.status === 202) return { ...out, requestId: rid, note: `Being made. Ask uiiq_social_post_collection_ad_status with requestId ${rid} every few seconds, for up to about 3 minutes. ${CAROUSEL_RUN_IT}` };
+      return { ...out, requestId: rid, note: CAROUSEL_RUN_IT };
+    },
+  },
+  {
+    name: "uiiq_social_post_collection_ad_status",
+    description: "Where a collection ad of a post is (after uiiq_social_post_collection_ad answered running): { status: running | done | failed | unknown, requestId, ... }. running: ask again in a few seconds, for up to about 3 minutes. done: campaignId, adSetId, adId, creativeId, canvasId, productSetId, adsManagerUrl, adStatus PAUSED. failed: nothing was made; error carries Meta's own words; make it again only as a new ad (a new requestId). unknown: Meta may already have made it: tell the person to check Ads Manager, and never make it again yourself. Without requestId, the post's latest. Asking never makes a second ad (it may send the SAME request to IQEX again, which IQEX never makes twice). Owners and admins only.",
+    inputSchema: { type: "object", additionalProperties: false, required: ["id"], properties: { id: { type: "string" }, requestId: { type: "string", description: "The coll-… id the make call returned" }, tenant: TENANT_PROP } },
+    async handler({ id, requestId, tenant }) {
+      const qs = requestId ? `?requestId=${encodeURIComponent(requestId)}` : "";
+      const res = await api(tenant)(`/socials/posts/${encodeURIComponent(id)}/collection-ad/status${qs}`);
+      if (!res.ok) throw await fail(res);
+      return res.json();
+    },
+  },
+  {
     name: "uiiq_social_post_publish_status",
     description: "Where a post's Facebook and Instagram targets are while IQEX posts them in the background (after uiiq_social_post_publish answered posting; it can take a minute): { status, posting, targets: [{ id, platform, status, label, permalink, errorMessage }] }. A target's status is PUBLISHING (still posting: ask again in a few seconds, for up to about 3 minutes), PUBLISHED (with its link), FAILED (nothing was posted), or NEEDS_CHECK: it may have been posted, so tell the person to check the Page/Instagram before posting again, and never publish it again yourself. Asking never posts anything again.",
     inputSchema: { type: "object", additionalProperties: false, required: ["id"], properties: { id: { type: "string" }, tenant: TENANT_PROP } },
