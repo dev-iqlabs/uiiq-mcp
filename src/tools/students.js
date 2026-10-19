@@ -62,7 +62,7 @@ export const studentsTools = [
   },
   {
     name: "uiiq_students_get",
-    description: "One student in full — the ONLY place medical notes, SEND needs, allergies and emergency contact are returned — plus guardian, policy acknowledgements, costumes, shows and every enrolment with its ledger. OWNER/ADMIN only.",
+    description: "One student in full — the ONLY place medical notes, SEND needs, allergies and emergency contact are returned — plus guardian, policy acknowledgements, costumes, shows and every enrolment with its ledger, and the family details check: detailsCheck (switch on), parentMedicalNote, detailsConfirmedAt and detailsConfirmedBy ({ name, email } or null), dobChanges ([{ id, from, to, by, via, at, checkedAt }]: dates of birth a parent changed; checkedAt null = not yet checked, mark them with uiiq_students_update dobChangeChecked=true). OWNER/ADMIN only.",
     inputSchema: { type: "object", required: ["id"], properties: { id: { type: "string" }, tenant: TENANT_PROP } },
     async handler({ id, tenant }) {
       const res = await api(tenant)(`/students/${encodeURIComponent(id)}`);
@@ -82,8 +82,8 @@ export const studentsTools = [
   },
   {
     name: "uiiq_students_update",
-    description: "Partial update of a student: any of the record fields, plus active (false = the child has left; keeps every register), tshirtSize and costumes (full replace of the per-show ledger). Sending active for a child whose registration is waiting for the office's check is a 409: approve it with uiiq_students_registration_approve instead. OWNER/ADMIN only.",
-    inputSchema: { type: "object", required: ["id"], properties: { id: { type: "string" }, ...STUDENT_FIELDS, active: { type: "boolean" }, tshirtSize: { type: ["string", "null"] }, costumes: { type: "array", items: { type: "object" } }, tenant: TENANT_PROP } },
+    description: "Partial update of a student: any of the record fields, plus active (false = the child has left; keeps every register), tshirtSize, costumes (full replace of the per-show ledger) and dobChangeChecked (true = the office has checked the dates of birth a parent changed: clears the \"changed by parent\" marker; can be sent alone). Sending active for a child whose registration is waiting for the office's check is a 409: approve it with uiiq_students_registration_approve instead. OWNER/ADMIN only.",
+    inputSchema: { type: "object", required: ["id"], properties: { id: { type: "string" }, ...STUDENT_FIELDS, active: { type: "boolean" }, tshirtSize: { type: ["string", "null"] }, costumes: { type: "array", items: { type: "object" } }, dobChangeChecked: { type: "boolean", description: "true = mark the dates of birth a parent changed as checked by the office" }, tenant: TENANT_PROP } },
     async handler({ id, tenant, ...body }) {
       const res = await send(tenant, "PATCH", `/students/${encodeURIComponent(id)}`, body);
       if (!res.ok) throw await fail(res);
@@ -367,6 +367,31 @@ export const studentsTools = [
     inputSchema: { type: "object", required: ["contactId"], properties: { contactId: { type: "string", description: "The parent's contact id (parents[].contactId)" }, tenant: TENANT_PROP } },
     async handler({ contactId, tenant }) {
       const res = await send(tenant, "DELETE", `/students/registered-parents/${encodeURIComponent(contactId)}`);
+      if (!res.ok) throw await fail(res);
+      return res.json();
+    },
+  },
+
+  // ── Family details check ──
+  // Behind the workspace's `family_details_check` switch (ships off). Parents
+  // confirm their children's details in the Members App; the office can draft
+  // ONE email asking them to. Nothing here ever sends it.
+  {
+    name: "uiiq_students_details_check",
+    description: "The family details check at a glance: { enabled, children, families, reachableByEmail, draftCampaignId }. children = active children whose details no parent has confirmed yet in the Members App; families = their households (guardian contacts); reachableByEmail = how many of those families the email would reach if it were sent now, under the campaign rules (subscribed, consent, suppressions); draftCampaignId = the draft email already waiting to be sent, or null. With the workspace's family_details_check switch off it answers enabled false and zeros. Make the draft with uiiq_students_details_check_draft. OWNER/ADMIN only (403 otherwise).",
+    inputSchema: { type: "object", properties: { tenant: TENANT_PROP } },
+    async handler({ tenant } = {}) {
+      const res = await api(tenant)("/students/details-check");
+      if (!res.ok) throw await fail(res);
+      return res.json();
+    },
+  },
+  {
+    name: "uiiq_students_details_check_draft",
+    description: "\"Ask parents to check their children's details\": makes ONE email campaign DRAFT to the guardians of active children not yet confirmed, with the link to the Members App, or returns the draft already waiting. Returns { campaignId, created, sent: false } (created true = a new draft, false = the existing one). The draft is NEVER sent by this tool: a human reviews it and presses Send in Campaigns (the campaign send tool), never this call. 403 if the family_details_check switch is off or you are not an owner/admin; 409 if the Members App or email campaigns are switched off. OWNER/ADMIN only.",
+    inputSchema: { type: "object", properties: { tenant: TENANT_PROP } },
+    async handler({ tenant } = {}) {
+      const res = await send(tenant, "POST", "/students/details-check");
       if (!res.ok) throw await fail(res);
       return res.json();
     },

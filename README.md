@@ -22,7 +22,7 @@ UIIQ is one subscription whose modules are grouped as **Sell**, **Grow** and **R
 | Retail | `uiiq_retail_*` | Products, categories, suppliers, low-stock alerts, shop sync, stock reasons and reports |
 | Till and kitchen | `uiiq_till_*` | Ping a paired till, verify a staff PIN, take a sale or payment intent, redeem an IQPlant plan code |
 | Menus (food and drink) | `uiiq_menu_*` | Generate a menu kit, build the live menu, manage menu documents |
-| Classes and students | `uiiq_classes_*`, `uiiq_students_*` | Terms, course runs, enrolments (pay now or instalments), registers (attendance, scan, stars, costumes), notices, parent policies; student records, progress notes, check-in cards (medical fields only on get), absences (illness and time off), family registration (the public Register form, children awaiting the office check, approve or decline) |
+| Classes and students | `uiiq_classes_*`, `uiiq_students_*` | Terms, course runs, enrolments (pay now or instalments), registers (attendance, scan, stars, costumes), notices, parent policies; student records, progress notes, check-in cards (medical fields only on get), absences (illness and time off), family registration (the public Register form, children awaiting the office check, approve or decline), the family details check (who has not confirmed, an email DRAFT asking parents to) |
 | Customer cards | `uiiq_cards_*` | Issue, reissue, revoke, hand over and print member and student cards through IQEX (QR/NFC and branding only, never a name; printing spends credits) |
 | Till back office, kitchen, tables | `uiiq_till_*` | Devices, staff, day close, daily summary, refunds, payment config, food orders and settlement, KDS tickets, tables and their QR codes (floor routes take the device token) |
 | Bookings admin | `uiiq_blockout_*`, `uiiq_checkin_*`, `uiiq_custom_field_*`, `uiiq_waiver_*`, `uiiq_ticket_type_*`, `uiiq_booking_refund`, `uiiq_promo_code_*` | Blockouts, the calendar, door check-in, custom booking fields, waivers, ticket types, refunds (real money), promo codes |
@@ -1653,9 +1653,9 @@ Needs the `competitions` feature. Setting up, rounds, the nominee confirmation a
 | Tool | What it does |
 |---|---|
 | `uiiq_students_list` | The student directory grouped by guardian (name, email, phone, owed balance) with each child's dob, groups, photo consent, active enrolments, owed balance and printed-card status. Children awaiting the registration check are not in it. |
-| `uiiq_students_get` | One student in full — the ONLY place medical notes, SEND needs, allergies and emergency contact are returned — plus guardian, policy acknowledgements, costumes, shows and every enrolment with its ledger. |
+| `uiiq_students_get` | One student in full — the ONLY place medical notes, SEND needs, allergies and emergency contact are returned — plus guardian, policy acknowledgements, costumes, shows and every enrolment with its ledger, plus the family details check fields (parent confirmation, dates of birth a parent changed). |
 | `uiiq_students_create` | Create a student. |
-| `uiiq_students_update` | Partial update of a student: any of the record fields, plus active (false = the child has left; keeps every register), tshirtSize and costumes (full replace of the per-show ledger). active on a child awaiting the registration check is a 409. |
+| `uiiq_students_update` | Partial update of a student: any of the record fields, plus active (false = the child has left; keeps every register), tshirtSize, costumes (full replace of the per-show ledger) and dobChangeChecked (the office has checked the dates of birth a parent changed). active on a child awaiting the registration check is a 409. |
 | `uiiq_students_delete_impact` | What hard-deleting a student would destroy and what forbids it (registers, payments…). |
 | `uiiq_students_delete` | HARD-DELETE a student record — for a duplicate or test row only. |
 | `uiiq_students_progress_list` | A student's progression notes (newest first, up to 100) and star tally with the 20 most recent stars. |
@@ -1674,6 +1674,8 @@ Needs the `competitions` feature. Setting up, rounds, the nominee confirmation a
 | `uiiq_students_registration_approve` | Approve a child a parent added: active on the roll, you as reviewer; subscribes nobody to marketing. Confirm first. 409 if already checked; 404 when family registration is off. OWNER/ADMIN. |
 | `uiiq_students_registration_decline` | DECLINE a child a parent added: the record is DELETED (and a bare guardian contact a registration made, when the parent has no registration left). Can't be undone; confirm first. Optional `reason` (at most 200 characters) is kept 30 days on a refusal record (guardian email, date, reason; nothing about the child). Works with the feature off. 409 if already checked, or with blockers if the child has history. OWNER/ADMIN. |
 | `uiiq_students_registered_parent_remove` | REMOVE a registered parent with no child: their registrations are deleted, and the contact too when a registration made it, nothing is attached and they did not say yes to news in the Members App (a parent who ticked news on the form is asked in the Members App whether they'd like news by email, and only a Yes there subscribes them; a form tick with no Yes keeps nothing) ({ ok, contactRemoved }). Can't be undone; confirm first. Works with the feature off. 409 if they have a child, 404 if not a registered parent. OWNER/ADMIN. |
+| `uiiq_students_details_check` | The family details check: active children no parent has confirmed, their families, how many the email would reach under the campaign rules, and the draft waiting (if any). enabled false and zeros with the switch off. OWNER/ADMIN. |
+| `uiiq_students_details_check_draft` | Make ONE email campaign DRAFT asking parents to check their children's details, or return the one waiting ({ campaignId, created, sent: false }). Never sends: a human sends it from Campaigns. 403 switch off or role; 409 Members App or email campaigns off. OWNER/ADMIN. |
 | `uiiq_students_groups` | The distinct group labels in use across active students, with a student count each (the group picker for notices, campaigns and SMS). |
 
 ### Team (Mastermind) — `src/tools/team.js`
@@ -1723,4 +1725,4 @@ Needs the `competitions` feature. Setting up, rounds, the nominee confirmation a
 | `uiiq_workflow_order_assign` | Assign a workflow order to a user in the tenant (assignedUserId null unassigns). |
 | `uiiq_workflow_order_request_approval` | Ask the customer to approve a stage of their order: creates an approval link, moves the order to AWAITING_APPROVAL and EMAILS the customer. |
 
-1192 tools.
+1204 tools.
