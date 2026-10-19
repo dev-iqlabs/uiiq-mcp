@@ -132,3 +132,21 @@ test("the descriptions say it's a draft only, never cut, and how a retry works",
   assert.deepEqual(tools.uiiq_social_promo_create.inputSchema.required, ["template"]);
   assert.match(tools.uiiq_social_promo_templates.description, /collection/);
 });
+
+test("a photo's fit (fill or whole) goes to UiiQ as given; the schema names only those two", async () => {
+  const { requests } = await call("uiiq_social_promo_create", { template: "promo-collection-4x5", photos: [{ assetId: 11, fit: "whole" }, { url: "https://shop.test/b.jpg" }] }, [200, MADE]);
+  assert.deepEqual(requests[0].body.photos, [{ assetId: 11, fit: "whole" }, { url: "https://shop.test/b.jpg" }]);
+  assert.deepEqual(tools.uiiq_social_promo_create.inputSchema.properties.photos.items.properties.fit.enum, ["fill", "whole"]);
+  assert.match(tools.uiiq_social_promo_create.description, /'whole' \(all of it on a blur of itself, so a round coin keeps its rim\)/);
+});
+
+test("uiiq_social_post_publish_status: one GET for the post; UiiQ's answer as given; NEEDS_CHECK means tell the person, never publish again", async () => {
+  const status = { status: "PUBLISHED", posting: 1, targets: [{ id: "t_ig", platform: "INSTAGRAM", status: "PUBLISHING", label: "Posting…", permalink: null, errorMessage: null }] };
+  const { requests, result } = await call("uiiq_social_post_publish_status", { id: "post/1" }, [200, status]);
+  assert.deepEqual(requests.map((r) => [r.method, r.path]), [["GET", "/socials/posts/post%2F1/publish-status"]]);
+  assert.deepEqual(result, status);
+  await assert.rejects(call("uiiq_social_post_publish_status", { id: "post_1" }, [404, { error: "Not found" }]), /Not found/);
+  const t = tools.uiiq_social_post_publish_status;
+  assert.match(t.description, /NEEDS_CHECK: it may have been posted.*never publish it again yourself/);
+  assert.equal(t.inputSchema.additionalProperties, false);
+});

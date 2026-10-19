@@ -238,14 +238,14 @@ export const socialTools = [
   },
   {
     name: "uiiq_social_promo_create",
-    description: "Make a promo layout into a DRAFT social post: IQEX renders it with these words and photos (charging the workspace's credits) and UiiQ saves a draft carrying it. Nothing is posted, and the image stays PRIVATE until the post is published (it is made public only then, and private again if the post is deleted): media_url is UiiQ's own address for it, which only the workspace's signed-in members can open. At most 30 an hour per workspace. template: a slug from uiiq_social_promo_templates. fields: its text fields only; words are printed exactly as sent or refused with a 400 naming the field (about how many characters fit), never cut. photos: in slot order, each { assetId } (a media-library image) or { url } (https); a collection needs five, the main product first. colours: the layout's colour fields as hex. requestId: leave it out for a fresh one; pass the SAME one to retry a Create that failed or timed out, and it isn't charged twice. Returns { success, post_id, media_url, template, charged, warnings }: warnings are IQEX's notes on the image it made (a photo slot left blank, the logo left off); when there are any, tell the person and have them check the image before publishing. Photos sent and NONE placed is a 422 and no draft is saved; IQEX has usually charged by then, and the message says so.",
+    description: "Make a promo layout into a DRAFT social post: IQEX renders it with these words and photos (charging the workspace's credits) and UiiQ saves a draft carrying it. Nothing is posted, and the image stays PRIVATE until the post is published (it is made public only then, and private again if the post is deleted): media_url is UiiQ's own address for it, which only the workspace's signed-in members can open. At most 30 an hour per workspace. template: a slug from uiiq_social_promo_templates. fields: its text fields only; words are printed exactly as sent or refused with a 400 naming the field (about how many characters fit), never cut. photos: in slot order, each { assetId } (a media-library image) or { url } (https), with fit 'fill' (the default: it fills its box, cropped) or 'whole' (all of it on a blur of itself, so a round coin keeps its rim); a collection needs five, the main product first. colours: the layout's colour fields as hex. requestId: leave it out for a fresh one; pass the SAME one to retry a Create that failed or timed out, and it isn't charged twice. Returns { success, post_id, media_url, template, charged, warnings }: warnings are IQEX's notes on the image it made (a photo slot left blank, the logo left off); when there are any, tell the person and have them check the image before publishing. Photos sent and NONE placed is a 422 and no draft is saved; IQEX has usually charged by then, and the message says so.",
     inputSchema: {
       type: "object",
       required: ["template"],
       properties: {
         template: { type: "string", description: "A slug from uiiq_social_promo_templates, e.g. promo-collection-4x5" },
         fields: { type: "object", additionalProperties: { type: "string" }, description: "The layout's text fields, e.g. { headline, price_line, cta, item1_name, item1_price }" },
-        photos: { type: "array", items: { type: "object", properties: { assetId: { type: "integer" }, url: { type: "string" } } }, description: "In slot order: { assetId } or { url } (https)" },
+        photos: { type: "array", items: { type: "object", properties: { assetId: { type: "integer" }, url: { type: "string" }, fit: { type: "string", enum: ["fill", "whole"], description: "fill (default) or whole: the whole photo on a blur of itself (round products keep their rim)" } } }, description: "In slot order: { assetId } or { url } (https), each with fit?" },
         colours: { type: "object", additionalProperties: { type: "string" }, description: "The layout's colour fields as hex, e.g. { bg_colour: '#020017' }" },
         content: { type: "string", description: "The post's own text" },
         hashtags: { type: "array", items: { type: "string" } },
@@ -315,6 +315,16 @@ export const socialTools = [
         throw e;
       }
       return { ...(await res.json()), requestId: rid, note: CAROUSEL_RUN_IT };
+    },
+  },
+  {
+    name: "uiiq_social_post_publish_status",
+    description: "Where a post's Facebook and Instagram targets are while IQEX posts them in the background (after uiiq_social_post_publish answered posting; it can take a minute): { status, posting, targets: [{ id, platform, status, label, permalink, errorMessage }] }. A target's status is PUBLISHING (still posting: ask again in a few seconds, for up to about 3 minutes), PUBLISHED (with its link), FAILED (nothing was posted), or NEEDS_CHECK: it may have been posted, so tell the person to check the Page/Instagram before posting again, and never publish it again yourself. Asking never posts anything again.",
+    inputSchema: { type: "object", additionalProperties: false, required: ["id"], properties: { id: { type: "string" }, tenant: TENANT_PROP } },
+    async handler({ id, tenant }) {
+      const res = await api(tenant)(`/socials/posts/${encodeURIComponent(id)}/publish-status`);
+      if (!res.ok) throw await fail(res);
+      return res.json();
     },
   },
   {
