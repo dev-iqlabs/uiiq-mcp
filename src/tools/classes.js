@@ -44,6 +44,7 @@ const CLASS_FIELDS = {
   termFeePence: { type: "number" },
   instalmentsAllowed: { type: "boolean" },
   signOutRequired: { type: "boolean", description: "A second scan at the end records the child leaving" },
+  byAudition: { type: "boolean", description: "By audition: parents can't enrol in the Members App, which says \"By audition, please contact us\" instead (default false). Owner or admin only to change (403 otherwise). Kept as it is when omitted." },
   runsFrom: { type: ["string", "null"], pattern: "^\\d{4}-\\d{2}-\\d{2}$", description: "YYYY-MM-DD: a class that runs only between dates (a holiday club, a one-off day). With runsUntil; both null = every week. The public timetable shows the dates and drops it after runsUntil. Kept as it is when omitted." },
   runsUntil: { type: ["string", "null"], pattern: "^\\d{4}-\\d{2}-\\d{2}$", description: "YYYY-MM-DD, on or after runsFrom: the last date it runs. Kept as it is when omitted." },
   bookingNote: { type: ["string", "null"], maxLength: 120, description: "Booked elsewhere, e.g. 'Book via EEQU' (at most 120 characters): shown publicly instead of the enrol link, so level can hold real levels. Kept as it is when omitted." },
@@ -91,7 +92,7 @@ export const classesTools = [
   },
   {
     name: "uiiq_classes_plan_cover_impact",
-    description: "Who changes with 'Covered by weekly plans' (read-only): the classes weekly plans covered under the rule before planCover and don't now, with today's settings. Returns { classes: [{ classId, className, organisation { id, name, sister }, planCover, affectedFamilies }] }: affectedFamilies is how many families on plans it leaves paying at the register (a family on plans in two of them counts in each). Class and organisation names and counts only, never a family's or child's name. An empty list means nothing changed for anyone. Owner or admin only (403 otherwise).",
+    description: "Who changes with 'Covered by weekly plans' (read-only): the classes weekly plans covered under the rule before planCover and don't now, with today's settings. Returns { classes: [{ classId, className, organisation { id, name, sister }, planCover, scheduleType, dropInPricePence, affectedFamilies }] }: affectedFamilies is how many families on plans it leaves paying at the register (a family on plans in two of them counts in each); dropInPricePence is what the register collects per session from a family on a plan once the class isn't covered (null = none set, so NOTHING is collected: set one on the class before turning cover off); scheduleType is TERM or ROLLING (a TERM class's families stay on their plan, with no term fee, until they are enrolled again). Class and organisation names and counts only, never a family's or child's name. An empty list means nothing changed for anyone. Owner or admin only (403 otherwise).",
     inputSchema: { type: "object", properties: { tenant: TENANT_PROP } },
     async handler({ tenant } = {}) {
       const res = await api(tenant)("/classes/plan-cover/impact");
@@ -365,7 +366,7 @@ export const classesTools = [
   // ── Family registration form ──
   {
     name: "uiiq_classes_registration_form_get",
-    description: "The school's public \"Register your family\" IQForm, which the Register button on the class enrol pages opens: { enabled, iqformId, url }. enabled=false (and nothing else) when the workspace doesn't have family registration switched on. iqformId and url are null until one is set. Any signed-in user of the workspace.",
+    description: "The school's public \"Register your family\" IQForm, which the Register button on the class enrol pages opens, and whether children parents add are approved automatically: { enabled, iqformId, url, autoApprove }. enabled=false (and nothing else) when the workspace doesn't have family registration switched on. iqformId and url are null until one is set. Any signed-in user of the workspace.",
     inputSchema: { type: "object", properties: { tenant: TENANT_PROP } },
     async handler({ tenant } = {}) {
       const res = await api(tenant)("/classes/registration-form");
@@ -375,10 +376,35 @@ export const classesTools = [
   },
   {
     name: "uiiq_classes_registration_form_set",
-    description: "Set or clear the school's public \"Register your family\" IQForm. ref is the IQForm's id or a link with form-id= in it; it must exist, be Public and belong to the venue's own IQEX org (400 with the reason otherwise). ref null or \"\" clears it, which takes the Register button off the enrol pages. Returns { ok, iqformId, title, url }. Children registered through it wait under uiiq_students_registrations_list. OWNER/ADMIN only; 404 unless the workspace has family registration switched on.",
-    inputSchema: { type: "object", required: ["ref"], properties: { ref: { type: ["string", "number", "null"], description: "IQForm id or link with form-id=; null or \"\" clears it" }, tenant: TENANT_PROP } },
-    async handler({ ref, tenant }) {
-      const res = await send(tenant, "PUT", "/classes/registration-form", { ref: ref ?? null });
+    description: "Set or clear the school's public \"Register your family\" IQForm, and/or whether children parents add are approved automatically. ref is the IQForm's id or a link with form-id= in it; it must exist, be Public and belong to the venue's own IQEX org (400 with the reason otherwise). ref null or \"\" clears it, which takes the Register button off the enrol pages. autoApprove true = a child a signed-in parent adds in the Members App goes on the roll at once, BEFORE the office has checked them (the office is emailed and keeps or removes it with uiiq_students_registration_approve / _decline); false (the default) = each child waits for the office to approve it. Turning it on changes the school's safeguarding: only send autoApprove true after the owner has explicitly agreed to it. Each is changed only when sent; send at least one. Returns { ok, iqformId, title, url, autoApprove }. Children registered through it are listed under uiiq_students_registrations_list. OWNER/ADMIN only; 404 unless the workspace has family registration switched on.",
+    inputSchema: { type: "object", properties: { ref: { type: ["string", "number", "null"], description: "IQForm id or link with form-id=; null or \"\" clears it; omit to leave it" }, autoApprove: { type: "boolean", description: "Approve children parents add automatically; omit to leave it" }, tenant: TENANT_PROP } },
+    async handler({ ref, autoApprove, tenant } = {}) {
+      if (ref === undefined && autoApprove === undefined) throw new Error("Send ref, autoApprove or both");
+      const body = { ...(ref !== undefined ? { ref } : {}), ...(autoApprove !== undefined ? { autoApprove } : {}) };
+      const res = await send(tenant, "PUT", "/classes/registration-form", body);
+      if (!res.ok) throw await fail(res);
+      return res.json();
+    },
+  },
+
+  // ── Enrolled by parents (Members App self-enrolment) ──
+  {
+    name: "uiiq_classes_parent_enrolments_list",
+    description: "\"Enrolled by parents\": enrolments parents made themselves in the Members App that the office hasn't kept or undone yet, newest first (at most 200): { enrolments: [{ id, status (ACTIVE, WAITLIST, or CANCELLED if cancelled since), enrolledAt, student { id, name }, class { id, name }, termName, guardianName }] }. Names only, no child details. Answer each with uiiq_classes_parent_enrolment_answer. Any signed-in user of the workspace.",
+    inputSchema: { type: "object", properties: { tenant: TENANT_PROP } },
+    async handler({ tenant } = {}) {
+      const res = await api(tenant)("/classes/parent-enrolments");
+      if (!res.ok) throw await fail(res);
+      return res.json();
+    },
+  },
+  {
+    name: "uiiq_classes_parent_enrolment_answer",
+    description: "The office's answer to an enrolment a parent made in the Members App (an id from uiiq_classes_parent_enrolments_list). action keep = it stands and leaves the list; undo = CANCELS the enrolment (the usual cancel: cancelledAt set, any payment ledger kept; nothing is sent to the parent) and it leaves the list. Confirm an undo with the person first. 409 once it has been kept or undone; 404 if it isn't a parent's enrolment here. Refused (403) while the workspace is closed or in read-only impersonation. Audited.",
+    inputSchema: { type: "object", required: ["id", "action"], properties: { id: { type: "string" }, action: { type: "string", enum: ["keep", "undo"] }, tenant: TENANT_PROP } },
+    async handler({ id, action, tenant }) {
+      if (action !== "keep" && action !== "undo") throw new Error('action must be "keep" or "undo"');
+      const res = await post(tenant, `/classes/parent-enrolments/${encodeURIComponent(id)}`, { action });
       if (!res.ok) throw await fail(res);
       return res.json();
     },

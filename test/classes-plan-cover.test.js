@@ -96,12 +96,16 @@ test("the schema: the three values, owner or admin, kept when omitted; the count
 });
 
 test("uiiq_classes_plan_cover_impact: a GET of the impact listing, returned as it is; a 403 is thrown", async () => {
-  const impact = { classes: [{ classId: "cls_hc", className: "Holiday Club", organisation: { id: "bo_college", name: "Street Beat College", sister: true }, planCover: "AUTO", affectedFamilies: 3 }] };
+  const impact = { classes: [{ classId: "cls_hc", className: "Holiday Club", organisation: { id: "bo_college", name: "Street Beat College", sister: true }, planCover: "AUTO", scheduleType: "TERM", dropInPricePence: null, affectedFamilies: 3 }] };
   replies = [[200, impact]];
   seen = [];
   assert.deepEqual(await tools.uiiq_classes_plan_cover_impact.handler({}), impact);
   assert.deepEqual(seen, [{ method: "GET", path: "/classes/plan-cover/impact" }]);
   assert.match(tools.uiiq_classes_plan_cover_impact.description, /never a family's or child's name/);
+  // The two fields that say whether the register will collect anything from those families (Lucas M2 on UiiQ #1099).
+  assert.match(tools.uiiq_classes_plan_cover_impact.description, /scheduleType, dropInPricePence, affectedFamilies/);
+  assert.match(tools.uiiq_classes_plan_cover_impact.description, /null = none set, so NOTHING is collected/);
+  assert.match(tools.uiiq_classes_plan_cover_impact.description, /TERM or ROLLING/);
   replies = [[403, { error: "Only an owner or admin can see which classes weekly plans no longer cover." }]];
   await assert.rejects(() => tools.uiiq_classes_plan_cover_impact.handler({}), /owner or admin/);
 });
