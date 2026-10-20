@@ -18,7 +18,7 @@ async function fail(res) {
 const send = (tenant, path, method, body) => api(tenant)(path, body === undefined ? { method } : { method, body: JSON.stringify(body) });
 const POST_STATUS = ["DRAFT", "QUEUED", "SCHEDULED"];
 // Enabling the campaign alone runs nothing (iqex-backend #1384): said wherever a carousel ad is made.
-const CAROUSEL_FOLLOW = (id, rid) => `IQEX is making it (about a minute). Ask uiiq_social_carousel_ad_status with id "${id}" and requestId "${rid}" every few seconds until it says done, failed or unknown; never make a new request meanwhile.`;
+const CAROUSEL_FOLLOW = (id, rid, video = false) => `IQEX is making it (${video ? "up to 12 minutes: Meta processes the video first" : "about a minute"}). Ask uiiq_social_carousel_ad_status with id "${id}" and requestId "${rid}" every ${video ? "10 seconds" : "few seconds"} until it says done, failed or unknown; never make a new request meanwhile.`;
 const CAROUSEL_RUN_IT = "To run it, the campaign, its ad set AND its ad must each be switched on in Ads Manager: enabling the campaign alone runs nothing. A budget changed in Ads Manager isn't held to UiiQ's £10 a day.";
 
 // Scheduling is a publish path: on a workspace with auto-publish on, the
@@ -263,7 +263,7 @@ export const socialTools = [
   },
   {
     name: "uiiq_social_post_carousel_ad",
-    description: `Make a Meta carousel ad from a PUBLISHED promo post (its image is public then; a draft's never is): a NEW campaign, ad set and ad in the workspace's own Meta ad account, ALL PAUSED. Card 1 is the post's collection image; then 1 to 9 of the shop's products, each { productId, photoIndex } from uiiq_social_promo_products (photoIndex 0 = the main photo, then the mockups): UiiQ reads each one's photo and page from the shop's feed itself, so no other image or link can get into an ad. Without confirm: true this is a DRY RUN: it returns the form's context (adAccount, the connected Facebook pages to pick pageId from, collectionImage, defaults) and what would be sent, and nothing is made. Only pass confirm: true once the person responsible has seen it and said to make it. ${CAROUSEL_RUN_IT} dailyBudgetPence: 100 to 1000 (£1 to £10 a day). Owners and admins only, at most 10 an hour, needs the Social Templates feature. requestId: leave it out for a fresh one; after a timeout (504) retry with the SAME one, which never makes a second ad. A 409 means that request has ENDED (it failed, or Meta may already have made it): it is never sent again, and you never send it again with a new requestId by yourself; a new requestId is only for the person's own Try again, after they've checked Ads Manager. A 429 means IQEX has three going and nothing was made: the SAME requestId can go again in a minute. A 503 means Meta ads aren't switched on yet and a 403 that the ad account or Page isn't registered: both are for UiiQ support. Meta's own reason comes back as a 502, with detail. Returns { campaignId, adSetId, adId, adsManagerUrl, status: PAUSED, duplicate, requestId } when it's made at once. IQEX usually takes about a minute and makes it in the background: then this returns { status: "running", requestId } (also when UiiQ didn't answer in time), and uiiq_social_carousel_ad_status with the same id and requestId says when it's done (ask every few seconds, for up to about 3 minutes).`,
+    description: `Make a Meta carousel ad from a PUBLISHED promo post (its image is public then; a draft's never is): a NEW campaign, ad set and ad in the workspace's own Meta ad account, ALL PAUSED. Card 1 is the post's collection image, or a video (collectionVideo: one of the context's videos[].ref, a published post's MP4 or the media library's); then 1 to 9 of the shop's products, each { productId, photoIndex } from uiiq_social_promo_products (photoIndex 0 = the main photo, then the mockups): UiiQ reads each one's photo and page from the shop's feed itself, so no other image or link can get into an ad. linkUrl must be on the workspace's website or its shop. Website events go on the workspace's own Meta pixel (trackWebsiteEvents, default on when it has one; a pixel is never named here); objective OUTCOME_TRAFFIC (default) or OUTCOME_SALES, which needs website events; urlTags are the URL parameters on every card's link (key=value joined by &, no spaces, at most 1000 characters; "" for none; left out, UiiQ's UTM default). Without confirm: true this is a DRY RUN: it returns the form's context (adAccount, the connected Facebook pages to pick pageId from, collectionImage, videos, pixelId, defaults), each card's type (photo or video) and what would be sent, and nothing is made. Only pass confirm: true once the person responsible has seen it and said to make it. ${CAROUSEL_RUN_IT} dailyBudgetPence: 100 to 1000 (£1 to £10 a day). Owners and admins only, at most 10 an hour, needs the Social Templates feature. requestId: leave it out for a fresh one; after a timeout (504) retry with the SAME one, which never makes a second ad. A 409 means that request has ENDED (it failed, or Meta may already have made it): it is never sent again, and you never send it again with a new requestId by yourself; a new requestId is only for the person's own Try again, after they've checked Ads Manager. A 429 means IQEX has three going and nothing was made: the SAME requestId can go again in a minute. "Meta ads aren't switched on for this workspace yet" (a 502) and a 403 that the ad account or Page isn't registered are both for UiiQ support. Meta's own reason comes back in error, as a 502. Returns { campaignId, adSetId, adId, adsManagerUrl, status: PAUSED, duplicate, requestId } when it's made at once. IQEX usually takes about a minute and makes it in the background: then this returns { status: "running", requestId } (also when UiiQ didn't answer in time), and uiiq_social_carousel_ad_status with the same id and requestId says when it's done (ask every few seconds, for up to about 3 minutes; with a video card, every 10 seconds for up to 12 minutes, while Meta processes the video: the answer says video: true).`,
     inputSchema: {
       type: "object",
       additionalProperties: false,
@@ -284,19 +284,31 @@ export const socialTools = [
           items: { type: "object", additionalProperties: false, required: ["productId"], properties: { productId: { type: "string", description: "A product id from uiiq_social_promo_products" }, photoIndex: { type: "integer", minimum: 0, description: "Which of its photos: 0 = the main one (default), then the mockups" }, name: { type: "string", description: "The card's name, at most 100 characters (default: \"title · price\")" }, description: { type: "string", description: "At most 200 characters" } } },
           description: "Cards 2 to 10, in order: the shop's products",
         },
+        collectionVideo: {
+          type: "object", additionalProperties: false,
+          properties: { postId: { type: "string", description: "A published post with a public MP4 (the context's videos[].ref)" }, assetId: { type: "integer", description: "A media library video (the context's videos[].ref)" } },
+          description: "Card 1 as a video instead of the collection image: exactly one of postId or assetId, from the context's videos",
+        },
+        trackWebsiteEvents: { type: "boolean", description: "Website events on the workspace's own Meta pixel (default: on when it has one)" },
+        urlTags: { type: "string", description: "URL parameters on every card's link: key=value pairs joined by &, no spaces, at most 1000 characters; \"\" for none; left out, UiiQ's UTM default" },
+        objective: { type: "string", enum: ["OUTCOME_TRAFFIC", "OUTCOME_SALES"], description: "OUTCOME_TRAFFIC (default) or OUTCOME_SALES (needs website events)" },
         requestId: { type: "string", description: "Leave out for a fresh one; the same one retries without making a second" },
         confirm: { type: "boolean", description: "true to really make the (paused) ad; anything else is a dry run" },
         tenant: TENANT_PROP,
       },
     },
-    async handler({ id, tenant, confirm, requestId, pageId, name, dailyBudgetPence, countries, primaryText, headline, ctaType, linkUrl, collectionName, products }) {
+    async handler({ id, tenant, confirm, requestId, pageId, name, dailyBudgetPence, countries, primaryText, headline, ctaType, linkUrl, collectionName, products, collectionVideo, trackWebsiteEvents, urlTags, objective }) {
       const path = `/socials/posts/${encodeURIComponent(id)}/carousel-ad`;
       // Named fields only, whatever else a caller passes (Lucas, on #109 L1).
       const defined = (o) => Object.fromEntries(Object.entries(o).filter(([, v]) => v !== undefined));
       const body = defined({
         pageId, name, dailyBudgetPence, countries, primaryText, headline, ctaType, linkUrl, collectionName,
         products: Array.isArray(products) ? products.map((p) => defined({ productId: p?.productId, photoIndex: p?.photoIndex, name: p?.name, description: p?.description })) : products,
+        collectionVideo: collectionVideo && typeof collectionVideo === "object" ? defined({ postId: collectionVideo.postId, assetId: collectionVideo.assetId }) : collectionVideo,
+        trackWebsiteEvents, urlTags, objective,
       });
+      // Each card's type, for the person to see: card 1 a video when collectionVideo is set; the products are photos.
+      const cards = [{ card: 1, type: body.collectionVideo ? "video" : "photo" }, ...(Array.isArray(body.products) ? body.products : []).map((p, i) => ({ card: i + 2, type: "photo", productId: p.productId }))];
       if (confirm !== true) {
         const preview = await api(tenant)(path);
         if (!preview.ok) throw await fail(preview);
@@ -304,6 +316,7 @@ export const socialTools = [
           dryRun: true,
           message: `Nothing was made. Pass confirm: true to make it, only once the person responsible has seen this. ${CAROUSEL_RUN_IT}`,
           context: await preview.json(),
+          cards,
           wouldSend: body,
         };
       }
@@ -311,8 +324,14 @@ export const socialTools = [
       const res = await send(tenant, path, "POST", { ...body, requestId: rid }).catch(() => null);
       // Being made in the background (202), or no answer in time: follow it with the status tool.
       if (!res || res.status === 202 || res.status === 504) {
-        if (res) await res.text().catch(() => "");
-        return { status: "running", requestId: rid, next: CAROUSEL_FOLLOW(id, rid) };
+        // A video card: IQEX says video: true (and Meta processes it for up to 10 minutes).
+        let first = null;
+        if (res) {
+          const text = await res.text().catch(() => "");
+          try { first = JSON.parse(text); } catch { /* not JSON */ }
+        }
+        const video = !!body.collectionVideo || first?.video === true;
+        return { status: "running", requestId: rid, video, next: CAROUSEL_FOLLOW(id, rid, video) };
       }
       if (!res.ok) {
         // The id this call made, so a 504 or a "still being made" 409 can be retried with it, never a second ad (Lucas, on #111 L-D).
@@ -439,7 +458,7 @@ export const socialTools = [
 
   {
     name: "uiiq_social_carousel_ad_status",
-    description: `Where a carousel ad made with uiiq_social_post_carousel_ad is, after it answered { status: "running" }: IQEX makes it in the background (about a minute). Ask every few seconds, for up to about 3 minutes. Returns { status: "running", requestId } while it's being made; { status: "done", campaignId, adSetId, adId, adsManagerUrl, adStatus: "PAUSED" } once made (${CAROUSEL_RUN_IT}); { status: "failed", error } when it ended without an ad (nothing is sent again; a new requestId only when the person asks to try again); or { status: "unknown", error }: Meta may have made it, so check Ads Manager before making another. Without requestId, the post's latest carousel ad. Asking never makes a second ad. Owners and admins only; needs the Social Templates feature.`,
+    description: `Where a carousel ad made with uiiq_social_post_carousel_ad is, after it answered { status: "running" }: IQEX makes it in the background (about a minute). Ask every few seconds, for up to about 3 minutes; for a video ad (video: true) every 10 seconds for up to 12 minutes, while Meta processes the video (step: "processing_video"). Returns { status: "running", requestId, video, step? } while it's being made; { status: "done", campaignId, adSetId, adId, adsManagerUrl, adStatus: "PAUSED" } once made (${CAROUSEL_RUN_IT}); { status: "failed", error } when it ended without an ad (nothing is sent again; a new requestId only when the person asks to try again); or { status: "unknown", error }: Meta may have made it, so check Ads Manager before making another. Without requestId, the post's latest carousel ad. Asking never makes a second ad. Owners and admins only; needs the Social Templates feature.`,
     inputSchema: {
       type: "object",
       additionalProperties: false,

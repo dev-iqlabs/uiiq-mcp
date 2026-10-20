@@ -156,3 +156,44 @@ test("uiiq_social_carousel_ad_status: no requestId asks for the latest; a refusa
   assert.deepEqual(s.required, ["id"]);
   assert.match(tools.uiiq_social_carousel_ad_status.description, /unknown.*check Ads Manager before making another/);
 });
+
+// ── Website events, URL parameters, objective and a video card 1 (UiiQ-platform carousel tracking) ──
+test("trackWebsiteEvents, urlTags, objective and collectionVideo are sent as given; only postId/assetId of the video; nothing else", async () => {
+  const { requests } = await call({ id: "post_1", ...AD, confirm: true, trackWebsiteEvents: false, urlTags: "utm_source=fb", objective: "OUTCOME_SALES", collectionVideo: { postId: "post_vid", videoUrl: "https://evil.test/x.mp4" } }, [200, { campaignId: "c1", adSetId: "s1", adId: "a1", status: "PAUSED" }]);
+  const { requestId: _rid, ...body } = requests[0].body;
+  assert.equal(body.trackWebsiteEvents, false);
+  assert.equal(body.urlTags, "utm_source=fb");
+  assert.equal(body.objective, "OUTCOME_SALES");
+  assert.deepEqual(body.collectionVideo, { postId: "post_vid" });
+  const { requests: plain } = await call({ id: "post_1", ...AD, confirm: true }, [200, { campaignId: "c1", adSetId: "s1", adId: "a1", status: "PAUSED" }]);
+  for (const k of ["trackWebsiteEvents", "urlTags", "objective", "collectionVideo"]) assert.equal(k in plain[0].body, false, k);
+});
+
+test("the dry run lists each card's type: card 1 a video with collectionVideo, the products photos", async () => {
+  let { result } = await call({ id: "post_1", ...AD }, [200, CONTEXT]);
+  assert.deepEqual(result.cards, [{ card: 1, type: "photo" }, { card: 2, type: "photo", productId: "UC-ROBIN" }]);
+  ({ result } = await call({ id: "post_1", ...AD, collectionVideo: { assetId: 77 } }, [200, CONTEXT]));
+  assert.equal(result.cards[0].type, "video");
+  assert.deepEqual(result.wouldSend.collectionVideo, { assetId: 77 });
+});
+
+test("a video ad's 202 says video: true and to ask every 10 seconds for up to 12 minutes", async () => {
+  const { result } = await call({ id: "post_1", ...AD, confirm: true, requestId: "ad-v", collectionVideo: { postId: "post_vid" } }, [202, { status: "running", requestId: "ad-v", video: true, step: "processing_video" }]);
+  assert.equal(result.status, "running");
+  assert.equal(result.video, true);
+  assert.match(result.next, /up to 12 minutes.*every 10 seconds/s);
+  const { result: photo } = await call({ id: "post_1", ...AD, confirm: true, requestId: "ad-p" }, [202, { status: "running", requestId: "ad-p" }]);
+  assert.equal(photo.video, false);
+  assert.match(photo.next, /about a minute/);
+});
+
+test("the descriptions name the pixel rule, the objective, the URL parameters, the video card and the 12 minutes", () => {
+  const d = tools.uiiq_social_post_carousel_ad.description;
+  assert.match(d, /workspace's own Meta pixel/);
+  assert.match(d, /OUTCOME_SALES, which needs website events/);
+  assert.match(d, /urlTags/);
+  assert.match(d, /collectionVideo/);
+  assert.match(d, /12 minutes/);
+  assert.match(tools.uiiq_social_carousel_ad_status.description, /video ad .* every 10 seconds for up to 12 minutes/s);
+  for (const k of ["collectionVideo", "trackWebsiteEvents", "urlTags", "objective"]) assert.ok(tools.uiiq_social_post_carousel_ad.inputSchema.properties[k], k);
+});
