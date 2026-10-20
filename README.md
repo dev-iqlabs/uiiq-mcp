@@ -1065,6 +1065,9 @@ Every product's target against its actual, by week, month or fiscal year, colour
 | `uiiq_ads_video_publish` | Publish an approved video as organic posts. A dry run unless `confirm: true`. |
 | `uiiq_ads_video_publish_paid` | Submit a video to the paid campaign managers. A dry run unless `confirm: true`. |
 | `uiiq_ads_google_campaign_control` | Pause or enable a Google Ads campaign, or set its daily budget (budgetMicros = pounds × 1,000,000). Enabling starts spending: a dry run without confirm: true. A change counts only when Google confirmed it. |
+| `uiiq_ads_meta_catalog` | The workspace's Meta product catalogue as IQEX watches it: products, last check, problems and warnings with the SKUs Meta names, paused (no credits), and the daily cost (while off, an estimate from the shop feed). |
+| `uiiq_ads_meta_catalog_check` | Check the Meta catalogue now; at most every 5 minutes (sooner: the last check, tooSoon). |
+| `uiiq_ads_meta_catalog_watch` | Switch watching the Meta catalogue on or off. On spends IQEX credits every day, 1 per 100 products with no daily limit: a dry run with the daily cost without confirm: true. |
 | `uiiq_ads_pinterest_alert_dismiss` | Dismiss a Pinterest trend alert (from the overview). |
 | `uiiq_ads_review_draft_reply` | Draft a reply to a Google review (by the review's id from uiiq_ads_local) in the workspace's voice. |
 
@@ -1732,4 +1735,4 @@ Needs the `competitions` feature. Setting up, rounds, the nominee confirmation a
 | `uiiq_workflow_order_assign` | Assign a workflow order to a user in the tenant (assignedUserId null unassigns). |
 | `uiiq_workflow_order_request_approval` | Ask the customer to approve a stage of their order: creates an approval link, moves the order to AWAITING_APPROVAL and EMAILS the customer. |
 
-1198 tools.
+1201 tools.
