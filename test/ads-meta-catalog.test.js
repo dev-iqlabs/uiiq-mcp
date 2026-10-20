@@ -51,17 +51,15 @@ async function call(name, args, response) {
 const UC = "28614534538167887";
 const OFF = { connected: true, catalogs: [{ catalogId: UC, enabled: false }], estimate: { products: 59, capped: false, creditsPerDay: 1 } };
 
-test("health: one GET, the catalogue when named; the answer as given", async () => {
+test("health: one GET naming no catalogue; the answer as given", async () => {
   const a = await call("uiiq_ads_meta_catalog", {}, [200, OFF]);
   assert.deepEqual(a.requests, [{ method: "GET", path: "/ads/meta/catalog" }]);
   assert.deepEqual(a.result, OFF);
-  const b = await call("uiiq_ads_meta_catalog", { catalogId: UC }, [200, OFF]);
-  assert.equal(b.requests[0].path, `/ads/meta/catalog?catalogId=${UC}`);
 });
 
-test("check now: one POST with the catalogue, nothing else", async () => {
-  const { requests, result } = await call("uiiq_ads_meta_catalog_check", { catalogId: UC }, [200, { connected: true, catalogs: [], tooSoon: true }]);
-  assert.deepEqual(requests, [{ method: "POST", path: "/ads/meta/catalog/check", body: { catalogId: UC } }]);
+test("check now: one POST with an empty body, nothing else", async () => {
+  const { requests, result } = await call("uiiq_ads_meta_catalog_check", {}, [200, { connected: true, catalogs: [], tooSoon: true }]);
+  assert.deepEqual(requests, [{ method: "POST", path: "/ads/meta/catalog/check", body: {} }]);
   assert.equal(result.tooSoon, true);
 });
 
@@ -75,11 +73,27 @@ test("switching on without confirm: a dry run with the daily cost; nothing is ch
   }
 });
 
-test("confirm: true switches it on; switching off needs no confirm; only enabled and catalogId are sent, never an org id", async () => {
-  const on = await call("uiiq_ads_meta_catalog_watch", { enabled: true, confirm: true, catalogId: UC, org_id: 999 }, [200, { catalogId: UC, enabled: true }]);
-  assert.deepEqual(on.requests, [{ method: "PUT", path: "/ads/meta/catalog/monitoring", body: { enabled: true, catalogId: UC } }]);
+test("confirm: true switches it on; switching off needs no confirm; only enabled is sent, never an org id or a catalogue", async () => {
+  const on = await call("uiiq_ads_meta_catalog_watch", { enabled: true, confirm: true, org_id: 999 }, [200, { catalogId: UC, enabled: true }]);
+  assert.deepEqual(on.requests, [{ method: "PUT", path: "/ads/meta/catalog/monitoring", body: { enabled: true } }]);
   const off = await call("uiiq_ads_meta_catalog_watch", { enabled: false }, [200, { catalogId: UC, enabled: false }]);
   assert.deepEqual(off.requests, [{ method: "PUT", path: "/ads/meta/catalog/monitoring", body: { enabled: false } }]);
+});
+
+test("no catalogue can be named: no schema has the argument, and one passed anyway is never sent (Lucas on UiiQ-platform #1103)", async () => {
+  for (const n of ["uiiq_ads_meta_catalog", "uiiq_ads_meta_catalog_check", "uiiq_ads_meta_catalog_watch"]) {
+    assert.equal("catalogId" in tools[n].inputSchema.properties, false, n);
+    assert.equal(tools[n].inputSchema.additionalProperties, false, n);
+    assert.match(tools[n].description, /There is no catalogue argument/, n);
+  }
+  const health = await call("uiiq_ads_meta_catalog", { catalogId: UC }, [200, OFF]);
+  assert.deepEqual(health.requests, [{ method: "GET", path: "/ads/meta/catalog" }]);
+  const check = await call("uiiq_ads_meta_catalog_check", { catalogId: UC }, [200, OFF]);
+  assert.deepEqual(check.requests[0].body, {});
+  const dry = await call("uiiq_ads_meta_catalog_watch", { enabled: true, catalogId: UC }, [200, OFF]);
+  assert.deepEqual(dry.requests, [{ method: "GET", path: "/ads/meta/catalog" }]);
+  const on = await call("uiiq_ads_meta_catalog_watch", { enabled: true, confirm: true, catalogId: UC }, [200, { catalogId: UC, enabled: true }]);
+  assert.deepEqual(on.requests[0].body, { enabled: true });
 });
 
 test("UiiQ's refusal is thrown with its words", async () => {
