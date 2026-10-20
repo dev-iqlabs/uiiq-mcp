@@ -89,7 +89,7 @@ export const adminPlatformTools = [
   },
   {
     name: "uiiq_admin_ad_accounts_get",
-    description: "A tenant's ad connections: [{ platform, accountId, connectedAt, bySignIn }] (tokens are never returned), and which platforms an admin can set here (META, GOOGLE, LINKEDIN). SUPER_ADMIN.",
+    description: "A tenant's ad connections: [{ platform, accountId, connectedAt, bySignIn }] (tokens are never returned), and which platforms an admin can set here (META, GOOGLE, LINKEDIN, META_CATALOG). SUPER_ADMIN.",
     inputSchema: { type: "object", additionalProperties: false, required: ["tenantId"], properties: { tenantId: TENANT_ID } },
     async handler({ tenantId }) {
       return send(null, `/admin/tenants/${enc(tenantId)}/ad-accounts`, "GET");
@@ -97,10 +97,10 @@ export const adminPlatformTools = [
   },
   {
     name: "uiiq_admin_ad_account_set",
-    description: "Set which Meta, Google or LinkedIn ad account is a tenant's, or remove it (accountId null). One spelling per account: Meta act_<digits>, Google the 10-digit customer id (dashes or not), LinkedIn the sponsored account number. Refused: an account another tenant already has (an ad account belongs to one workspace, as IQEX gives it to one org), and a connection made by signing in. Audited. IQEX acts on the account only once it's registered to the tenant's IQEX org there (link_ad_account). SUPER_ADMIN, the role read live, never while impersonating.",
+    description: "Set which Meta, Google or LinkedIn ad account, or which Meta product catalogue (META_CATALOG: the catalogue a collection ad shows), is a tenant's, or remove it (accountId null). One spelling per account: Meta act_<digits>, Google the 10-digit customer id (dashes or not), LinkedIn the sponsored account number, a Meta catalogue its number. Refused: an account another tenant already has (an ad account belongs to one workspace, as IQEX gives it to one org), and a connection made by signing in. Audited. IQEX acts on the account only once it's registered to the tenant's IQEX org there (link_ad_account). SUPER_ADMIN, the role read live, never while impersonating.",
     inputSchema: {
       type: "object", additionalProperties: false, required: ["tenantId", "platform", "accountId"],
-      properties: { tenantId: TENANT_ID, platform: { type: "string", enum: ["META", "GOOGLE", "LINKEDIN"] }, accountId: { type: ["string", "null"], description: "The account id, or null to remove it" } },
+      properties: { tenantId: TENANT_ID, platform: { type: "string", enum: ["META", "GOOGLE", "LINKEDIN", "META_CATALOG"] }, accountId: { type: ["string", "null"], description: "The account id, or null to remove it" } },
     },
     async handler({ tenantId, platform, accountId }) {
       return send(null, `/admin/tenants/${enc(tenantId)}/ad-accounts`, "PUT", { platform, accountId });
@@ -371,6 +371,14 @@ export const adminPlatformTools = [
     inputSchema: { type: "object", properties: { apiKey: { type: ["string", "null"], description: "The key, or null to clear" }, tenant: TENANT_PROP } },
     async handler({ apiKey = null, tenant } = {}) {
       return send(tenant, "/admin/settings/elevenlabs", "POST", { apiKey });
+    },
+  },
+  {
+    name: "uiiq_admin_gift_cards_legacy_count",
+    description: "How many live gift cards still carry a pre-#1080 code (hex8, GC-4-4, GC-6-6, other), per workspace and format, with their outstanding balance: counts only, never codes or holders. Tracks the legacy re-issue to its cutoff. SUPER_ADMIN.",
+    inputSchema: { type: "object", properties: {} },
+    async handler() {
+      return send(null, "/admin/gift-cards/legacy-count", "GET");
     },
   },
   {

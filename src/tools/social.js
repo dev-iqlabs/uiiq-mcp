@@ -18,6 +18,7 @@ async function fail(res) {
 const send = (tenant, path, method, body) => api(tenant)(path, body === undefined ? { method } : { method, body: JSON.stringify(body) });
 const POST_STATUS = ["DRAFT", "QUEUED", "SCHEDULED"];
 // Enabling the campaign alone runs nothing (iqex-backend #1384): said wherever a carousel ad is made.
+const CAROUSEL_FOLLOW = (id, rid) => `IQEX is making it (about a minute). Ask uiiq_social_carousel_ad_status with id "${id}" and requestId "${rid}" every few seconds until it says done, failed or unknown; never make a new request meanwhile.`;
 const CAROUSEL_RUN_IT = "To run it, the campaign, its ad set AND its ad must each be switched on in Ads Manager: enabling the campaign alone runs nothing. A budget changed in Ads Manager isn't held to UiiQ's £10 a day.";
 
 // Scheduling is a publish path: on a workspace with auto-publish on, the
@@ -262,7 +263,7 @@ export const socialTools = [
   },
   {
     name: "uiiq_social_post_carousel_ad",
-    description: `Make a Meta carousel ad from a PUBLISHED promo post (its image is public then; a draft's never is): a NEW campaign, ad set and ad in the workspace's own Meta ad account, ALL PAUSED. Card 1 is the post's collection image; then 1 to 9 of the shop's products, each { productId, photoIndex } from uiiq_social_promo_products (photoIndex 0 = the main photo, then the mockups): UiiQ reads each one's photo and page from the shop's feed itself, so no other image or link can get into an ad. Without confirm: true this is a DRY RUN: it returns the form's context (adAccount, the connected Facebook pages to pick pageId from, collectionImage, defaults) and what would be sent, and nothing is made. Only pass confirm: true once the person responsible has seen it and said to make it. ${CAROUSEL_RUN_IT} dailyBudgetPence: 100 to 1000 (£1 to £10 a day). Owners and admins only, at most 10 an hour, needs the Social Templates feature. requestId: leave it out for a fresh one; after a timeout (504) retry with the SAME one, which never makes a second ad. A 409 "still being made": retry the SAME requestId shortly. A 409 "may already have made": check Ads Manager, and use a new requestId only if it isn't there. A 503 means Meta ads aren't switched on yet and a 403 that the ad account or Page isn't registered: both are for UiiQ support. Meta's own reason comes back as a 502, with detail. Returns { campaignId, adSetId, adId, adsManagerUrl, status: PAUSED, duplicate, requestId }.`,
+    description: `Make a Meta carousel ad from a PUBLISHED promo post (its image is public then; a draft's never is): a NEW campaign, ad set and ad in the workspace's own Meta ad account, ALL PAUSED. Card 1 is the post's collection image; then 1 to 9 of the shop's products, each { productId, photoIndex } from uiiq_social_promo_products (photoIndex 0 = the main photo, then the mockups): UiiQ reads each one's photo and page from the shop's feed itself, so no other image or link can get into an ad. Without confirm: true this is a DRY RUN: it returns the form's context (adAccount, the connected Facebook pages to pick pageId from, collectionImage, defaults) and what would be sent, and nothing is made. Only pass confirm: true once the person responsible has seen it and said to make it. ${CAROUSEL_RUN_IT} dailyBudgetPence: 100 to 1000 (£1 to £10 a day). Owners and admins only, at most 10 an hour, needs the Social Templates feature. requestId: leave it out for a fresh one; after a timeout (504) retry with the SAME one, which never makes a second ad. A 409 means that request has ENDED (it failed, or Meta may already have made it): it is never sent again, and you never send it again with a new requestId by yourself; a new requestId is only for the person's own Try again, after they've checked Ads Manager. A 429 means IQEX has three going and nothing was made: the SAME requestId can go again in a minute. A 503 means Meta ads aren't switched on yet and a 403 that the ad account or Page isn't registered: both are for UiiQ support. Meta's own reason comes back as a 502, with detail. Returns { campaignId, adSetId, adId, adsManagerUrl, status: PAUSED, duplicate, requestId } when it's made at once. IQEX usually takes about a minute and makes it in the background: then this returns { status: "running", requestId } (also when UiiQ didn't answer in time), and uiiq_social_carousel_ad_status with the same id and requestId says when it's done (ask every few seconds, for up to about 3 minutes).`,
     inputSchema: {
       type: "object",
       additionalProperties: false,
@@ -307,14 +308,97 @@ export const socialTools = [
         };
       }
       const rid = requestId || `ad-${randomUUID()}`;
-      const res = await send(tenant, path, "POST", { ...body, requestId: rid });
+      const res = await send(tenant, path, "POST", { ...body, requestId: rid }).catch(() => null);
+      // Being made in the background (202), or no answer in time: follow it with the status tool.
+      if (!res || res.status === 202 || res.status === 504) {
+        if (res) await res.text().catch(() => "");
+        return { status: "running", requestId: rid, next: CAROUSEL_FOLLOW(id, rid) };
+      }
       if (!res.ok) {
         // The id this call made, so a 504 or a "still being made" 409 can be retried with it, never a second ad (Lucas, on #111 L-D).
         const e = await fail(res);
-        e.message += ` (requestId: ${rid}, retry with this one)`;
+        // 429: nothing made, the same id can go again. 409: that request has ended, never send it again (Gatekeeper and Lucas, 19 Oct 2026).
+        e.message += res.status === 429
+          ? ` (requestId: ${rid}: nothing was made; the same one can go again in a minute)`
+          : res.status === 409
+            ? ` (requestId: ${rid} has ended: never send it again; a new requestId only if the person asks, after checking Ads Manager)`
+            : ` (requestId: ${rid})`;
         throw e;
       }
       return { ...(await res.json()), requestId: rid, note: CAROUSEL_RUN_IT };
+    },
+  },
+  {
+    name: "uiiq_social_post_collection_ad",
+    description: `Make a Meta COLLECTION ad from a PUBLISHED promo post: the post's image as the hero picture, with a shop collection's products underneath (collection: one of the context's collections[].label, the feed's custom_label_0; IQEX keeps the set in step with the feed; at least 4 products) or 4 to 50 hand-picked productIds from uiiq_social_promo_products. Each opens its own product (an Instant Experience). A NEW campaign, ad set and ad in the workspace's own Meta ad account, ALL PAUSED. Needs the workspace's Meta product catalogue set by a platform admin (uiiq_admin_ad_account_set platform META_CATALOG); the context's catalogue: false means "No product catalogue is connected yet" and nothing can be made. Without confirm: true this is a DRY RUN: UiiQ checks everything and answers what would be made (wouldSend, the collection's products) plus the form's context (pages, instagram, collections with counts, pixelId, defaults); nothing is made. Only pass confirm: true once the person responsible has seen it and said to make it. ${CAROUSEL_RUN_IT} dailyBudgetPence: 100 to 1000 (£1 to £10 a day). ctaType: SHOP_NOW, LEARN_MORE, BUY_NOW or ORDER_NOW. Website events (trackWebsiteEvents) are only ever on the workspace's own pixel (default on when it has one); objective OUTCOME_SALES needs them; urlTags are added to every link (default UiiQ's utm tags, "" for none). Owners and admins only, at most 10 an hour, needs the Social Templates feature. IQEX makes it in the background (about a minute): a 202 answers { status: running, requestId }; follow it with uiiq_social_post_collection_ad_status and that requestId, never by making it again. requestId: leave it out for a fresh one (coll-…); retrying the SAME one never makes a second ad. A failure carries Meta's own words; a 409 "may already have made" means check Ads Manager first. Done: { campaignId, adSetId, adId, creativeId, canvasId, productSetId, adsManagerUrl, status: PAUSED }.`,
+    inputSchema: {
+      type: "object",
+      additionalProperties: false,
+      required: ["id"],
+      properties: {
+        id: { type: "string", description: "The published promo post" },
+        collection: { type: "string", maxLength: 100, description: "A shop collection: one of the context's collections[].label (e.g. \"Calm & Wellbeing Collection\")" },
+        productIds: { type: "array", minItems: 4, maxItems: 50, items: { type: "string" }, description: "Or 4 to 50 hand-picked product ids from uiiq_social_promo_products" },
+        pageId: { type: "string", description: "One of the context's pages[].id: the Facebook Page the ad runs as" },
+        instagramActorId: { type: "string", description: "Optional: one of the context's instagram[].id (on that Page)" },
+        name: { type: "string", description: "The campaign/ad name, at most 200 characters" },
+        dailyBudgetPence: { type: "integer", minimum: 100, maximum: 1000, description: "100 to 1000 (£1 to £10 a day)" },
+        countries: { type: "array", items: { type: "string" }, description: "Two-letter codes, e.g. [\"GB\"]" },
+        primaryText: { type: "string", description: "The ad's text, at most 2000 characters" },
+        headline: { type: "string", description: "At most 255 characters" },
+        ctaType: { type: "string", enum: ["SHOP_NOW", "LEARN_MORE", "BUY_NOW", "ORDER_NOW"] },
+        linkUrl: { type: "string", description: "https: where the button goes (default: the collection's page from the post's text)" },
+        trackWebsiteEvents: { type: "boolean", description: "Website events on the workspace's own Meta pixel (default: on when it has one)" },
+        urlTags: { type: "string", maxLength: 1000, description: "URL parameters on every link; \"\" for none" },
+        objective: { type: "string", enum: ["OUTCOME_TRAFFIC", "OUTCOME_SALES"], description: "Traffic (default) or Sales (needs website events)" },
+        requestId: { type: "string", description: "Leave out for a fresh one (coll-…); the same one retries without making a second" },
+        confirm: { type: "boolean", description: "true to really make the (paused) ad; anything else is a dry run" },
+        tenant: TENANT_PROP,
+      },
+    },
+    async handler({ id, tenant, confirm, requestId, collection, productIds, pageId, instagramActorId, name, dailyBudgetPence, countries, primaryText, headline, ctaType, linkUrl, trackWebsiteEvents, urlTags, objective }) {
+      const path = `/socials/posts/${encodeURIComponent(id)}/collection-ad`;
+      const defined = (o) => Object.fromEntries(Object.entries(o).filter(([, v]) => v !== undefined));
+      const body = defined({ collection, productIds, pageId, instagramActorId, name, dailyBudgetPence, countries, primaryText, headline, ctaType, linkUrl, trackWebsiteEvents, urlTags, objective });
+      if (confirm !== true) {
+        const preview = await api(tenant)(path);
+        if (!preview.ok) throw await fail(preview);
+        const context = await preview.json();
+        // UiiQ's own dry run (nothing kept or sent), with the context's defaults for what wasn't given.
+        const d = context.defaults ?? {};
+        const dry = await send(tenant, path, "POST", {
+          pageId: context.pages?.[0]?.id, name: d.name, primaryText: d.primaryText, linkUrl: d.linkUrl, ctaType: d.ctaType, countries: d.countries, dailyBudgetPence: d.dailyBudgetPence,
+          ...body, dryRun: true,
+        });
+        const wouldMake = dry.ok ? await dry.json() : { refused: (await fail(dry)).message };
+        return {
+          dryRun: true,
+          message: `Nothing was made. Pass confirm: true to make it, only once the person responsible has seen this. ${CAROUSEL_RUN_IT}`,
+          context,
+          wouldMake,
+        };
+      }
+      const rid = requestId || `coll-${randomUUID()}`;
+      const res = await send(tenant, path, "POST", { ...body, requestId: rid });
+      if (!res.ok) {
+        const e = await fail(res);
+        e.message += ` (requestId: ${rid})`;
+        throw e;
+      }
+      const out = await res.json();
+      if (res.status === 202) return { ...out, requestId: rid, note: `Being made. Ask uiiq_social_post_collection_ad_status with requestId ${rid} every few seconds, for up to about 3 minutes. ${CAROUSEL_RUN_IT}` };
+      return { ...out, requestId: rid, note: CAROUSEL_RUN_IT };
+    },
+  },
+  {
+    name: "uiiq_social_post_collection_ad_status",
+    description: "Where a collection ad of a post is (after uiiq_social_post_collection_ad answered running): { status: running | done | failed | unknown, requestId, ... }. running: ask again in a few seconds, for up to about 3 minutes. done: campaignId, adSetId, adId, creativeId, canvasId, productSetId, adsManagerUrl, adStatus PAUSED. failed: nothing was made; error carries Meta's own words; make it again only as a new ad (a new requestId). unknown: Meta may already have made it: tell the person to check Ads Manager, and never make it again yourself. Without requestId, the post's latest. Asking never makes a second ad (it may send the SAME request to IQEX again, which IQEX never makes twice). Owners and admins only.",
+    inputSchema: { type: "object", additionalProperties: false, required: ["id"], properties: { id: { type: "string" }, requestId: { type: "string", description: "The coll-… id the make call returned" }, tenant: TENANT_PROP } },
+    async handler({ id, requestId, tenant }) {
+      const qs = requestId ? `?requestId=${encodeURIComponent(requestId)}` : "";
+      const res = await api(tenant)(`/socials/posts/${encodeURIComponent(id)}/collection-ad/status${qs}`);
+      if (!res.ok) throw await fail(res);
+      return res.json();
     },
   },
   {
@@ -350,6 +434,28 @@ export const socialTools = [
       const res = await send(tenant, `/socials/posts/${encodeURIComponent(id)}/carousel-post`, "POST", { products: picks });
       if (!res.ok) throw await fail(res);
       return { ...(await res.json()), note: "A DRAFT: nothing was published. A person reviews and publishes it in UiiQ." };
+    },
+  },
+
+  {
+    name: "uiiq_social_carousel_ad_status",
+    description: `Where a carousel ad made with uiiq_social_post_carousel_ad is, after it answered { status: "running" }: IQEX makes it in the background (about a minute). Ask every few seconds, for up to about 3 minutes. Returns { status: "running", requestId } while it's being made; { status: "done", campaignId, adSetId, adId, adsManagerUrl, adStatus: "PAUSED" } once made (${CAROUSEL_RUN_IT}); { status: "failed", error } when it ended without an ad (nothing is sent again; a new requestId only when the person asks to try again); or { status: "unknown", error }: Meta may have made it, so check Ads Manager before making another. Without requestId, the post's latest carousel ad. Asking never makes a second ad. Owners and admins only; needs the Social Templates feature.`,
+    inputSchema: {
+      type: "object",
+      additionalProperties: false,
+      required: ["id"],
+      properties: {
+        id: { type: "string", description: "The promo post the ad was made from" },
+        requestId: { type: "string", description: "The requestId uiiq_social_post_carousel_ad returned (default: the post's latest)" },
+        tenant: TENANT_PROP,
+      },
+    },
+    async handler({ id, requestId, tenant }) {
+      const qs = requestId ? `?requestId=${encodeURIComponent(requestId)}` : "";
+      const res = await api(tenant)(`/socials/posts/${encodeURIComponent(id)}/carousel-ad/status${qs}`);
+      if (!res.ok) throw await fail(res);
+      const s = await res.json();
+      return s.status === "done" ? { ...s, note: CAROUSEL_RUN_IT } : s;
     },
   },
 

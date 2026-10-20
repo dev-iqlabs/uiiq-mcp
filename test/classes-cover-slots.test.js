@@ -109,6 +109,6 @@ test("the update description warns about raising coverSlots and says what is kep
   assert.match(d, /confirmAtRisk: <n>/);
   assert.equal(tools.uiiq_classes_update.inputSchema.properties.confirmAtRisk.type, "integer");
   assert.doesNotMatch(tools.uiiq_classes_enrolment_plan_load.description, /memberCode }/);
-  assert.match(d, /dropInPricePence, termFeePence, coveredByPlanIds, coverSlots\) are kept as they are when omitted/);
+  assert.match(d, /dropInPricePence, termFeePence, coveredByPlanIds, coverSlots, planCover\) are kept as they are when omitted/);
   assert.match(tools.uiiq_classes_enrolment_plan_options.description, /'partial'/);
 });
