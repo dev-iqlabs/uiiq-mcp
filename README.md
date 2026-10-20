@@ -428,6 +428,8 @@ Needs the workspace's `sister_organisations` feature (404 when off). Changes are
 | `uiiq_social_carousel_ad_status` | Where a carousel ad is after `{ status: "running" }`: running, done (its ids and Ads Manager link, PAUSED), failed (why; make it again with a new requestId) or unknown (Meta may have made it: check Ads Manager first). Ask every few seconds for up to about 3 minutes; asking never makes a second ad. |
 | `uiiq_social_promo_create` | Make a promo layout into a DRAFT post (IQEX renders the image; credits are spent; the image stays private until the post is published). Words are printed as sent or refused, never cut; the same requestId retries without a second charge. A photo can take `fit: "whole"` (shown whole on a blur of itself, so a round coin keeps its rim; default `fill`). Returns IQEX's `warnings` on the image (a photo slot left blank); photos sent and none placed is a 422 with no draft. |
 | `uiiq_social_post_carousel_ad` | Make a Meta carousel ad from a PUBLISHED promo post (the collection image, then 1 to 9 shop products by id and photo number, read from the shop's feed): a new campaign, ad set and ad, ALL PAUSED, £1 to £10 a day. A dry run without confirm: true. Enabling the campaign alone runs nothing: its ad set and ad are switched on in Ads Manager too. |
+| `uiiq_social_post_collection_ad` | Make a Meta collection ad from a PUBLISHED promo post: its image as the hero, a shop collection's products underneath (the feed's custom_label_0, kept in step with the feed) or 4 to 50 hand-picked ones; a new campaign, ad set and ad, ALL PAUSED, £1 to £10 a day; website events on the workspace's own pixel, URL parameters, Traffic or Sales. Needs the workspace's Meta catalogue (admin, META_CATALOG). Without confirm: true, UiiQ's own dry run; made in the background (202), then `uiiq_social_post_collection_ad_status`. |
+| `uiiq_social_post_collection_ad_status` | Where a collection ad is: running, done (every Ads Manager id), failed (Meta's own words) or unknown (check Ads Manager). Never makes a second. |
 | `uiiq_social_post_publish_status` | Where a post's Facebook and Instagram targets are while IQEX posts them in the background: PUBLISHING (ask again in a few seconds), PUBLISHED (its link), FAILED, or NEEDS_CHECK (it may have been posted: the person checks the Page/Instagram; never publish it again). Asking never posts anything again. |
 | `uiiq_social_carousel_post` | Make a DRAFT carousel post from a shop collection promo post: slide 1 is its promo card, then 1 to 9 shop products by id and photo number in order (read from the shop's feed), with the promo post's text and accounts. Nothing is published. Facebook and Instagram take 2+ images only for the workspaces UiiQ's multi-image switch names (a 409 on publish otherwise). |
 | `uiiq_social_post_insights` | Refresh a published post's Facebook and Instagram figures through IQEX now; a figure Meta didn't give is listed as unavailable, never 0. Reads only. |
@@ -1278,7 +1280,7 @@ Needs the `competitions` feature. Setting up, rounds, the nominee confirmation a
 | `uiiq_admin_gift_programme_create` | Create a Gift Programme for a tenant. |
 | `uiiq_admin_gift_programme_update` | Update one of a tenant's Gift Programmes by key — only the fields you send change (journey and outcome are merged). |
 | `uiiq_admin_ad_accounts_get` | A tenant's ad connections (platform, account, connected by sign-in or not; never a token). |
-| `uiiq_admin_ad_account_set` | Set or remove a tenant's Meta, Google or LinkedIn ad account (one spelling, one workspace per account, audited). |
+| `uiiq_admin_ad_account_set` | Set or remove a tenant's Meta, Google or LinkedIn ad account, or its Meta product catalogue (META_CATALOG, for collection ads) (one spelling, one workspace per account, audited). |
 | `uiiq_admin_sender_bindings_get` | The sending domains (or shared-provider addresses) linked to a tenant. |
 | `uiiq_admin_sender_binding_set` | Link or unlink a sending domain or address (needs `confirm: true`, else a dry run): one workspace per domain, our platform domains only for their own workspace; the tenant sends from its own address only when linked and verified (audited). |
 | `uiiq_admin_iqex_link_set` | Link a tenant to an IQEX organisation (orgId) or unlink it (orgId null). |
@@ -1733,4 +1735,4 @@ Needs the `competitions` feature. Setting up, rounds, the nominee confirmation a
 | `uiiq_workflow_order_assign` | Assign a workflow order to a user in the tenant (assignedUserId null unassigns). |
 | `uiiq_workflow_order_request_approval` | Ask the customer to approve a stage of their order: creates an approval link, moves the order to AWAITING_APPROVAL and EMAILS the customer. |
 
-1199 tools.
+1201 tools.
