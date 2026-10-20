@@ -423,6 +423,9 @@ Needs the workspace's `sister_organisations` feature (404 when off). Changes are
 | `uiiq_social_post_publish` | PUBLISH a post now (irreversible). A dry run unless `confirm: true`: shows the post and where it would go. |
 | `uiiq_social_promo_templates` | The promo layouts this workspace can use (the shop collection ad among them): their text fields with limits, colours and photo slots. |
 | `uiiq_social_promo_products` | The workspace's shop products (its Connect product feed) for promo photos: title, price and the photos with their mockups. |
+| `uiiq_social_promo_create` | Make a promo layout into a DRAFT post (IQEX renders the image; credits are spent; the image stays private until the post is published). Words are printed as sent or refused, never cut; the same requestId retries without a second charge. Returns IQEX's `warnings` on the image (a photo slot left blank); photos sent and none placed is a 422 with no draft. |
+| `uiiq_social_post_carousel_ad` | Make a Meta carousel ad from a PUBLISHED promo post (the collection image, then 1 to 9 shop products by id and photo number, read from the shop's feed): a new campaign, ad set and ad, ALL PAUSED, £1 to £10 a day. A dry run without confirm: true. Enabling the campaign alone runs nothing: its ad set and ad are switched on in Ads Manager too. IQEX usually makes it in the background (about a minute): then it returns `{ status: "running", requestId }` (also when UiiQ didn't answer in time), to follow with `uiiq_social_carousel_ad_status`. A 409 means that request has ended (it failed, or Meta may have made it) and is never sent again; a new requestId only on the person's own Try again. A 429 means nothing was made: the same requestId can go again in a minute. |
+| `uiiq_social_carousel_ad_status` | Where a carousel ad is after `{ status: "running" }`: running, done (its ids and Ads Manager link, PAUSED), failed (why; make it again with a new requestId) or unknown (Meta may have made it: check Ads Manager first). Ask every few seconds for up to about 3 minutes; asking never makes a second ad. |
 | `uiiq_social_promo_create` | Make a promo layout into a DRAFT post (IQEX renders the image; credits are spent; the image stays private until the post is published). Words are printed as sent or refused, never cut; the same requestId retries without a second charge. A photo can take `fit: "whole"` (shown whole on a blur of itself, so a round coin keeps its rim; default `fill`). Returns IQEX's `warnings` on the image (a photo slot left blank); photos sent and none placed is a 422 with no draft. |
 | `uiiq_social_post_carousel_ad` | Make a Meta carousel ad from a PUBLISHED promo post (the collection image, then 1 to 9 shop products by id and photo number, read from the shop's feed): a new campaign, ad set and ad, ALL PAUSED, £1 to £10 a day. A dry run without confirm: true. Enabling the campaign alone runs nothing: its ad set and ad are switched on in Ads Manager too. |
 | `uiiq_social_post_collection_ad` | Make a Meta collection ad from a PUBLISHED promo post: its image as the hero, a shop collection's products underneath (the feed's custom_label_0, kept in step with the feed) or 4 to 50 hand-picked ones; a new campaign, ad set and ad, ALL PAUSED, £1 to £10 a day; website events on the workspace's own pixel, URL parameters, Traffic or Sales. Needs the workspace's Meta catalogue (admin, META_CATALOG). Without confirm: true, UiiQ's own dry run; made in the background (202), then `uiiq_social_post_collection_ad_status`. |
@@ -1304,6 +1307,7 @@ Needs the `competitions` feature. Setting up, rounds, the nominee confirmation a
 | `uiiq_admin_feature_create` | Register a new feature flag in the platform catalogue (key is lower-cased, spaces to _; product GROW, RUN, SELL or AI). |
 | `uiiq_admin_elevenlabs_key_get` | Whether the workspace has its own ElevenLabs API key set, with a masked preview (first 8 and last 4 characters). |
 | `uiiq_admin_elevenlabs_key_set` | SET the workspace's ElevenLabs API key (a secret: sent, never shown or logged), or clear it with apiKey null. |
+| `uiiq_admin_gift_cards_legacy_count` | How many live gift cards still carry a pre-#1080 code, per workspace and format, with their outstanding balance (counts only). |
 | `uiiq_admin_vat_get` | The platform VAT rates (GB): standardPct, reducedPct, zeroPct and when they were last changed. |
 | `uiiq_admin_vat_set` | Change the platform VAT rates (each 0–100; only the ones you send change). |
 | `uiiq_admin_audit_log` | The platform audit log, newest first: filter by resource, resourceId, userId, action (prefix match, e.g. |
@@ -1413,10 +1417,11 @@ Needs the `competitions` feature. Setting up, rounds, the nominee confirmation a
 
 | Tool | What it does |
 |---|---|
-| `uiiq_classes_list` | List the school's classes (active only unless includeInactive) with teachers, venue, show, schedule type, prices and the active-enrolment count. |
-| `uiiq_classes_get` | One class in full: editor fields, every teacher, its course runs, and the roster (enrolments with student names, guardian, fee/paid/owed); `fundingMode` / `funding` say whether it is run for a sister organisation, free or subsidised. |
-| `uiiq_classes_create` | Create a class. A photo (`imageMediaId`) needs `photoPermissionConfirmed: true`, after the user confirms permission. |
-| `uiiq_classes_update` | Replace a class's details. `imageMediaId` picks or replaces the photo (needs `photoPermissionConfirmed: true`, after the user confirms permission); null removes it. |
+| `uiiq_classes_list` | List the school's classes (active only unless includeInactive) with teachers, venue, show, schedule type, prices and the active-enrolment count; `planCover` / `coveredByWeeklyPlans` say whether weekly plans cover each. |
+| `uiiq_classes_get` | One class in full: editor fields, every teacher, its course runs, and the roster (enrolments with student names, guardian, fee/paid/owed); `fundingMode` / `funding` say whether it is run for a sister organisation, free or subsidised; `planCover`, `coveredByWeeklyPlans`, `planCoverAutomatic` and `organisation` say whether weekly plans cover it and why. |
+| `uiiq_classes_plan_cover_impact` | Who changes with "Covered by weekly plans" (read-only, owner/admin): the classes weekly plans covered under the rule before and don't now, each with `scheduleType`, `dropInPricePence` (what the register collects per session from a family on a plan; null = none set, so nothing is collected) and `affectedFamilies` (families on plans it leaves paying at the register). Class and organisation names and counts only. |
+| `uiiq_classes_create` | Create a class. `planCover` (AUTO / COVERED / NOT_COVERED, owner or admin): covered by weekly plans. A photo (`imageMediaId`) needs `photoPermissionConfirmed: true`, after the user confirms permission. |
+| `uiiq_classes_update` | Replace a class's details. `planCover` turning plan cover off asks first (409 with `affected`; resend `confirmCoverChange: <n>` once the user agrees). `imageMediaId` picks or replaces the photo (needs `photoPermissionConfirmed: true`, after the user confirms permission); null removes it. |
 | `uiiq_classes_delete` | DELETE a class outright. |
 | `uiiq_classes_terms_list` | The school's terms (newest first) with dates, excluded dates and how many course runs each has. |
 | `uiiq_classes_term_create` | Create a term: name, startDate and endDate (YYYY-MM-DD), optional excludedDates (half-term etc.) and active. |
@@ -1437,7 +1442,9 @@ Needs the `competitions` feature. Setting up, rounds, the nominee confirmation a
 | `uiiq_classes_policies_get` | The policies guardians are asked to acknowledge in the family portal (key, title, version, url) with how many have acknowledged each at its current version. |
 | `uiiq_classes_policies_set` | Replace the WHOLE parent-policy list (max 25; each needs a unique key and a title; url must be https://, or documentId a Document Vault file). |
 | `uiiq_classes_registration_form_get` | The school's public "Register your family" IQForm (enabled, iqformId, url); enabled=false when family registration is switched off. |
-| `uiiq_classes_registration_form_set` | Set (IQForm id or form-id= link; must be Public and the venue's own) or clear (null / "") the public "Register your family" form. OWNER/ADMIN; 404 unless family registration is switched on. |
+| `uiiq_classes_registration_form_set` | Set (IQForm id or form-id= link; must be Public and the venue's own) or clear (null / "") the public "Register your family" form, and/or `autoApprove` (children parents add go on the roll at once; the office keeps or removes them). OWNER/ADMIN; 404 unless family registration is switched on. |
+| `uiiq_classes_parent_enrolments_list` | "Enrolled by parents": enrolments parents made in the Members App that the office hasn't kept or undone (names only). |
+| `uiiq_classes_parent_enrolment_answer` | Keep, or undo (cancel), an enrolment a parent made in the Members App. |
 | `uiiq_classes_enrolments_list` | Enrolments (newest first), filtered by classId and/or studentId: student and class names, term, status, payment mode, fee/paid/owed and instalment arrears. |
 | `uiiq_classes_enrolment_get` | One enrolment with its payment ledger (amount, method, till sale, date). |
 | `uiiq_classes_enrol` | Enrol a student in a class. |
@@ -1725,4 +1732,4 @@ Needs the `competitions` feature. Setting up, rounds, the nominee confirmation a
 | `uiiq_workflow_order_assign` | Assign a workflow order to a user in the tenant (assignedUserId null unassigns). |
 | `uiiq_workflow_order_request_approval` | Ask the customer to approve a stage of their order: creates an approval link, moves the order to AWAITING_APPROVAL and EMAILS the customer. |
 
-1204 tools.
+1198 tools.

@@ -374,6 +374,14 @@ export const adminPlatformTools = [
     },
   },
   {
+    name: "uiiq_admin_gift_cards_legacy_count",
+    description: "How many live gift cards still carry a pre-#1080 code (hex8, GC-4-4, GC-6-6, other), per workspace and format, with their outstanding balance: counts only, never codes or holders. Tracks the legacy re-issue to its cutoff. SUPER_ADMIN.",
+    inputSchema: { type: "object", properties: {} },
+    async handler() {
+      return send(null, "/admin/gift-cards/legacy-count", "GET");
+    },
+  },
+  {
     name: "uiiq_admin_vat_get",
     description: "The platform VAT rates (GB): standardPct, reducedPct, zeroPct and when they were last changed. SUPER_ADMIN.",
     inputSchema: { type: "object", properties: {} },
