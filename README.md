@@ -1305,6 +1305,7 @@ Needs the `competitions` feature. Setting up, rounds, the nominee confirmation a
 | `uiiq_admin_feature_create` | Register a new feature flag in the platform catalogue (key is lower-cased, spaces to _; product GROW, RUN, SELL or AI). |
 | `uiiq_admin_elevenlabs_key_get` | Whether the workspace has its own ElevenLabs API key set, with a masked preview (first 8 and last 4 characters). |
 | `uiiq_admin_elevenlabs_key_set` | SET the workspace's ElevenLabs API key (a secret: sent, never shown or logged), or clear it with apiKey null. |
+| `uiiq_admin_gift_cards_legacy_count` | How many live gift cards still carry a pre-#1080 code, per workspace and format, with their outstanding balance (counts only). |
 | `uiiq_admin_vat_get` | The platform VAT rates (GB): standardPct, reducedPct, zeroPct and when they were last changed. |
 | `uiiq_admin_vat_set` | Change the platform VAT rates (each 0–100; only the ones you send change). |
 | `uiiq_admin_audit_log` | The platform audit log, newest first: filter by resource, resourceId, userId, action (prefix match, e.g. |
@@ -1438,7 +1439,9 @@ Needs the `competitions` feature. Setting up, rounds, the nominee confirmation a
 | `uiiq_classes_policies_get` | The policies guardians are asked to acknowledge in the family portal (key, title, version, url) with how many have acknowledged each at its current version. |
 | `uiiq_classes_policies_set` | Replace the WHOLE parent-policy list (max 25; each needs a unique key and a title; url must be https://, or documentId a Document Vault file). |
 | `uiiq_classes_registration_form_get` | The school's public "Register your family" IQForm (enabled, iqformId, url); enabled=false when family registration is switched off. |
-| `uiiq_classes_registration_form_set` | Set (IQForm id or form-id= link; must be Public and the venue's own) or clear (null / "") the public "Register your family" form. OWNER/ADMIN; 404 unless family registration is switched on. |
+| `uiiq_classes_registration_form_set` | Set (IQForm id or form-id= link; must be Public and the venue's own) or clear (null / "") the public "Register your family" form, and/or `autoApprove` (children parents add go on the roll at once; the office keeps or removes them). OWNER/ADMIN; 404 unless family registration is switched on. |
+| `uiiq_classes_parent_enrolments_list` | "Enrolled by parents": enrolments parents made in the Members App that the office hasn't kept or undone (names only). |
+| `uiiq_classes_parent_enrolment_answer` | Keep, or undo (cancel), an enrolment a parent made in the Members App. |
 | `uiiq_classes_enrolments_list` | Enrolments (newest first), filtered by classId and/or studentId: student and class names, term, status, payment mode, fee/paid/owed and instalment arrears. |
 | `uiiq_classes_enrolment_get` | One enrolment with its payment ledger (amount, method, till sale, date). |
 | `uiiq_classes_enrol` | Enrol a student in a class. |
@@ -1726,4 +1729,4 @@ Needs the `competitions` feature. Setting up, rounds, the nominee confirmation a
 | `uiiq_workflow_order_assign` | Assign a workflow order to a user in the tenant (assignedUserId null unassigns). |
 | `uiiq_workflow_order_request_approval` | Ask the customer to approve a stage of their order: creates an approval link, moves the order to AWAITING_APPROVAL and EMAILS the customer. |
 
-1192 tools.
+1195 tools.
