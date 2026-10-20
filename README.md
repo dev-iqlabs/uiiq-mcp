@@ -1415,10 +1415,11 @@ Needs the `competitions` feature. Setting up, rounds, the nominee confirmation a
 
 | Tool | What it does |
 |---|---|
-| `uiiq_classes_list` | List the school's classes (active only unless includeInactive) with teachers, venue, show, schedule type, prices and the active-enrolment count. |
-| `uiiq_classes_get` | One class in full: editor fields, every teacher, its course runs, and the roster (enrolments with student names, guardian, fee/paid/owed); `fundingMode` / `funding` say whether it is run for a sister organisation, free or subsidised. |
-| `uiiq_classes_create` | Create a class. A photo (`imageMediaId`) needs `photoPermissionConfirmed: true`, after the user confirms permission. |
-| `uiiq_classes_update` | Replace a class's details. `imageMediaId` picks or replaces the photo (needs `photoPermissionConfirmed: true`, after the user confirms permission); null removes it. |
+| `uiiq_classes_list` | List the school's classes (active only unless includeInactive) with teachers, venue, show, schedule type, prices and the active-enrolment count; `planCover` / `coveredByWeeklyPlans` say whether weekly plans cover each. |
+| `uiiq_classes_get` | One class in full: editor fields, every teacher, its course runs, and the roster (enrolments with student names, guardian, fee/paid/owed); `fundingMode` / `funding` say whether it is run for a sister organisation, free or subsidised; `planCover`, `coveredByWeeklyPlans`, `planCoverAutomatic` and `organisation` say whether weekly plans cover it and why. |
+| `uiiq_classes_plan_cover_impact` | Who changes with "Covered by weekly plans" (read-only, owner/admin): the classes weekly plans covered under the rule before and don't now, each with `scheduleType`, `dropInPricePence` (what the register collects per session from a family on a plan; null = none set, so nothing is collected) and `affectedFamilies` (families on plans it leaves paying at the register). Class and organisation names and counts only. |
+| `uiiq_classes_create` | Create a class. `planCover` (AUTO / COVERED / NOT_COVERED, owner or admin): covered by weekly plans. A photo (`imageMediaId`) needs `photoPermissionConfirmed: true`, after the user confirms permission. |
+| `uiiq_classes_update` | Replace a class's details. `planCover` turning plan cover off asks first (409 with `affected`; resend `confirmCoverChange: <n>` once the user agrees). `imageMediaId` picks or replaces the photo (needs `photoPermissionConfirmed: true`, after the user confirms permission); null removes it. |
 | `uiiq_classes_delete` | DELETE a class outright. |
 | `uiiq_classes_terms_list` | The school's terms (newest first) with dates, excluded dates and how many course runs each has. |
 | `uiiq_classes_term_create` | Create a term: name, startDate and endDate (YYYY-MM-DD), optional excludedDates (half-term etc.) and active. |
@@ -1729,4 +1730,4 @@ Needs the `competitions` feature. Setting up, rounds, the nominee confirmation a
 | `uiiq_workflow_order_assign` | Assign a workflow order to a user in the tenant (assignedUserId null unassigns). |
 | `uiiq_workflow_order_request_approval` | Ask the customer to approve a stage of their order: creates an approval link, moves the order to AWAITING_APPROVAL and EMAILS the customer. |
 
-1195 tools.
+1196 tools.
