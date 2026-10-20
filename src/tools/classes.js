@@ -578,7 +578,7 @@ export const classesTools = [
   },
   {
     name: "uiiq_classes_register_settings",
-    description: "The register-hook settings: lapseWeeks, arrearsGraceDays, lowAttendancePct, lateGraceMins. With student absences switched on, also absenceApprovalRequired (\"Parents' time-off requests need approval\", default false: a parent's time off is approved at once; true: it waits for an owner or admin). The key is absent when student absences are off.",
+    description: "The register-hook settings: lapseWeeks, arrearsGraceDays, lowAttendancePct, lateGraceMins; ageBands (the timetable's age groups); timetablePageUrl (the timetable page on the school's website, where a class page's \"Back to timetable\" goes when the visitor didn't come from the timetable; null when none is set: \"Back to website\"). With student absences switched on, also absenceApprovalRequired (\"Parents' time-off requests need approval\", default false: a parent's time off is approved at once; true: it waits for an owner or admin). The key is absent when student absences are off.",
     inputSchema: { type: "object", properties: { tenant: TENANT_PROP } },
     async handler({ tenant } = {}) {
       const res = await api(tenant)("/classes/registers/settings");
@@ -588,8 +588,16 @@ export const classesTools = [
   },
   {
     name: "uiiq_classes_register_settings_set",
-    description: "Update any of lapseWeeks (1-52), arrearsGraceDays (0-90), lowAttendancePct (1-100), lateGraceMins (0-120), and, only while student absences are switched on, absenceApprovalRequired (true = parents' time-off requests wait for approval; false = approved at once; illness never waits; the change is audited). OWNER/ADMIN only.",
-    inputSchema: { type: "object", properties: { lapseWeeks: { type: "number" }, arrearsGraceDays: { type: "number" }, lowAttendancePct: { type: "number" }, lateGraceMins: { type: "number" }, absenceApprovalRequired: { type: "boolean", description: "Student absences on only: parents' time-off requests need approval" }, tenant: TENANT_PROP } },
+    description: "Update any of lapseWeeks (1-52), arrearsGraceDays (0-90), lowAttendancePct (1-100), lateGraceMins (0-120), and, only while student absences are switched on, absenceApprovalRequired (true = parents' time-off requests wait for approval; false = approved at once; illness never waits; the change is audited), and timetablePageUrl (the timetable page on the school's website, e.g. https://sbda.online/timetable/; null or \"\" clears it; audited). OWNER/ADMIN only.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        lapseWeeks: { type: "number" }, arrearsGraceDays: { type: "number" }, lowAttendancePct: { type: "number" }, lateGraceMins: { type: "number" },
+        absenceApprovalRequired: { type: "boolean", description: "Student absences on only: parents' time-off requests need approval" },
+        timetablePageUrl: { type: ["string", "null"], description: "The timetable page on the school's website: where a class page's \"Back to timetable\" goes when the visitor didn't come from the timetable (a shared link, the app, a search result). Must be an https page on the workspace's current website or a subdomain of it (www either way), else 400 \"The timetable page must be on your website (<host>)\". null or \"\" clears it (back to \"Back to website\"). Kept as it is when omitted." },
+        tenant: TENANT_PROP,
+      },
+    },
     async handler({ tenant, ...body }) {
       const res = await send(tenant, "PATCH", "/classes/registers/settings", body);
       if (!res.ok) throw await fail(res);
