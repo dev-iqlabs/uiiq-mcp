@@ -65,7 +65,7 @@ test("UiiQ's refusal is thrown with its words", async () => {
   await assert.rejects(call("uiiq_admin_ad_account_set", { tenantId: "ten_1", platform: "META", accountId: "act_9" }, [409, { error: "That account is already set on ultimate-image" }]), /already set on ultimate-image/);
 });
 
-test("the schemas are closed; set takes only META, GOOGLE or LINKEDIN", () => {
+test("the schemas are closed; set takes only META, GOOGLE, LINKEDIN or META_CATALOG", () => {
   for (const n of ["uiiq_admin_ad_accounts_get", "uiiq_admin_ad_account_set"]) assert.equal(tools[n].inputSchema.additionalProperties, false);
-  assert.deepEqual(tools.uiiq_admin_ad_account_set.inputSchema.properties.platform.enum, ["META", "GOOGLE", "LINKEDIN"]);
+  assert.deepEqual(tools.uiiq_admin_ad_account_set.inputSchema.properties.platform.enum, ["META", "GOOGLE", "LINKEDIN", "META_CATALOG"]);
 });
