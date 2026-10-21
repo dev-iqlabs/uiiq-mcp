@@ -72,3 +72,27 @@ test("the schema: 1 to 9 products, id required, nothing else accepted", () => {
   assert.deepEqual(Object.keys(s.properties.products.items.properties), ["productId", "photoIndex"]);
   assert.equal(s.properties.products.items.additionalProperties, false);
 });
+
+// A product's spin video first (UiiQ-platform #1139: video { productId, kind?, ratio? }).
+test("video: only its product, kind and shape are sent; UiiQ's note on where each part goes is kept with the draft's", async () => {
+  const made = { ...MADE, slides: 4, note: "Facebook: the video only. Instagram: the video and 3 photos." };
+  const { result, requests } = await call({ id: "post_1", products: [{ productId: "UC-ROBIN" }], video: { productId: "UC-ROBIN", kind: "spin", ratio: "4:5", url: "https://evil.test/v.mp4" } }, [201, made]);
+  assert.deepEqual(requests[0].body, { products: [{ productId: "UC-ROBIN" }], video: { productId: "UC-ROBIN", kind: "spin", ratio: "4:5" } });
+  assert.equal(result.note, "Facebook: the video only. Instagram: the video and 3 photos. A DRAFT: nothing was published. A person reviews and publishes it in UiiQ.");
+  // No video: none sent; just the product: the server picks the kind and shape.
+  const none = await call({ id: "post_1", products: [{ productId: "UC-ROBIN" }] }, [201, MADE]);
+  assert.equal("video" in none.requests[0].body, false);
+  const bare = await call({ id: "post_1", products: [{ productId: "UC-ROBIN" }], video: { productId: "UC-ROBIN" } }, [201, MADE]);
+  assert.deepEqual(bare.requests[0].body.video, { productId: "UC-ROBIN" });
+});
+
+test("the video's schema: closed, a product id required, endcard or spin, 1:1 or 4:5; described", () => {
+  const t = tools.uiiq_social_carousel_post;
+  const v = t.inputSchema.properties.video;
+  assert.equal(v.additionalProperties, false);
+  assert.deepEqual(v.required, ["productId"]);
+  assert.deepEqual(v.properties.kind.enum, ["endcard", "spin"]);
+  assert.deepEqual(v.properties.ratio.enum, ["1:1", "4:5"]);
+  assert.match(t.description, /then 1 to 8 products/);
+  assert.match(t.description, /Facebook then posts the video alone and Instagram the whole carousel/);
+});
