@@ -349,7 +349,7 @@ export const socialTools = [
   },
   {
     name: "uiiq_social_post_collection_ad",
-    description: `Make a Meta COLLECTION ad from a PUBLISHED promo post: the post's image as the hero picture, with a shop collection's products underneath (collection: one of the context's collections[].label, the feed's custom_label_0; IQEX keeps the set in step with the feed; at least 4 products) or 4 to 50 hand-picked productIds from uiiq_social_promo_products. Each opens its own product (an Instant Experience). A NEW campaign, ad set and ad in the workspace's own Meta ad account, ALL PAUSED. Needs the workspace's Meta product catalogue set by a platform admin (uiiq_admin_ad_account_set platform META_CATALOG); the context's catalogue: false means "No product catalogue is connected yet" and nothing can be made. Without confirm: true this is a DRY RUN: UiiQ checks everything and answers what would be made (wouldSend, the collection's products) plus the form's context (pages, instagram, collections with counts, pixelId, defaults); nothing is made. Only pass confirm: true once the person responsible has seen it and said to make it. ${CAROUSEL_RUN_IT} dailyBudgetPence: 100 to 1000 (£1 to £10 a day). ctaType: SHOP_NOW, LEARN_MORE, BUY_NOW or ORDER_NOW. Website events (trackWebsiteEvents) are only ever on the workspace's own pixel (default on when it has one); objective OUTCOME_SALES needs them; urlTags are added to every link (default UiiQ's utm tags, "" for none). Owners and admins only, at most 10 an hour, needs the Social Templates feature. IQEX makes it in the background (about a minute): a 202 answers { status: running, requestId }; follow it with uiiq_social_post_collection_ad_status and that requestId, never by making it again. requestId: leave it out for a fresh one (coll-…); retrying the SAME one never makes a second ad. A failure carries Meta's own words; a 409 "may already have made" means check Ads Manager first. Done: { campaignId, adSetId, adId, creativeId, canvasId, productSetId, adsManagerUrl, status: PAUSED }.`,
+    description: `Make a Meta COLLECTION ad from a PUBLISHED promo post: the post's image as the hero picture, with a shop collection's products underneath (collection: one of the context's collections[].label, the feed's custom_label_0; IQEX keeps the set in step with the feed; at least 4 products) or 4 to 50 hand-picked productIds from uiiq_social_promo_products. Each opens its own product (an Instant Experience). A NEW campaign, ad set and ad in the workspace's own Meta ad account, ALL PAUSED. Needs the workspace's Meta product catalogue set by a platform admin (uiiq_admin_ad_account_set platform META_CATALOG); the context's catalogue: false means "No product catalogue is connected yet" and nothing can be made. Without confirm: true this is a DRY RUN: UiiQ checks everything and answers what would be made (wouldSend, the collection's products) plus the form's context (pages, instagram, collections with counts, pixelId, defaults); nothing is made. Only pass confirm: true once the person responsible has seen it and said to make it. ${CAROUSEL_RUN_IT} dailyBudgetPence: 100 to 1000 (£1 to £10 a day). ctaType: SHOP_NOW, LEARN_MORE, BUY_NOW or ORDER_NOW. Website events (trackWebsiteEvents) are only ever on the workspace's own pixel (default on when it has one); objective OUTCOME_SALES needs them; urlTags are added to every link (default UiiQ's utm tags, "" for none). Owners and admins only, at most 10 an hour, needs the Social Templates feature. IQEX makes it in the background (about a minute): a 202 answers { status: running, requestId }; follow it with uiiq_social_post_collection_ad_status and that requestId, never by making it again. requestId: leave it out for a fresh one (coll-…); retrying the SAME one never makes a second ad. A failure carries Meta's own words; a 409 "may already have made" means check Ads Manager first. Done: { campaignId, adSetId, adId, creativeId, canvasId, productSetId, adsManagerUrl, status: PAUSED }. heroVideo { productId, ratio? }: a shop product's spin video ON TOP instead of the post's picture (the context's heroVideos lists the products that have one, with their ratios; ratio "1:1" or "4:5", default 1:1 else 4:5). UiiQ reads the video from the shop's feed itself (never a URL you send); the dry run's hero says { kind: video, productId, ratio, url }. A video hero takes Meta up to 10 minutes to process: the running answer says video: true and step (processing_video while Meta works), so follow it every 10 seconds for up to 12 minutes.`,
     inputSchema: {
       type: "object",
       additionalProperties: false,
@@ -358,6 +358,11 @@ export const socialTools = [
         id: { type: "string", description: "The published promo post" },
         collection: { type: "string", maxLength: 100, description: "A shop collection: one of the context's collections[].label (e.g. \"Calm & Wellbeing Collection\")" },
         productIds: { type: "array", minItems: 4, maxItems: 50, items: { type: "string" }, description: "Or 4 to 50 hand-picked product ids from uiiq_social_promo_products" },
+        heroVideo: {
+          type: "object", additionalProperties: false, required: ["productId"],
+          properties: { productId: { type: "string", description: "One of the context's heroVideos[].productId" }, ratio: { type: "string", enum: ["1:1", "4:5"], description: "Its shape (default 1:1, else 4:5)" } },
+          description: "Optional: a shop product's spin video on top instead of the post's picture",
+        },
         pageId: { type: "string", description: "One of the context's pages[].id: the Facebook Page the ad runs as" },
         instagramActorId: { type: "string", description: "Optional: one of the context's instagram[].id (on that Page)" },
         name: { type: "string", description: "The campaign/ad name, at most 200 characters" },
@@ -375,10 +380,12 @@ export const socialTools = [
         tenant: TENANT_PROP,
       },
     },
-    async handler({ id, tenant, confirm, requestId, collection, productIds, pageId, instagramActorId, name, dailyBudgetPence, countries, primaryText, headline, ctaType, linkUrl, trackWebsiteEvents, urlTags, objective }) {
+    async handler({ id, tenant, confirm, requestId, collection, productIds, heroVideo, pageId, instagramActorId, name, dailyBudgetPence, countries, primaryText, headline, ctaType, linkUrl, trackWebsiteEvents, urlTags, objective }) {
       const path = `/socials/posts/${encodeURIComponent(id)}/collection-ad`;
       const defined = (o) => Object.fromEntries(Object.entries(o).filter(([, v]) => v !== undefined));
-      const body = defined({ collection, productIds, pageId, instagramActorId, name, dailyBudgetPence, countries, primaryText, headline, ctaType, linkUrl, trackWebsiteEvents, urlTags, objective });
+      // Only the product and its shape, whatever else a caller adds (a url is never sent: UiiQ reads the feed's).
+      const hero = heroVideo && typeof heroVideo === "object" ? defined({ productId: heroVideo.productId, ratio: heroVideo.ratio }) : heroVideo;
+      const body = defined({ collection, productIds, heroVideo: hero, pageId, instagramActorId, name, dailyBudgetPence, countries, primaryText, headline, ctaType, linkUrl, trackWebsiteEvents, urlTags, objective });
       if (confirm !== true) {
         const preview = await api(tenant)(path);
         if (!preview.ok) throw await fail(preview);
@@ -405,13 +412,16 @@ export const socialTools = [
         throw e;
       }
       const out = await res.json();
-      if (res.status === 202) return { ...out, requestId: rid, note: `Being made. Ask uiiq_social_post_collection_ad_status with requestId ${rid} every few seconds, for up to about 3 minutes. ${CAROUSEL_RUN_IT}` };
+      if (res.status === 202) {
+        const video = out.video === true || !!body.heroVideo;
+        return { ...out, requestId: rid, note: `Being made. Ask uiiq_social_post_collection_ad_status with requestId ${rid} ${video ? "every 10 seconds, for up to 12 minutes (Meta processes the video first; step says processing_video meanwhile)" : "every few seconds, for up to about 3 minutes"}. ${CAROUSEL_RUN_IT}` };
+      }
       return { ...out, requestId: rid, note: CAROUSEL_RUN_IT };
     },
   },
   {
     name: "uiiq_social_post_collection_ad_status",
-    description: "Where a collection ad of a post is (after uiiq_social_post_collection_ad answered running): { status: running | done | failed | unknown, requestId, ... }. running: ask again in a few seconds, for up to about 3 minutes. done: campaignId, adSetId, adId, creativeId, canvasId, productSetId, adsManagerUrl, adStatus PAUSED. failed: nothing was made; error carries Meta's own words; make it again only as a new ad (a new requestId). unknown: Meta may already have made it: tell the person to check Ads Manager, and never make it again yourself. Without requestId, the post's latest. Asking never makes a second ad (it may send the SAME request to IQEX again, which IQEX never makes twice). Owners and admins only.",
+    description: "Where a collection ad of a post is (after uiiq_social_post_collection_ad answered running): { status: running | done | failed | unknown, requestId, ... }. running: ask again in a few seconds, for up to about 3 minutes; with video: true (a video on top), every 10 seconds for up to 12 while step says processing_video. done: campaignId, adSetId, adId, creativeId, canvasId, productSetId, adsManagerUrl, adStatus PAUSED. failed: nothing was made; error carries Meta's own words; make it again only as a new ad (a new requestId). unknown: Meta may already have made it: tell the person to check Ads Manager, and never make it again yourself. Without requestId, the post's latest. Asking never makes a second ad (it may send the SAME request to IQEX again, which IQEX never makes twice). Owners and admins only.",
     inputSchema: { type: "object", additionalProperties: false, required: ["id"], properties: { id: { type: "string" }, requestId: { type: "string", description: "The coll-… id the make call returned" }, tenant: TENANT_PROP } },
     async handler({ id, requestId, tenant }) {
       const qs = requestId ? `?requestId=${encodeURIComponent(requestId)}` : "";
@@ -432,7 +442,7 @@ export const socialTools = [
   },
   {
     name: "uiiq_social_carousel_post",
-    description: "Make a DRAFT carousel post from a shop collection promo post (any status): slide 1 is its promo card, then 1 to 9 of the shop's products in the order given, each { productId, photoIndex } from uiiq_social_promo_products (photoIndex 0 = the main photo, then the mockups). UiiQ reads each photo from the shop's feed itself, so no other image can get in. The new draft gets the promo post's text, hashtags and accounts. NOTHING IS PUBLISHED: a person reviews and publishes it in UiiQ. Facebook and Instagram take a post of 2 or more images only once UiiQ's multi-image switch is on; until then publishing it to them is refused (409). A post that isn't a collection promo's is refused (400). Needs the Social Templates feature; at most 30 an hour. Returns { postId, mediaUrls, slides }.",
+    description: "Make a DRAFT carousel post from a shop collection promo post (any status): slide 1 is its promo card, then 1 to 9 of the shop's products in the order given, each { productId, photoIndex } from uiiq_social_promo_products (photoIndex 0 = the main photo, then the mockups). UiiQ reads each photo from the shop's feed itself, so no other image can get in. The new draft gets the promo post's text, hashtags and accounts. NOTHING IS PUBLISHED: a person reviews and publishes it in UiiQ. Facebook and Instagram take a post of 2 or more images only once UiiQ's multi-image switch is on; until then publishing it to them is refused (409). A post that isn't a collection promo's is refused (400). Needs the Social Templates feature; at most 30 an hour. Returns { postId, mediaUrls, slides, note? }. video { productId, kind?, ratio? }: a shop product's spin video FIRST, before the promo card, then 1 to 8 products (Meta takes 10): kind \"endcard\" (the spin with name, price, delivery and link, for organic posts) or \"spin\" (the plain one); left out, the end card when the product has one, else the plain spin; ratio \"1:1\" or \"4:5\" (default 1:1, else 4:5). UiiQ reads it from the shop's feed (products with videos in uiiq_social_promo_products) and again at publish. Facebook then posts the video alone and Instagram the whole carousel: the answer's note says so (\"Facebook: the video only. Instagram: the video and N photos\").",
     inputSchema: {
       type: "object",
       additionalProperties: false,
@@ -442,17 +452,30 @@ export const socialTools = [
         products: {
           type: "array", minItems: 1, maxItems: 9,
           items: { type: "object", additionalProperties: false, required: ["productId"], properties: { productId: { type: "string", description: "A product id from uiiq_social_promo_products" }, photoIndex: { type: "integer", minimum: 0, description: "Which of its photos: 0 = the main one (default), then the mockups" } } },
-          description: "Slides 2 to 10, in order: the shop's products",
+          description: "Slides 2 to 10 (3 to 10 with a video), in order: the shop's products",
+        },
+        video: {
+          type: "object", additionalProperties: false, required: ["productId"],
+          properties: {
+            productId: { type: "string", description: "A product with videos in uiiq_social_promo_products" },
+            kind: { type: "string", enum: ["endcard", "spin"], description: "endcard or the plain spin (default: the end card when it has one)" },
+            ratio: { type: "string", enum: ["1:1", "4:5"], description: "Its shape (default 1:1, else 4:5)" },
+          },
+          description: "Optional: a product's spin video as slide 1, before the promo card",
         },
         tenant: TENANT_PROP,
       },
     },
-    async handler({ id, tenant, products }) {
-      // Only each product's id and photo number, whatever else a caller passes.
-      const picks = Array.isArray(products) ? products.map((p) => Object.fromEntries(Object.entries({ productId: p?.productId, photoIndex: p?.photoIndex }).filter(([, v]) => v !== undefined))) : products;
-      const res = await send(tenant, `/socials/posts/${encodeURIComponent(id)}/carousel-post`, "POST", { products: picks });
+    async handler({ id, tenant, products, video }) {
+      const defined = (o) => Object.fromEntries(Object.entries(o).filter(([, v]) => v !== undefined));
+      // Only each product's id and photo number, and the video's product, kind and shape, whatever else a caller passes.
+      const picks = Array.isArray(products) ? products.map((p) => defined({ productId: p?.productId, photoIndex: p?.photoIndex })) : products;
+      const lead = video && typeof video === "object" ? defined({ productId: video.productId, kind: video.kind, ratio: video.ratio }) : video;
+      const res = await send(tenant, `/socials/posts/${encodeURIComponent(id)}/carousel-post`, "POST", { products: picks, ...(lead !== undefined && lead !== null ? { video: lead } : {}) });
       if (!res.ok) throw await fail(res);
-      return { ...(await res.json()), note: "A DRAFT: nothing was published. A person reviews and publishes it in UiiQ." };
+      const made = await res.json();
+      // UiiQ's own note (where each part goes, with a video first) kept, then the draft's.
+      return { ...made, note: `${made.note ? `${made.note} ` : ""}A DRAFT: nothing was published. A person reviews and publishes it in UiiQ.` };
     },
   },
 

@@ -141,3 +141,31 @@ test("the schemas: closed, paused, 4 to 50 products, the collection's four CTAs,
   assert.equal(tools.uiiq_social_post_collection_ad_status.inputSchema.additionalProperties, false);
   assert.match(tools.uiiq_social_post_collection_ad_status.description, /unknown: Meta may already have made it/);
 });
+
+// A shop product's spin video on top (UiiQ-platform #1135: heroVideo { productId, ratio? }).
+test("heroVideo: only its product and shape are sent, never a url; a video ad's 202 says follow it every 10s for 12 minutes", async () => {
+  const a = await make({ id: "post_1", ...AD, heroVideo: { productId: "UC-ROBIN", ratio: "4:5", url: "https://evil.test/v.mp4", hero_video_url: "https://evil.test/v.mp4" }, confirm: true }, [202, { status: "running", requestId: "x", video: true, step: "making" }]);
+  assert.deepEqual(a.requests[0].body.heroVideo, { productId: "UC-ROBIN", ratio: "4:5" });
+  assert.equal("hero_video_url" in a.requests[0].body, false);
+  assert.match(a.result.note, /every 10 seconds, for up to 12 minutes \(Meta processes the video first; step says processing_video meanwhile\)/);
+  // Without a shape, none sent (the server's default); without heroVideo, none at all and the 3-minute note.
+  const b = await make({ id: "post_1", ...AD, heroVideo: { productId: "UC-ROBIN" }, confirm: true }, [202, { status: "running", requestId: "y", video: true }]);
+  assert.deepEqual(b.requests[0].body.heroVideo, { productId: "UC-ROBIN" });
+  const c = await make({ id: "post_1", ...AD, confirm: true }, [202, { status: "running", requestId: "z" }]);
+  assert.equal("heroVideo" in c.requests[0].body, false);
+  assert.match(c.result.note, /every few seconds, for up to about 3 minutes/);
+});
+
+test("heroVideo in the dry run is sent with it; the schema: closed, a product id required, 1:1 or 4:5", async () => {
+  const hero = { kind: "video", productId: "UC-ROBIN", ratio: "1:1", url: "https://iqex-assets.s3.eu-west-2.amazonaws.com/design-spins/x.mp4" };
+  const { result, requests } = await make({ id: "post_1", ...AD, heroVideo: { productId: "UC-ROBIN" } }, (method) => (method === "GET" ? [200, CONTEXT] : [200, { ...WOULD, hero }]));
+  assert.equal(result.dryRun, true);
+  assert.deepEqual(result.wouldMake.hero, hero);
+  assert.deepEqual(requests.find((q) => q.method === "POST").body.heroVideo, { productId: "UC-ROBIN" });
+  const s = tools.uiiq_social_post_collection_ad.inputSchema.properties.heroVideo;
+  assert.equal(s.additionalProperties, false);
+  assert.deepEqual(s.required, ["productId"]);
+  assert.deepEqual(s.properties.ratio.enum, ["1:1", "4:5"]);
+  assert.match(tools.uiiq_social_post_collection_ad.description, /heroVideo \{ productId, ratio\? \}/);
+  assert.match(tools.uiiq_social_post_collection_ad_status.description, /every 10 seconds for up to 12/);
+});
