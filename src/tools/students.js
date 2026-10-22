@@ -23,6 +23,20 @@ function noEmptyClassIds(classIds) {
   }
 }
 
+// Photography and video consent (UiiQ-platform #1117, Steve and Kim, 20 Oct
+// 2026) is a recorded answer: Yes, No or Not answered, never a plain tick.
+// The office records it through PATCH /students/[id] with photoConsent and
+// photoConsentNote (who asked and how; the API refuses the answer without
+// one), and every change is audited. Not answered counts as No everywhere.
+const PHOTO_CONSENT_NOTE_MAX = 300;
+const PHOTO_CONSENT_STATES = "photoConsentState is \"yes\", \"no\" or \"not_answered\" (not_answered: no answer is on record, and the school treats that as No, so the child is not photographed or filmed; an old plain tick from before the record existed reads not_answered). photoConsent is true only for a recorded Yes";
+function needsPhotoConsentNote(photoConsent, note) {
+  if (photoConsent === undefined) return;
+  if (typeof note !== "string" || !note.trim()) {
+    throw new Error("A photography and video consent answer needs a note saying who asked and how (for example: Mum emailed on 21 Oct). Nothing was sent.");
+  }
+}
+
 // STUDENTS — children's records for the classes sector. Every route here is
 // OWNER/ADMIN/SUPER_ADMIN only (the API answers 403 otherwise) except
 // uiiq_students_groups, which is labels and counts. Medical, SEND, allergy
@@ -38,7 +52,7 @@ const STUDENT_FIELDS = {
   allergies: { type: ["string", "null"] },
   emergencyName: { type: ["string", "null"] },
   emergencyPhone: { type: ["string", "null"] },
-  photoConsent: { type: "boolean" },
+  photoConsent: { type: "boolean", description: "Photography and video consent, as the parent or carer told the school. Create: true records Yes as the office's answer (noted \"Recorded when the child was added\"); false or left out records nothing (Not answered). Update: true = Yes, false = No, and photoConsentNote is needed with it" },
   notes: { type: ["string", "null"] },
   birthdayNote: { type: ["string", "null"], description: "Teacher's one-liner merged into the birthday message, cleared once sent" },
   groups: { type: "array", items: { type: "string" }, description: "Free-text group labels (troupe, squad…)" },
@@ -48,7 +62,7 @@ const STUDENT_FIELDS = {
 export const studentsTools = [
   {
     name: "uiiq_students_list",
-    description: "The student directory grouped by guardian (name, email, phone, owed balance) with each child's dob, groups, photo consent, active enrolments, owed balance and printed-card status. `q` matches child or guardian name/email. No medical data. Children a parent registered who are still waiting for the office's check are not here (see uiiq_students_registrations_list). OWNER/ADMIN only.",
+    description: "The student directory grouped by guardian (name, email, phone, owed balance) with each child's dob, groups, photography and video consent (photoConsentState: yes, no or not_answered, where not_answered counts as No; photoConsent is true only for a recorded Yes), active enrolments, owed balance and printed-card status. `q` matches child or guardian name/email. No medical data, and no photos. Children a parent registered who are still waiting for the office's check are not here (see uiiq_students_registrations_list). OWNER/ADMIN only.",
     inputSchema: { type: "object", properties: { q: { type: "string" }, includeInactive: { type: "boolean" }, tenant: TENANT_PROP } },
     async handler({ q, includeInactive, tenant } = {}) {
       const params = new URLSearchParams();
@@ -62,7 +76,7 @@ export const studentsTools = [
   },
   {
     name: "uiiq_students_get",
-    description: "One student in full — the ONLY place medical notes, SEND needs, allergies and emergency contact are returned — plus guardian, policy acknowledgements, costumes, shows and every enrolment with its ledger. OWNER/ADMIN only.",
+    description: "One student in full — the ONLY place medical notes, SEND needs, allergies and emergency contact are returned — plus guardian, policy acknowledgements, costumes, shows and every enrolment with its ledger, hasPhoto (whether the school holds the child's photo; the photo itself is not returned), and photography and video consent: photoConsentState (yes, no or not_answered) with photoConsentDetail (what is on record, or null). To read the consent alone, without the medical details, use uiiq_students_photo_consent_status. OWNER/ADMIN only.",
     inputSchema: { type: "object", required: ["id"], properties: { id: { type: "string" }, tenant: TENANT_PROP } },
     async handler({ id, tenant }) {
       const res = await api(tenant)(`/students/${encodeURIComponent(id)}`);
@@ -72,7 +86,7 @@ export const studentsTools = [
   },
   {
     name: "uiiq_students_create",
-    description: "Create a student. The guardian is an existing Contact (guardianContactId) or given inline as guardian { name, email, phone? } — upserted by email, so a known parent is never duplicated. OWNER/ADMIN only.",
+    description: "Create a student. The guardian is an existing Contact (guardianContactId) or given inline as guardian { name, email, phone? } — upserted by email, so a known parent is never duplicated. photoConsent: true records Yes as the office's answer (you, noted \"Recorded when the child was added\", audited); false or left out records nothing, so the child is Not answered (which counts as No). To record a No, or a Yes with your own note, use uiiq_students_photo_consent_set after creating. OWNER/ADMIN only.",
     inputSchema: { type: "object", required: ["firstName", "lastName"], properties: { ...STUDENT_FIELDS, guardian: { type: "object", properties: { name: { type: "string" }, email: { type: "string" }, phone: { type: "string" } } }, tenant: TENANT_PROP } },
     async handler({ tenant, ...body }) {
       const res = await send(tenant, "POST", "/students", body);
@@ -82,9 +96,10 @@ export const studentsTools = [
   },
   {
     name: "uiiq_students_update",
-    description: "Partial update of a student: any of the record fields, plus active (false = the child has left; keeps every register), tshirtSize and costumes (full replace of the per-show ledger). Sending active for a child whose registration is waiting for the office's check is a 409: approve it with uiiq_students_registration_approve instead. OWNER/ADMIN only.",
-    inputSchema: { type: "object", required: ["id"], properties: { id: { type: "string" }, ...STUDENT_FIELDS, active: { type: "boolean" }, tshirtSize: { type: ["string", "null"] }, costumes: { type: "array", items: { type: "object" } }, tenant: TENANT_PROP } },
+    description: "Partial update of a student: any of the record fields, plus active (false = the child has left; keeps every register), tshirtSize and costumes (full replace of the per-show ledger). Sending active for a child whose registration is waiting for the office's check is a 409: approve it with uiiq_students_registration_approve instead. photoConsent (true = Yes, false = No) records the parent's photography and video answer as the office's and needs photoConsentNote (who asked and how, at most 300 characters): without one nothing is sent. Sending the answer the child already has changes nothing; uiiq_students_photo_consent_set does the same on its own. OWNER/ADMIN only.",
+    inputSchema: { type: "object", required: ["id"], properties: { id: { type: "string" }, ...STUDENT_FIELDS, photoConsentNote: { type: "string", maxLength: PHOTO_CONSENT_NOTE_MAX, description: "Who asked and how, e.g. \"Mum emailed on 21 Oct\" (at most 300 characters): needed whenever photoConsent is sent" }, active: { type: "boolean" }, tshirtSize: { type: ["string", "null"] }, costumes: { type: "array", items: { type: "object" } }, tenant: TENANT_PROP } },
     async handler({ id, tenant, ...body }) {
+      needsPhotoConsentNote(body.photoConsent, body.photoConsentNote);
       const res = await send(tenant, "PATCH", `/students/${encodeURIComponent(id)}`, body);
       if (!res.ok) throw await fail(res);
       return res.json();
@@ -106,6 +121,42 @@ export const studentsTools = [
     inputSchema: { type: "object", required: ["id"], properties: { id: { type: "string" }, tenant: TENANT_PROP } },
     async handler({ id, tenant }) {
       const res = await send(tenant, "DELETE", `/students/${encodeURIComponent(id)}`);
+      if (!res.ok) throw await fail(res);
+      return res.json();
+    },
+  },
+
+  // ── Photography and video consent ──
+  {
+    name: "uiiq_students_photo_consent_status",
+    description: `A child's photography and video consent on its own, without the rest of their record (no medical, SEND, allergy or emergency details, no enrolments, no photo): { id, firstName, lastName, photoConsent, photoConsentState, photoConsentDetail }. ${PHOTO_CONSENT_STATES}. photoConsentDetail is what is on record, or null when nothing is: source (parent_form = the parent's own photography form; parent_withdrawal = the parent withdrew it online in the Members App; office = the school recorded it at the parent's request), recordedAt, byEmail (the office member who recorded it; office changes only), note (the office's note on who asked and how), parentName (the name the parent typed on the form), wording, linkUrl and answerLabel (what the parent was shown and the choice they ticked; kept when the office later changes the answer, so it can differ from the current one) and submittedAt. Show it only to the person who needs it. Reads only. OWNER/ADMIN only (403 otherwise).`,
+    inputSchema: { type: "object", additionalProperties: false, required: ["id"], properties: { id: { type: "string", description: "Student id" }, tenant: TENANT_PROP } },
+    async handler({ id, tenant }) {
+      const res = await api(tenant)(`/students/${encodeURIComponent(id)}`);
+      if (!res.ok) throw await fail(res);
+      const s = await res.json();
+      // The consent alone: the rest of the child's record (medical, SEND, allergies, emergency contact, enrolments) stays out of the answer.
+      return { id: s.id, firstName: s.firstName, lastName: s.lastName, photoConsent: s.photoConsent === true, photoConsentState: s.photoConsentState ?? null, photoConsentDetail: s.photoConsentDetail ?? null };
+    },
+  },
+  {
+    name: "uiiq_students_photo_consent_set",
+    description: `Record a child's photography and video consent as the school's, from what their parent or carer told the school: answer "yes" (the school may photograph and film the child) or "no" (it may not). note is required: who asked and how (for example "Mum emailed on 21 Oct"), at most ${PHOTO_CONSENT_NOTE_MAX} characters; it is kept on the record beside the answer and shown on the child's page. You are recorded as the office member who made the change, and it is audited (from, to, you, and whether a note was given, never its text). What the parent was shown on their own form stays on the record. Sending the answer the child already has changes nothing. There is no way back to Not answered. A parent can withdraw a Yes themselves in the Members App; giving permission again is the parent's photography form or this. Only record what the parent or carer actually told the school, and confirm with the person before calling. Only the answer and the note are sent: nothing else on the child's record changes. OWNER/ADMIN only (403 otherwise; also refused in a read-only impersonation or a closed workspace). Returns { ok: true }; read it back with uiiq_students_photo_consent_status.`,
+    inputSchema: {
+      type: "object",
+      additionalProperties: false,
+      required: ["id", "answer", "note"],
+      properties: {
+        id: { type: "string", description: "Student id" },
+        answer: { type: "string", enum: ["yes", "no"], description: "yes = the school may photograph and film the child; no = it may not" },
+        note: { type: "string", minLength: 1, maxLength: PHOTO_CONSENT_NOTE_MAX, description: "Who asked and how, e.g. \"Mum emailed on 21 Oct\" (at most 300 characters)" },
+        tenant: TENANT_PROP,
+      },
+    },
+    async handler({ id, answer, note, tenant }) {
+      if (answer !== "yes" && answer !== "no") throw new Error("answer must be \"yes\" or \"no\". Nothing was sent.");
+      needsPhotoConsentNote(answer, note);
+      const res = await send(tenant, "PATCH", `/students/${encodeURIComponent(id)}`, { photoConsent: answer === "yes", photoConsentNote: note });
       if (!res.ok) throw await fail(res);
       return res.json();
     },
@@ -327,7 +378,7 @@ export const studentsTools = [
   // work with it off too, so leftovers can be cleared.
   {
     name: "uiiq_students_registrations_list",
-    description: "The office's \"Awaiting check\": { enabled, registrations, parents }. registrations = children parents added for the office to look at, oldest first: those waiting for its check, and (autoApproved true) those approved automatically because the school has that switched on (uiiq_classes_registration_form_set autoApprove), already on the roll until the office keeps or removes them; the child (name, dob, age), the class they asked about, medical notes, SEND needs, allergies, emergency contact, photo consent, the guardian contact (and what the form said about the parent when it differs from the contact on file), any existing family it matched, the consents given, how it came in (form_add_child = the Members App's Add a child form, form_register = an older registration) and when. parents = parents who registered and have added no child yet (contactId, name, email, phone, registeredAt, classInterest, and signedIn: whether they have signed in to the Members App since, which proves the address; false = not signed in yet). enabled = whether family registration is switched on: with it off both lists still come back so leftovers can be declined or removed, but nothing can be approved. It carries children's health information on purpose, because that is what the office checks: show it only to the person doing the check. Act on it with uiiq_students_registration_approve / _decline (children) and uiiq_students_registered_parent_remove (parents). Until approved a child is not in uiiq_students_list and can't be enrolled, marked on a register or given absences. OWNER/ADMIN only (403 otherwise).",
+    description: "The office's \"Awaiting check\": { enabled, registrations, parents }. registrations = children parents added for the office to look at, oldest first: those waiting for its check, and (autoApproved true) those approved automatically because the school has that switched on (uiiq_classes_registration_form_set autoApprove), already on the roll until the office keeps or removes them; the child (name, dob, age), the class they asked about, medical notes, SEND needs, allergies, emergency contact, photography and video consent (photoConsentState: yes, no or not_answered; photoConsent true only for a recorded Yes), the guardian contact (and what the form said about the parent when it differs from the contact on file), any existing family it matched, the consents given, how it came in (form_add_child = the Members App's Add a child form, form_register = an older registration) and when. parents = parents who registered and have added no child yet (contactId, name, email, phone, registeredAt, classInterest, and signedIn: whether they have signed in to the Members App since, which proves the address; false = not signed in yet). enabled = whether family registration is switched on: with it off both lists still come back so leftovers can be declined or removed, but nothing can be approved. It carries children's health information on purpose, because that is what the office checks: show it only to the person doing the check. Act on it with uiiq_students_registration_approve / _decline (children) and uiiq_students_registered_parent_remove (parents). Until approved a child is not in uiiq_students_list and can't be enrolled, marked on a register or given absences. OWNER/ADMIN only (403 otherwise).",
     inputSchema: { type: "object", properties: { tenant: TENANT_PROP } },
     async handler({ tenant } = {}) {
       const res = await api(tenant)("/students/registrations");
