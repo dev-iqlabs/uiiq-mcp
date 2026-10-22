@@ -79,19 +79,6 @@ test("the schema says what it is, its range, and who may change it", () => {
   assert.match(tools.uiiq_classes_get.description, /coverSlots/);
 });
 
-test("plan_load asks the read-only endpoint with all three ids and passes the prompt through", async () => {
-  const answer = { over: true, totalSlots: 3, perWeek: 2, suggestedPlan: { id: "plan_3", name: "SBDA 3 classes Weekly", price: "£54.75/month", perWeek: 3 }, warning: "This takes them to 3 classes a week. Their plan covers 2. They'll need SBDA 3 classes Weekly (£54.75/month)." };
-  const { result, requests } = await call("uiiq_classes_enrolment_plan_load", { studentId: "s 1", classId: "c_mt", membershipId: "m1" }, [200, answer]);
-  assert.deepEqual(requests, [{ method: "GET", path: "/classes/enrolments/plan-load?studentId=s+1&classId=c_mt&membershipId=m1" }]);
-  assert.deepEqual(result, answer);
-});
-
-test("enrol passes the enrolment answer's warning through", async () => {
-  const { result } = await call("uiiq_classes_enrol", { studentId: "s1", classId: "c_mt", paymentMode: "PLAN", membershipId: "m1" }, [201, { ok: true, id: "e1", warning: "This takes them to 3 classes a week." }]);
-  assert.equal(result.warning, "This takes them to 3 classes a week.");
-  assert.match(tools.uiiq_classes_enrol.description, /warning/);
-});
-
 test("update sends confirmAtRisk, and a 409 asking first comes back as its question", async () => {
   const ok = await call("uiiq_classes_update", { id: "cls_mt", ...CLASS, coverSlots: 2, confirmAtRisk: 1 }, [200, { ok: true, atRisk: 1 }]);
   assert.equal(ok.requests[0].body.confirmAtRisk, 1);
@@ -108,7 +95,5 @@ test("the update description warns about raising coverSlots and says what is kep
   assert.match(d, /Only resend confirmAtRisk after the user explicitly agrees/);
   assert.match(d, /confirmAtRisk: <n>/);
   assert.equal(tools.uiiq_classes_update.inputSchema.properties.confirmAtRisk.type, "integer");
-  assert.doesNotMatch(tools.uiiq_classes_enrolment_plan_load.description, /memberCode }/);
   assert.match(d, /dropInPricePence, termFeePence, coveredByPlanIds, coverSlots, planCover\) are kept as they are when omitted/);
-  assert.match(tools.uiiq_classes_enrolment_plan_options.description, /'partial'/);
 });

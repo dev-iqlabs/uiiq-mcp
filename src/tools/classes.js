@@ -15,13 +15,19 @@ const send = (tenant, method, path, body) => api(tenant)(path, body === undefine
 const post = (tenant, path, body) => send(tenant, "POST", path, body);
 
 // CLASSES — the dance-school / classes sector: classes, terms and course runs,
-// enrolments (with payment modes), the day's registers (marks, payments,
-// stars, costumes, scan check-in), session cover/cancellation, parent notices
-// and the policies parents acknowledge. No feature flag on these routes; the
-// register-settings PATCH and parent-policies PUT are OWNER/ADMIN only, and
-// the scan-cards sheet is OWNER/ADMIN because it hands out live check-in QRs.
-// Registers and enrolments return names + paid state only — medical and
-// emergency data lives on the student record (students.js).
+// session cover/cancellation, parent notices, the policies parents
+// acknowledge, the family registration form's settings and the register
+// settings. No feature flag on these routes; the register-settings PATCH and
+// parent-policies PUT are OWNER/ADMIN only.
+//
+// Children's records aren't available from the MCP (Steve, 22 Oct 2026, from
+// Kim's DPIA, DPA 6.6: no AI session reads children's records): enrolments,
+// parents' enrolments, the registers (marks, payments, stars, costumes, scan
+// check-in, check-in cards), attendance reports, absences, a session's
+// audience and costume refunds are used in the UiiQ dashboard in a browser,
+// and so is picking a class photo (children may be identifiable in it).
+// uiiq_classes_get leaves the class's roster out. test/no-child-records keeps
+// it that way.
 
 const CLASS_FIELDS = {
   name: { type: "string" },
@@ -53,18 +59,17 @@ const CLASS_FIELDS = {
   coverSlots: { type: "integer", minimum: 1, maximum: 14, description: "How many of a weekly plan's slots one session uses (default 1): 2 for a double-length class, so it counts as two classes on a 'N classes a week' plan. Owner or admin only to change (403 otherwise). Kept as it is when omitted. Raising coverSlots can put existing 1-a-week members over their weekly limit; check atRisk." },
   planCover: { type: "string", enum: ["AUTO", "COVERED", "NOT_COVERED"], description: "Covered by weekly plans (Steve, 19 Oct 2026). AUTO (the default): covered when the class is the workspace's own (academy), not when it is run for or billed through a sister organisation (college). COVERED / NOT_COVERED override that either way. A class that isn't covered is covered by no plan, listed ones included, and doesn't count towards a plan's classes a week; a free (funded) class is never covered and can't be set to COVERED. Owner or admin only to change (403 otherwise). Kept as it is when omitted." },
   active: { type: "boolean" },
-  imageMediaId: { type: ["integer", "null"], minimum: 1, description: "The class photo: an image id from the workspace's own media library (an id from uiiq_media_list or uiiq_media_upload), or null to remove it (its public copy goes offline). Public on the internet while the class is published and active. Needs photoPermissionConfirmed: true to pick or replace. Kept as it is when omitted." },
-  photoPermissionConfirmed: { type: "boolean", description: "Required true with a non-null imageMediaId: the user confirms the workspace has permission from the parent or carer of every child who can be identified in the photo, or that no child can be identified. Only send it after the user has said so; the confirmation is audited." },
 };
 const CLASS_REQUIRED = ["name", "dayOfWeek", "startTime", "durationMins", "capacity"];
 
-// The class photo (UiiQ-platform class photos, Kim C8): picking or replacing
-// one puts it on the internet, so the API refuses (400) without
-// photoPermissionConfirmed: true. Refused here too, before any request.
-const PHOTO_PERMISSION =
-  "A class photo is public on the internet (timetable, website and enrolment page). Ask the user to confirm that the workspace has permission from the parent or carer of every child who can be identified in it, or that no child can be identified; then send photoPermissionConfirmed: true with imageMediaId. Nothing was sent.";
-function checkPhoto(body) {
-  if (body.imageMediaId !== undefined && body.imageMediaId !== null && body.photoPermissionConfirmed !== true) throw new Error(PHOTO_PERMISSION);
+// The class photo: children may be identifiable in it, and picking one means
+// confirming every one of their parents agreed, so it is the dashboard's, never
+// an AI session's (Steve, 22 Oct 2026). Refused here before any request; an
+// omitted photo is kept as it is.
+const NO_CLASS_PHOTO =
+  "Class photos aren't available from the MCP: children may be identifiable in them (Steve, 22 Oct 2026: no AI session handles children's records). Pick, replace or remove the photo in the UiiQ dashboard in a browser. Nothing was sent.";
+function noClassPhoto(body) {
+  if (body.imageMediaId !== undefined || body.photoPermissionConfirmed !== undefined) throw new Error(NO_CLASS_PHOTO);
 }
 
 export const classesTools = [
@@ -82,12 +87,14 @@ export const classesTools = [
   },
   {
     name: "uiiq_classes_get",
-    description: "One class in full: editor fields, every teacher, its course runs, and the roster (enrolments with student names, guardian, fee/paid/owed). No medical data. coverSlots is how many of a weekly plan's slots one session uses (coverSlotsNote 'uses 2 slots' when more than one); canSetCoverSlots says whether you may change it. fundingMode (NONE | FREE | SUBSIDISED) and funding ('Funded, free' / 'Funded, subsidised' / null) say whether it is run for a sister organisation and whether families pay; set with uiiq_classes_billing_set. planCover (AUTO | COVERED | NOT_COVERED) is the 'Covered by weekly plans' setting, coveredByWeeklyPlans what it comes to, planCoverAutomatic what AUTO would be, and organisation { id, name, sister } the organisation the class belongs to (the workspace's own, or the sister it is run for or billed through).",
+    description: "One class: editor fields, every teacher and its course runs, without the roster: children's records aren't available from the MCP (Steve, 22 Oct 2026: no AI session reads children's records), so the answer carries rosterCount (how many are on it) and rosterOmitted: true instead; the roster itself is in the UiiQ dashboard. coverSlots is how many of a weekly plan's slots one session uses (coverSlotsNote 'uses 2 slots' when more than one); canSetCoverSlots says whether you may change it. fundingMode (NONE | FREE | SUBSIDISED) and funding ('Funded, free' / 'Funded, subsidised' / null) say whether it is run for a sister organisation and whether families pay; set with uiiq_classes_billing_set. planCover (AUTO | COVERED | NOT_COVERED) is the 'Covered by weekly plans' setting, coveredByWeeklyPlans what it comes to, planCoverAutomatic what AUTO would be, and organisation { id, name, sister } the organisation the class belongs to (the workspace's own, or the sister it is run for or billed through).",
     inputSchema: { type: "object", required: ["id"], properties: { id: { type: "string" }, tenant: TENANT_PROP } },
     async handler({ id, tenant }) {
       const res = await api(tenant)(`/classes/${encodeURIComponent(id)}`);
       if (!res.ok) throw await fail(res);
-      return res.json();
+      // The roster (children's names and their guardians) never reaches the model: only how many are on it.
+      const { roster, ...cls } = await res.json();
+      return { ...cls, rosterCount: Array.isArray(roster) ? roster.length : 0, rosterOmitted: true };
     },
   },
   {
@@ -102,10 +109,10 @@ export const classesTools = [
   },
   {
     name: "uiiq_classes_create",
-    description: "Create a class. Requires name, dayOfWeek (0-6), startTime (HH:MM), durationMins and capacity; the slug is generated from the name. Linked ids (staffMemberId, venueId, showEventId, instructorResourceId) must belong to the tenant. Prices (dropInPricePence, termFeePence), coveredByPlanIds, coverSlots above 1 and a planCover other than AUTO need an owner or admin (403). A photo (imageMediaId) needs photoPermissionConfirmed: true, sent only after the user confirms permission (400 otherwise).",
+    description: "Create a class. Requires name, dayOfWeek (0-6), startTime (HH:MM), durationMins and capacity; the slug is generated from the name. Linked ids (staffMemberId, venueId, showEventId, instructorResourceId) must belong to the tenant. Prices (dropInPricePence, termFeePence), coveredByPlanIds, coverSlots above 1 and a planCover other than AUTO need an owner or admin (403). The class photo is picked in the UiiQ dashboard, not here (children may be identifiable in it).",
     inputSchema: { type: "object", required: CLASS_REQUIRED, properties: { ...CLASS_FIELDS, tenant: TENANT_PROP } },
     async handler({ tenant, ...body }) {
-      checkPhoto(body);
+      noClassPhoto(body);
       const res = await post(tenant, "/classes", body);
       if (!res.ok) throw await fail(res);
       return res.json();
@@ -113,10 +120,10 @@ export const classesTools = [
   },
   {
     name: "uiiq_classes_update",
-    description: "Replace a class's details. NOT a partial update: the API validates the full class, so send every field you want kept (name, dayOfWeek, startTime, durationMins, capacity are required; an omitted staffMemberId/venueId is reset to empty). Teachers are only rewritten when `teachers` is sent. The owner/admin settings (dropInPricePence, termFeePence, coveredByPlanIds, coverSlots, planCover) are kept as they are when omitted, and changing any of them needs an owner or admin (403). Raising coverSlots can put existing 1-a-week members over their weekly limit; check atRisk. When a coverSlots change would newly put families on plans over their weekly classes, the API answers 409 { needsConfirmation: true, atRisk, error } and saves NOTHING. Only resend confirmAtRisk after the user explicitly agrees, and send the COUNT the 409 gave (confirmAtRisk: <n>): if more families are at risk by then, the API asks again. The answer's atRisk says how many families it put over. Turning planCover so the class is no longer covered by weekly plans leaves the families on plans in it paying at the register: the API answers 409 { needsConfirmation: true, affected, confirmCoverChange, error } and saves NOTHING. Only resend confirmCoverChange after the user explicitly agrees, with the COUNT the 409 gave (confirmCoverChange: <n>); the API asks again if more by then. The answer's affected says how many families it left paying at the register. imageMediaId picks or replaces the photo and needs photoPermissionConfirmed: true, sent only after the user confirms permission (400 otherwise); null removes it; omitted keeps it.",
+    description: "Replace a class's details. NOT a partial update: the API validates the full class, so send every field you want kept (name, dayOfWeek, startTime, durationMins, capacity are required; an omitted staffMemberId/venueId is reset to empty). Teachers are only rewritten when `teachers` is sent. The owner/admin settings (dropInPricePence, termFeePence, coveredByPlanIds, coverSlots, planCover) are kept as they are when omitted, and changing any of them needs an owner or admin (403). Raising coverSlots can put existing 1-a-week members over their weekly limit; check atRisk. When a coverSlots change would newly put families on plans over their weekly classes, the API answers 409 { needsConfirmation: true, atRisk, error } and saves NOTHING. Only resend confirmAtRisk after the user explicitly agrees, and send the COUNT the 409 gave (confirmAtRisk: <n>): if more families are at risk by then, the API asks again. The answer's atRisk says how many families it put over. Turning planCover so the class is no longer covered by weekly plans leaves the families on plans in it paying at the register: the API answers 409 { needsConfirmation: true, affected, confirmCoverChange, error } and saves NOTHING. Only resend confirmCoverChange after the user explicitly agrees, with the COUNT the 409 gave (confirmCoverChange: <n>); the API asks again if more by then. The answer's affected says how many families it left paying at the register. The class photo is kept as it is: picking, replacing or removing it is done in the UiiQ dashboard (children may be identifiable in it).",
     inputSchema: { type: "object", required: ["id", ...CLASS_REQUIRED], properties: { id: { type: "string" }, ...CLASS_FIELDS, confirmAtRisk: { type: "integer", minimum: 0, description: "The atRisk count the user agreed to (from the 409): save the coverSlots change even though it puts that many families on plans over their weekly classes. Never send it without the user's explicit agreement." }, confirmCoverChange: { type: "integer", minimum: 0, description: "The affected count the user agreed to (from the 409): save the planCover change even though it leaves that many families on plans paying at the register. Never send it without the user's explicit agreement." }, tenant: TENANT_PROP } },
     async handler({ id, tenant, ...body }) {
-      checkPhoto(body);
+      noClassPhoto(body);
       const res = await send(tenant, "PATCH", `/classes/${encodeURIComponent(id)}`, body);
       if (!res.ok) throw await fail(res);
       return res.json();
@@ -284,16 +291,6 @@ export const classesTools = [
       return res.json();
     },
   },
-  {
-    name: "uiiq_classes_session_audience",
-    description: "Who a message about a class would reach (one row per household, children named, unsubscribed/archived dropped), plus the staff who could cover and the rooms available. Preview before uiiq_classes_session_override.",
-    inputSchema: { type: "object", required: ["classId"], properties: { classId: { type: "string" }, tenant: TENANT_PROP } },
-    async handler({ classId, tenant }) {
-      const res = await api(tenant)(`/classes/sessions/audience?classId=${encodeURIComponent(classId)}`);
-      if (!res.ok) throw await fail(res);
-      return res.json();
-    },
-  },
 
   // ── Parent notices (family portal) ──
   {
@@ -376,7 +373,7 @@ export const classesTools = [
   },
   {
     name: "uiiq_classes_registration_form_set",
-    description: "Set or clear the school's public \"Register your family\" IQForm, and/or whether children parents add are approved automatically. ref is the IQForm's id or a link with form-id= in it; it must exist, be Public and belong to the venue's own IQEX org (400 with the reason otherwise). ref null or \"\" clears it, which takes the Register button off the enrol pages. autoApprove true = a child a signed-in parent adds in the Members App goes on the roll at once, BEFORE the office has checked them (the office is emailed and keeps or removes it with uiiq_students_registration_approve / _decline); false (the default) = each child waits for the office to approve it. Turning it on changes the school's safeguarding: only send autoApprove true after the owner has explicitly agreed to it. Each is changed only when sent; send at least one. Returns { ok, iqformId, title, url, autoApprove }. Children registered through it are listed under uiiq_students_registrations_list. OWNER/ADMIN only; 404 unless the workspace has family registration switched on.",
+    description: "Set or clear the school's public \"Register your family\" IQForm, and/or whether children parents add are approved automatically. ref is the IQForm's id or a link with form-id= in it; it must exist, be Public and belong to the venue's own IQEX org (400 with the reason otherwise). ref null or \"\" clears it, which takes the Register button off the enrol pages. autoApprove true = a child a signed-in parent adds in the Members App goes on the roll at once, BEFORE the office has checked them (the office is emailed and keeps or removes it in the UiiQ dashboard's Awaiting check); false (the default) = each child waits for the office to approve it. Turning it on changes the school's safeguarding: only send autoApprove true after the owner has explicitly agreed to it. Each is changed only when sent; send at least one. Returns { ok, iqformId, title, url, autoApprove }. Children registered through it are listed under uiiq_students_registrations_list. OWNER/ADMIN only; 404 unless the workspace has family registration switched on.",
     inputSchema: { type: "object", properties: { ref: { type: ["string", "number", "null"], description: "IQForm id or link with form-id=; null or \"\" clears it; omit to leave it" }, autoApprove: { type: "boolean", description: "Approve children parents add automatically; omit to leave it" }, tenant: TENANT_PROP } },
     async handler({ ref, autoApprove, tenant } = {}) {
       if (ref === undefined && autoApprove === undefined) throw new Error("Send ref, autoApprove or both");
@@ -387,195 +384,7 @@ export const classesTools = [
     },
   },
 
-  // ── Enrolled by parents (Members App self-enrolment) ──
-  {
-    name: "uiiq_classes_parent_enrolments_list",
-    description: "\"Enrolled by parents\": enrolments parents made themselves in the Members App that the office hasn't kept or undone yet, newest first (at most 200): { enrolments: [{ id, status (ACTIVE, WAITLIST, or CANCELLED if cancelled since), enrolledAt, student { id, name }, class { id, name }, termName, guardianName }] }. Names only, no child details. Answer each with uiiq_classes_parent_enrolment_answer. Any signed-in user of the workspace.",
-    inputSchema: { type: "object", properties: { tenant: TENANT_PROP } },
-    async handler({ tenant } = {}) {
-      const res = await api(tenant)("/classes/parent-enrolments");
-      if (!res.ok) throw await fail(res);
-      return res.json();
-    },
-  },
-  {
-    name: "uiiq_classes_parent_enrolment_answer",
-    description: "The office's answer to an enrolment a parent made in the Members App (an id from uiiq_classes_parent_enrolments_list). action keep = it stands and leaves the list; undo = CANCELS the enrolment (the usual cancel: cancelledAt set, any payment ledger kept; nothing is sent to the parent) and it leaves the list. Confirm an undo with the person first. 409 once it has been kept or undone; 404 if it isn't a parent's enrolment here. Refused (403) while the workspace is closed or in read-only impersonation. Audited.",
-    inputSchema: { type: "object", required: ["id", "action"], properties: { id: { type: "string" }, action: { type: "string", enum: ["keep", "undo"] }, tenant: TENANT_PROP } },
-    async handler({ id, action, tenant }) {
-      if (action !== "keep" && action !== "undo") throw new Error('action must be "keep" or "undo"');
-      const res = await post(tenant, `/classes/parent-enrolments/${encodeURIComponent(id)}`, { action });
-      if (!res.ok) throw await fail(res);
-      return res.json();
-    },
-  },
-
-  // ── Enrolments ──
-  {
-    name: "uiiq_classes_enrolments_list",
-    description: "Enrolments (newest first), filtered by classId and/or studentId: student and class names, term, status, payment mode, fee/paid/owed and instalment arrears.",
-    inputSchema: { type: "object", properties: { classId: { type: "string" }, studentId: { type: "string" }, tenant: TENANT_PROP } },
-    async handler({ classId, studentId, tenant } = {}) {
-      const params = new URLSearchParams();
-      if (classId) params.set("classId", classId);
-      if (studentId) params.set("studentId", studentId);
-      const qs = params.toString() ? `?${params}` : "";
-      const res = await api(tenant)(`/classes/enrolments${qs}`);
-      if (!res.ok) throw await fail(res);
-      return res.json();
-    },
-  },
-  {
-    name: "uiiq_classes_enrolment_get",
-    description: "One enrolment with its payment ledger (amount, method, till sale, date).",
-    inputSchema: { type: "object", required: ["id"], properties: { id: { type: "string" }, tenant: TENANT_PROP } },
-    async handler({ id, tenant }) {
-      const res = await api(tenant)(`/classes/enrolments/${encodeURIComponent(id)}`);
-      if (!res.ok) throw await fail(res);
-      return res.json();
-    },
-  },
-  {
-    name: "uiiq_classes_enrol",
-    description: "Enrol a student in a class. paymentMode UPFRONT | DROP_IN | INSTALMENTS | PLAN. TERM classes need courseRunId (except DROP_IN). Full class → 409 with full:true; retry with waitlist=true to WAITLIST. TAKES MONEY when asked: `payment` {method CASH|CARD, amountPence?} raises a till sale (UPFRONT only); INSTALMENTS (2-12, class must allow them, Stripe connected) returns a Stripe Checkout URL for the guardian; PLAN needs the guardian's ACTIVE membershipId whose plan covers the class. On a PLAN enrolment the answer's `warning`, when not null, is the upgrade prompt to pass on (e.g. 'This takes them to 3 classes a week. Their plan covers 2. They'll need SBDA 3 classes Weekly (£54.75/month).'); the enrolment is still made, and sessions over the plan are charged at the register.",
-    inputSchema: { type: "object", required: ["studentId", "classId", "paymentMode"], properties: { studentId: { type: "string" }, classId: { type: "string" }, courseRunId: { type: "string" }, paymentMode: { type: "string", enum: ["UPFRONT", "DROP_IN", "INSTALMENTS", "PLAN"] }, feePence: { type: "number", description: "Defaults to the run/class fee (0 for DROP_IN)" }, startDate: { type: "string", description: "YYYY-MM-DD, default today" }, waitlist: { type: "boolean" }, payment: { type: "object", properties: { method: { type: "string", enum: ["CASH", "CARD"] }, amountPence: { type: "number" } } }, instalmentCount: { type: "number" }, membershipId: { type: "string" }, notes: { type: "string" }, tenant: TENANT_PROP } },
-    async handler({ tenant, ...body }) {
-      const res = await post(tenant, "/classes/enrolments", body);
-      if (!res.ok) throw await fail(res);
-      return res.json();
-    },
-  },
-  {
-    name: "uiiq_classes_enrolment_update",
-    description: "Change an enrolment's status (TRIAL | ACTIVE | WAITLIST | CANCELLED | COMPLETED — activating re-checks capacity; CANCELLED keeps the ledger), feePence or notes. Send at least one.",
-    inputSchema: { type: "object", required: ["id"], properties: { id: { type: "string" }, status: { type: "string", enum: ["TRIAL", "ACTIVE", "WAITLIST", "CANCELLED", "COMPLETED"] }, feePence: { type: "number" }, notes: { type: ["string", "null"] }, tenant: TENANT_PROP } },
-    async handler({ id, tenant, ...body }) {
-      const res = await send(tenant, "PATCH", `/classes/enrolments/${encodeURIComponent(id)}`, body);
-      if (!res.ok) throw await fail(res);
-      return res.json();
-    },
-  },
-  {
-    name: "uiiq_classes_enrolment_instalment_link",
-    description: "Regenerate the Stripe Checkout link for an ACTIVE INSTALMENTS enrolment whose guardian never completed checkout. Refused (409) once billing has started (a subscription or Stripe payment exists) — take any balance at the register instead. Creates a Stripe Checkout session on the tenant's Connect account.",
-    inputSchema: { type: "object", required: ["id"], properties: { id: { type: "string" }, tenant: TENANT_PROP } },
-    async handler({ id, tenant }) {
-      const res = await post(tenant, `/classes/enrolments/${encodeURIComponent(id)}/instalment-link`, {});
-      if (!res.ok) throw await fail(res);
-      return res.json();
-    },
-  },
-  {
-    name: "uiiq_classes_enrolment_plan_options",
-    description: "The student's guardian's ACTIVE memberships, each flagged with whether its plan covers the class — what to pass as membershipId for a PLAN enrolment. covers is true, false, or 'partial' when one session of the class uses more of the plan's weekly slots than it allows (still usable for a PLAN enrolment; every session goes over).",
-    inputSchema: { type: "object", required: ["studentId", "classId"], properties: { studentId: { type: "string" }, classId: { type: "string" }, tenant: TENANT_PROP } },
-    async handler({ studentId, classId, tenant }) {
-      const qs = `?studentId=${encodeURIComponent(studentId)}&classId=${encodeURIComponent(classId)}`;
-      const res = await api(tenant)(`/classes/enrolments/plan-options${qs}`);
-      if (!res.ok) throw await fail(res);
-      return res.json();
-    },
-  },
-  {
-    name: "uiiq_classes_enrolment_plan_load",
-    description: "Would enrolling the student in the class on this membership take them over their plan's weekly classes, and which plan would they need? Read-only. Answers { perWeek, usedSlots, classSlots, totalSlots, over, suggestedPlan: { id, name, price, perWeek } | null, warning, membershipId } (never the member code). Only plans billed through the class's organisation are suggested; a funded class, or one the plan can't cover, gives no load. Slots, not sessions: a double class (coverSlots 2) counts as two. suggestedPlan is the cheapest active plan (per month) big enough, else the cheapest unlimited one, else null (warning then says no plan covers it). Unlimited plans and no plan never warn. A warning, not a refusal: the enrolment is still allowed.",
-    inputSchema: { type: "object", required: ["studentId", "classId", "membershipId"], properties: { studentId: { type: "string" }, classId: { type: "string" }, membershipId: { type: "string" }, tenant: TENANT_PROP } },
-    async handler({ studentId, classId, membershipId, tenant }) {
-      const qs = new URLSearchParams({ studentId, classId, membershipId });
-      const res = await api(tenant)(`/classes/enrolments/plan-load?${qs}`);
-      if (!res.ok) throw await fail(res);
-      return res.json();
-    },
-  },
-
-  // ── Registers ──
-  {
-    name: "uiiq_classes_register_day",
-    description: "The day's registers (default today): every class running on that date with its students, attendance marks, check-in/out times, paid chip (PAID / OWES / DROP_IN_DUE / PLAN / PLAN_OVER / ARREARS …), stars and costume ticks; cancelled sessions listed separately. Names + paid state only. With student absences switched on (absencesEnabled: true), each child with a known absence covering the session carries `absence` (linked = their Absent mark belongs to it). Its kind, label (such as \"Holiday\" or \"Ill (reported)\") and note go only to owners/admins, that class's own teachers and whoever covers the session; anyone else sees the neutral \"Away (known)\" (kind ABSENCE) and nothing about why. Each class says canMarkIll: whether you may mark ILL there on that date. In a school with family registration switched on, each child also carries photoConsent: \"yes\", \"no\" or \"not_answered\" (photography and video; not_answered counts as No, so the child is not photographed or filmed) and hasPhoto (whether the school holds the child's photo; the photo itself is not returned). Who answered and why stays on the student record (uiiq_students_photo_consent_status, owners/admins).",
-    inputSchema: { type: "object", properties: { date: { type: "string", description: "YYYY-MM-DD" }, tenant: TENANT_PROP } },
-    async handler({ date, tenant } = {}) {
-      const qs = date ? `?date=${encodeURIComponent(date)}` : "";
-      const res = await api(tenant)(`/classes/registers${qs}`);
-      if (!res.ok) throw await fail(res);
-      return res.json();
-    },
-  },
-  {
-    name: "uiiq_classes_register_students",
-    description: "Names-only student search (id, name, guardian name; max 20) for adding a walk-in to a register. Open to every staff user, unlike uiiq_students_list.",
-    inputSchema: { type: "object", properties: { q: { type: "string" }, tenant: TENANT_PROP } },
-    async handler({ q, tenant } = {}) {
-      const qs = q ? `?q=${encodeURIComponent(q)}` : "";
-      const res = await api(tenant)(`/classes/registers/students${qs}`);
-      if (!res.ok) throw await fail(res);
-      return res.json();
-    },
-  },
-  {
-    name: "uiiq_classes_register_mark",
-    description: "Mark a student PRESENT, ABSENT or LATE for a class on a date. walkIn=true enrols an unenrolled student as DROP_IN first. A mark that CHANGES to ABSENT or LATE fires the tenant's attendance automations on the guardian (may message them). 409 on a cancelled session. With student absences switched on: ILL is accepted too — stored as ABSENT, linked to a one-day ILLNESS absence (or one already covering the day), and it sends no \"Missed class\" message; instead a new ILL mark fires the tenant's \"absence_marked_ill\" automation (a neutral \"noted as unwell\" notice; its template ships as a draft). ILL is only for that class's teachers, whoever covers the session, and owners/admins (403 otherwise: mark ABSENT instead), only for a child on the class's register (an ACTIVE/TRIAL enrolment or a mark already saved), and only for today or earlier (UK). An ABSENT inside a recorded absence is linked the same way and sends no \"Missed class\" either. Changing an ILL mark to anything else removes the illness that tap made (only that one; an absence recorded elsewhere is just unlinked). The reply then carries absenceId.",
-    inputSchema: { type: "object", required: ["classId", "studentId", "sessionDate", "status"], properties: { classId: { type: "string" }, studentId: { type: "string" }, sessionDate: { type: "string", description: "YYYY-MM-DD" }, status: { type: "string", enum: ["PRESENT", "ABSENT", "LATE", "ILL"], description: "ILL only when student absences are switched on (400 otherwise), by the class's teachers, cover or owners/admins (403 otherwise)" }, walkIn: { type: "boolean" }, tenant: TENANT_PROP } },
-    async handler({ tenant, ...body }) {
-      const res = await post(tenant, "/classes/registers/attendance", body);
-      if (!res.ok) throw await fail(res);
-      return res.json();
-    },
-  },
-  {
-    name: "uiiq_classes_register_payment",
-    description: "TAKE A PAYMENT at the register against an enrolment (drop-in fee, plan excess or owed balance): raises a CASH/CARD till sale so it lands in daily takings, records it on the ledger, and with sessionDate stamps that day's attendance as paid (creating a PRESENT mark if none). A DROP_IN or PLAN payment MUST pass sessionDate, the session being paid for (400 without it), and is taken once per session: a second take for the same session is a 409 (\"Already paid for this session\"; check uiiq_classes_register_day before retrying). Only a term/upfront balance may omit it. Refused (400) on a funded, FREE class (run for a sister organisation): families never pay for it. A funded, SUBSIDISED class takes it like any other; the ledger line records the organisation running it as whose money it is.",
-    inputSchema: { type: "object", required: ["enrolmentId", "amountPence", "method"], properties: { enrolmentId: { type: "string" }, amountPence: { type: "number" }, method: { type: "string", enum: ["CASH", "CARD"] }, sessionDate: { type: "string", description: "YYYY-MM-DD: the session being paid for. Required for a DROP_IN or PLAN enrolment; omit only for a term/upfront balance" }, note: { type: "string" }, tenant: TENANT_PROP } },
-    async handler({ tenant, ...body }) {
-      const res = await post(tenant, "/classes/registers/payment", body);
-      if (!res.ok) throw await fail(res);
-      return res.json();
-    },
-  },
-  {
-    name: "uiiq_classes_register_star",
-    description: "Toggle a star for a student in a class on a date (calling again removes it; the reply says starred true/false). Giving one fires the student_star_given automation on the guardian.",
-    inputSchema: { type: "object", required: ["classId", "studentId", "sessionDate"], properties: { classId: { type: "string" }, studentId: { type: "string" }, sessionDate: { type: "string" }, note: { type: "string", description: "Up to 500 chars" }, tenant: TENANT_PROP } },
-    async handler({ tenant, ...body }) {
-      const res = await post(tenant, "/classes/registers/star", body);
-      if (!res.ok) throw await fail(res);
-      return res.json();
-    },
-  },
-  {
-    name: "uiiq_classes_register_costume",
-    description: "Tick a student's costume for a show as handedOut and/or paid (send at least one). Stamped with who did it. With classId, paid is THAT ROUTINE's costume paid at the office: a costume sale is recorded at the routine's price (the class's override, else the show's) in the show's billing organisation; 409 with no price set, or when the student isn't enrolled in that routine; unticking (paid: false) deletes the office sale, so it is the owner's or an admin's (403 otherwise); a costume paid online can't be unticked here. Both are audited. Without classId, paid is the older per-show tick.",
-    inputSchema: { type: "object", required: ["studentId", "showEventId"], properties: { studentId: { type: "string" }, showEventId: { type: "string" }, classId: { type: "string", description: "The routine (class performing in the show) for a per-routine paid tick" }, handedOut: { type: "boolean" }, paid: { type: "boolean" }, tenant: TENANT_PROP } },
-    async handler({ tenant, ...body }) {
-      const res = await post(tenant, "/classes/registers/costume", body);
-      if (!res.ok) throw await fail(res);
-      return res.json();
-    },
-  },
-  {
-    name: "uiiq_classes_costume_refund",
-    description: "Owner or admin only: REFUND one routine's show costume paid online in the Members App (UiiQ-platform sister organisations 4/7), on the Stripe account it was paid on, which clears its tick. saleId is the routine's costume sale (routineSaleId on the register). A costume paid at the office is unticked with uiiq_classes_register_costume instead (409 here). Moves money: without confirm: true it is ALWAYS a dry run that changes nothing. Acts in your own signed-in workspace.",
-    inputSchema: { type: "object", required: ["saleId"], properties: { saleId: { type: "string" }, confirm: { type: "boolean", description: "true = refund it; omit for the dry run" } } },
-    async handler({ saleId, confirm }) {
-      if (confirm !== true) return { dryRun: true, changed: false, wouldDo: "refund_costume", saleId, note: "Nothing was changed. Check this with the workspace owner, then call again with confirm: true." };
-      const res = await post(undefined, `/classes/costumes/${encodeURIComponent(saleId)}/refund`, {});
-      if (!res.ok) throw await fail(res);
-      return res.json();
-    },
-  },
-  {
-    name: "uiiq_classes_attendance_report",
-    description: "Attendance rate by class and by student over a date range (inclusive; default the last 8 weeks), flagging students under the tenant's low-attendance threshold. Cancelled sessions are excluded.",
-    inputSchema: { type: "object", properties: { from: { type: "string", description: "YYYY-MM-DD" }, to: { type: "string" }, tenant: TENANT_PROP } },
-    async handler({ from, to, tenant } = {}) {
-      const params = new URLSearchParams();
-      if (from) params.set("from", from);
-      if (to) params.set("to", to);
-      const qs = params.toString() ? `?${params}` : "";
-      const res = await api(tenant)(`/classes/registers/report${qs}`);
-      if (!res.ok) throw await fail(res);
-      return res.json();
-    },
-  },
+  // ── Register settings (the registers themselves list children: not here) ──
   {
     name: "uiiq_classes_register_settings",
     description: "The register-hook settings: lapseWeeks, arrearsGraceDays, lowAttendancePct, lateGraceMins; ageBands (the timetable's age groups); timetablePageUrl (the timetable page on the school's website, where a class page's \"Back to timetable\" goes when the visitor didn't come from the timetable; null when none is set: \"Back to website\"). With student absences switched on, also absenceApprovalRequired (\"Parents' time-off requests need approval\", default false: a parent's time off is approved at once; true: it waits for an owner or admin). The key is absent when student absences are off.",
@@ -600,78 +409,6 @@ export const classesTools = [
     },
     async handler({ tenant, ...body }) {
       const res = await send(tenant, "PATCH", "/classes/registers/settings", body);
-      if (!res.ok) throw await fail(res);
-      return res.json();
-    },
-  },
-
-  // ── Absences (student absences switched on only; 404 otherwise) ──
-  {
-    name: "uiiq_classes_absences_list",
-    description: "Every student's absences in the workspace, for the Absences page (Classes -> Absences): parents' time-off requests waiting for a decision, who is away, and history. Filters: status (any of REQUESTED, APPROVED, REPORTED, DECLINED, CANCELLED), from (still running on or after this day), to (starting on or before this day), order (asc|desc by start, default desc), limit (1-100, default 50); pass nextCursor back as cursor for the next page. Owners/admins see everything plus `waiting` (requests to decide) and viewer.canReview; anyone else sees only excused absences, with the kind and note on the classes they teach and \"Away (known)\" (kind ABSENCE) everywhere else. Notes are a child's health information: left out (hasNote says one exists) unless includeNotes=true. To decide a request use uiiq_students_absences_approve / _decline with its studentId and id.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        status: { type: "array", items: { type: "string", enum: ["REQUESTED", "APPROVED", "REPORTED", "DECLINED", "CANCELLED"] }, description: "Default all" },
-        from: { type: "string", description: "YYYY-MM-DD: absences ending on or after this day" },
-        to: { type: "string", description: "YYYY-MM-DD: absences starting on or before this day" },
-        order: { type: "string", enum: ["asc", "desc"] },
-        limit: { type: "number", description: "1-100, default 50" },
-        cursor: { type: "string", description: "nextCursor from the previous page" },
-        includeNotes: { type: "boolean", description: "Include notes and the school's messages (default false)" },
-        tenant: TENANT_PROP,
-      },
-    },
-    async handler({ status, from, to, order, limit, cursor, includeNotes, tenant } = {}) {
-      const q = new URLSearchParams();
-      if (Array.isArray(status) && status.length) q.set("status", status.join(","));
-      if (from) q.set("from", from);
-      if (to) q.set("to", to);
-      if (order) q.set("order", order);
-      if (limit !== undefined) q.set("limit", String(limit));
-      if (cursor) q.set("cursor", cursor);
-      const qs = q.toString();
-      const res = await api(tenant)(`/classes/absences${qs ? `?${qs}` : ""}`);
-      if (!res.ok) throw await fail(res);
-      const body = await res.json();
-      if (includeNotes === true || !Array.isArray(body?.absences)) return body;
-      // Notes are opt-in so a child's health note never lands in the model's
-      // context just because someone asked who is away (Lucas, #769 L4).
-      return {
-        ...body,
-        absences: body.absences.map(({ note, reviewNote, ...a }) => ({ ...a, hasNote: !!note || !!reviewNote })),
-        notesOmitted: true,
-      };
-    },
-  },
-
-  // ── Scan check-in ──
-  {
-    name: "uiiq_classes_register_scan",
-    description: "Record ONE scan of a child's check-in card/QR/NFC tag (token = the scanned URL or token) for a date, as the signed-in staff member would from the scanner: checks the child in to the class running now (or classId), or signs them out on a second scan where the class requires it. Rate-limited; an unknown token gets the same NOT_ON_REGISTER reply as an unenrolled child.",
-    inputSchema: { type: "object", required: ["token", "sessionDate"], properties: { token: { type: "string" }, sessionDate: { type: "string", description: "YYYY-MM-DD" }, classId: { type: "string", description: "Pin the scan to one class" }, signedOutBy: { type: "string", description: "Who collected the child (sign-out)" }, scannedAt: { type: "string", description: "ISO time the scan was taken" }, clientId: { type: "string", description: "Device-side id, echoed back" }, tenant: TENANT_PROP } },
-    async handler({ tenant, ...body }) {
-      const res = await post(tenant, "/classes/registers/scan", body);
-      if (!res.ok) throw await fail(res);
-      return res.json();
-    },
-  },
-  {
-    name: "uiiq_classes_register_scan_sync",
-    description: "Drain an offline scan queue: up to 100 scans [{ clientId, token, sessionDate, classId?, signedOutBy?, scannedAt }] processed in order, idempotently; results keyed by clientId. Bad rows are accepted and reported, never blocking the rest.",
-    inputSchema: { type: "object", required: ["scans"], properties: { scans: { type: "array", items: { type: "object", required: ["token", "sessionDate"], properties: { clientId: { type: "string" }, token: { type: "string" }, sessionDate: { type: "string" }, classId: { type: "string" }, signedOutBy: { type: "string" }, scannedAt: { type: "string" } } } }, tenant: TENANT_PROP } },
-    async handler({ scans, tenant }) {
-      const res = await post(tenant, "/classes/registers/scan/sync", { scans });
-      if (!res.ok) throw await fail(res);
-      return res.json();
-    },
-  },
-  {
-    name: "uiiq_classes_scan_cards",
-    description: "The printable check-in card sheet for a class: each enrolled child's QR (data URI; max 120) with their name as a SEPARATE field and their printed-card status. The name is never encoded in the QR. Mints a check-in token for any child without one. OWNER/ADMIN only.",
-    inputSchema: { type: "object", required: ["classId"], properties: { classId: { type: "string" }, tenant: TENANT_PROP } },
-    async handler({ classId, tenant }) {
-      const res = await api(tenant)(`/classes/registers/scan-cards?classId=${encodeURIComponent(classId)}`);
       if (!res.ok) throw await fail(res);
       return res.json();
     },

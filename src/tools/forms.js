@@ -181,7 +181,7 @@ export const formsTools = [
   },
   {
     name: "uiiq_form_app_publish",
-    description: "PUBLISH an IQForm into the Members App: ref is the IQForm id or a link containing form-id= (must exist on the venue's own IQEX org and be Public). audienceType everyone|plan|parents|class|group with audienceValue (plan/class/group id); required default true; perChild = one submission per child (not for plan); dueAt ISO date. 409 if already published. purpose \"add_child\" publishes it instead as the Members App Family tab's \"Add another child\" form (children added through it wait for the office's check, see uiiq_students_registrations_list): it needs family registration switched on (403 otherwise), only one can be active per tenant (409 naming the other), and it always takes one shape whatever else is sent: audience parents, not required, not per child, no due date. Omit purpose (or null) for a normal form.",
+    description: "PUBLISH an IQForm into the Members App: ref is the IQForm id or a link containing form-id= (must exist on the venue's own IQEX org and be Public). audienceType everyone|plan|parents|class|group with audienceValue (plan/class/group id); required default true; perChild = one submission per child (not for plan); dueAt ISO date. 409 if already published. purpose \"add_child\" publishes it instead as the Members App Family tab's \"Add another child\" form (children added through it wait for the office's check in the UiiQ dashboard's Awaiting check): it needs family registration switched on (403 otherwise), only one can be active per tenant (409 naming the other), and it always takes one shape whatever else is sent: audience parents, not required, not per child, no due date. Omit purpose (or null) for a normal form.",
     inputSchema: {
       type: "object",
       required: ["ref"],
@@ -230,12 +230,15 @@ export const formsTools = [
   },
   {
     name: "uiiq_form_app_status",
-    description: "Who a published Members-App form is for and who has done it (per member / per child) — the office's completion view.",
+    description: "Who a published Members-App form is for and who has done it — the office's completion view: { people: [{ email, name, done, completedAt, forAChild? }], done, total }. A per-child form's rows are the parent's, marked forAChild: true, without the child's name: children's records aren't available from the MCP (Steve, 22 Oct 2026: no AI session reads children's records); the UiiQ dashboard shows which child.",
     inputSchema: { type: "object", required: ["id"], properties: { id: { type: "string" }, tenant: TENANT_PROP } },
     async handler({ id, tenant }) {
       const res = await api(tenant)(`/forms/app/${encodeURIComponent(id)}/status`);
       if (!res.ok) throw await fail(res);
-      return res.json();
+      const status = await res.json();
+      if (!Array.isArray(status?.people)) return status;
+      // A child's name never reaches the model: a per-child row says only that it is for a child.
+      return { ...status, people: status.people.map(({ child, ...p }) => (child ? { ...p, forAChild: true } : p)) };
     },
   },
 ];

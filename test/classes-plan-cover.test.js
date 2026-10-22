@@ -72,7 +72,8 @@ test("a 409 asking first comes back as its question; confirmCoverChange is sent 
 test("get passes the setting, what it comes to, and the organisation through", async () => {
   const answer = { id: "cls_hc", planCover: "AUTO", coveredByWeeklyPlans: false, planCoverAutomatic: false, organisation: { id: "bo_college", name: "Street Beat College", sister: true } };
   const { result } = await call("uiiq_classes_get", { id: "cls_hc" }, [200, answer]);
-  assert.deepEqual(result, answer);
+  // Everything but the roster passes through (no roster here: none to count).
+  assert.deepEqual(result, { ...answer, rosterCount: 0, rosterOmitted: true });
 });
 
 test("the schema: the three values, owner or admin, kept when omitted; the count to confirm", () => {
