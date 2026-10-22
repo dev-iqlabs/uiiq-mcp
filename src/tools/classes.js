@@ -26,8 +26,9 @@ const post = (tenant, path, body) => send(tenant, "POST", path, body);
 // check-in, check-in cards), attendance reports, absences, a session's
 // audience and costume refunds are used in the UiiQ dashboard in a browser,
 // and so is picking a class photo (children may be identifiable in it).
-// uiiq_classes_get leaves the class's roster out. test/no-child-records keeps
-// it that way.
+// uiiq_classes_get reads the class list and its course runs, never the class's
+// detail route (it lists the children, and UiiQ refuses it to this client).
+// test/no-child-records keeps it that way.
 
 const CLASS_FIELDS = {
   name: { type: "string" },
@@ -87,14 +88,23 @@ export const classesTools = [
   },
   {
     name: "uiiq_classes_get",
-    description: "One class: editor fields, every teacher and its course runs, without the roster: children's records aren't available from the MCP (Steve, 22 Oct 2026: no AI session reads children's records), so the answer carries rosterCount (how many are on it) and rosterOmitted: true instead; the roster itself is in the UiiQ dashboard. coverSlots is how many of a weekly plan's slots one session uses (coverSlotsNote 'uses 2 slots' when more than one); canSetCoverSlots says whether you may change it. fundingMode (NONE | FREE | SUBSIDISED) and funding ('Funded, free' / 'Funded, subsidised' / null) say whether it is run for a sister organisation and whether families pay; set with uiiq_classes_billing_set. planCover (AUTO | COVERED | NOT_COVERED) is the 'Covered by weekly plans' setting, coveredByWeeklyPlans what it comes to, planCoverAutomatic what AUTO would be, and organisation { id, name, sister } the organisation the class belongs to (the workspace's own, or the sister it is run for or billed through).",
+    description: "One class, by id (inactive ones too): its editor fields, every teacher, venue, show, prices, coverSlots (how many of a weekly plan's slots one session uses), planCover (AUTO | COVERED | NOT_COVERED, the 'Covered by weekly plans' setting) and coveredByWeeklyPlans (what it comes to), organisation { id, name, sister } (the workspace's own, or the sister it is run for or billed through; also as organisationId / organisationName), activeEnrolments (how many hold an active enrolment: a count, never who), and courseRuns (each run with its own count). canSetCoverSlots says whether you may change coverSlots. Read from the class list and the course runs: the class's own detail route lists its children, so UiiQ refuses it to this client (Steve, 22 Oct 2026: no AI session reads children's records). Who is in the class is in the UiiQ dashboard, and so are its funding and Billed through (change them with uiiq_classes_billing_set). rosterOmitted: true says so.",
     inputSchema: { type: "object", required: ["id"], properties: { id: { type: "string" }, tenant: TENANT_PROP } },
     async handler({ id, tenant }) {
-      const res = await api(tenant)(`/classes/${encodeURIComponent(id)}`);
+      // Never GET /classes/<id>: it carries the roster, and UiiQ refuses it to a CLI, MCP or API-key session
+      // (UiiQ-platform #1168). The class list and the course runs carry the same class with counts only.
+      const call = api(tenant);
+      const res = await call("/classes?includeInactive=1");
       if (!res.ok) throw await fail(res);
-      // The roster (children's names and their guardians) never reaches the model: only how many are on it.
-      const { roster, ...cls } = await res.json();
-      return { ...cls, rosterCount: Array.isArray(roster) ? roster.length : 0, rosterOmitted: true };
+      const list = await res.json();
+      const cls = (list.classes ?? []).find((c) => c.id === id);
+      if (!cls) throw new Error(`No class ${id} in this workspace (uiiq_classes_list lists them).`);
+      const runsRes = await call(`/classes/course-runs?classId=${encodeURIComponent(id)}`);
+      if (!runsRes.ok) throw await fail(runsRes);
+      const runs = await runsRes.json();
+      // The organisation as the detail route gave it: a class run for or billed through a sister names it; else the workspace's own.
+      const organisation = { id: cls.organisationId ?? null, name: cls.organisationName ?? list.workspaceName ?? null, sister: !!cls.organisationId };
+      return { ...cls, organisation, courseRuns: runs.runs ?? [], canSetCoverSlots: list.canSetCoverSlots, rosterOmitted: true };
     },
   },
   {

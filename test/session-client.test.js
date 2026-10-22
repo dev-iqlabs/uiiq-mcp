@@ -60,18 +60,18 @@ function prepare(r) {
 }
 const seq = (...answers) => () => (answers.length > 1 ? answers.shift() : answers[0]);
 const signIns = () => seen.filter((q) => q.path === "/auth/callback/credentials");
-const CLASS = { id: "cls1", name: "Junior Ballet", courseRuns: [] };
+const CLASSES = { classes: [{ id: "cls1", name: "Junior Ballet" }] };
 
 test("a sign-in says client=uiiq-mcp, and no request carries Origin or Sec-Fetch-Site", async () => {
-  prepare({ "GET /classes/cls1": seq([401, { error: "Unauthorized" }], [200, CLASS]) });
-  const result = await tools.uiiq_classes_get.handler({ id: "cls1" });
-  assert.equal(result.name, "Junior Ballet");
+  prepare({ "GET /classes": seq([401, { error: "Unauthorized" }], [200, CLASSES]) });
+  const result = await tools.uiiq_classes_list.handler({});
+  assert.equal(result.classes[0].name, "Junior Ballet");
   assert.equal(signIns().length, 1);
   const form = new URLSearchParams(signIns()[0].body);
   assert.equal(form.get("client"), "uiiq-mcp");
   assert.equal(form.get("email"), "office@sbda.test");
   assert.equal(form.get("csrfToken"), "csrf-test");
-  assert.deepEqual(seen.map((q) => `${q.method} ${q.path}`), ["GET /classes/cls1", "GET /auth/csrf", "POST /auth/callback/credentials", "GET /classes/cls1"]);
+  assert.deepEqual(seen.map((q) => `${q.method} ${q.path}`), ["GET /classes", "GET /auth/csrf", "POST /auth/callback/credentials", "GET /classes"]);
   for (const q of seen) {
     assert.equal(q.headers.origin, undefined, `${q.method} ${q.path} sent Origin`);
     assert.equal(q.headers["sec-fetch-site"], undefined, `${q.method} ${q.path} sent Sec-Fetch-Site`);
@@ -79,27 +79,27 @@ test("a sign-in says client=uiiq-mcp, and no request carries Origin or Sec-Fetch
 });
 
 test("a child-records 403 ends the call with UiiQ's words: one request, no new sign-in, no retry", async () => {
-  prepare({ "GET /classes/cls1": [403, REFUSED] });
-  await assert.rejects(tools.uiiq_classes_get.handler({ id: "cls1" }), (e) => {
+  prepare({ "GET /classes": [403, REFUSED] });
+  await assert.rejects(tools.uiiq_classes_list.handler({}), (e) => {
     assert.equal(e.code, "child_records_browser_only");
     assert.match(e.message, /^Children's records are open in the UiiQ dashboard in a browser only\./);
     assert.match(e.message, /not an expired session: don't retry or sign in again/);
     return true;
   });
-  assert.deepEqual(seen.map((q) => `${q.method} ${q.path}`), ["GET /classes/cls1"]);
+  assert.deepEqual(seen.map((q) => `${q.method} ${q.path}`), ["GET /classes"]);
 });
 
 test("a child-records 403 after an expired session's one sign-in ends there: no second sign-in", async () => {
-  prepare({ "GET /classes/cls1": seq([401, { error: "Unauthorized" }], [403, REFUSED]) });
-  await assert.rejects(tools.uiiq_classes_get.handler({ id: "cls1" }), { code: "child_records_browser_only" });
+  prepare({ "GET /classes": seq([401, { error: "Unauthorized" }], [403, REFUSED]) });
+  await assert.rejects(tools.uiiq_classes_list.handler({}), { code: "child_records_browser_only" });
   assert.equal(signIns().length, 1);
-  assert.equal(seen.filter((q) => q.path === "/classes/cls1").length, 2);
+  assert.equal(seen.filter((q) => q.path === "/classes").length, 2);
 });
 
 test("any other 403 is the tool's own refusal, as before: UiiQ's words, no new sign-in", async () => {
-  prepare({ "GET /classes/cls1": [403, { error: "You don't have permission to view classes." }] });
-  await assert.rejects(tools.uiiq_classes_get.handler({ id: "cls1" }), (e) => e.message === "You don't have permission to view classes." && e.code === undefined);
-  assert.deepEqual(seen.map((q) => `${q.method} ${q.path}`), ["GET /classes/cls1"]);
+  prepare({ "GET /classes": [403, { error: "You don't have permission to view classes." }] });
+  await assert.rejects(tools.uiiq_classes_list.handler({}), (e) => e.message === "You don't have permission to view classes." && e.code === undefined);
+  assert.deepEqual(seen.map((q) => `${q.method} ${q.path}`), ["GET /classes"]);
 });
 
 test("no source file sets an Origin or Sec-Fetch-* header", () => {

@@ -29,7 +29,7 @@ for (const [name, args] of [
   });
 }
 
-test("3d: fundingMode on uiiq_classes_billing_set, a dry run like the rest; get says what free and subsidised mean", async () => {
+test("3d: fundingMode on uiiq_classes_billing_set, a dry run like the rest; get says where the funding is", async () => {
   const t = tool("uiiq_classes_billing_set");
   assert.deepEqual(t.inputSchema.properties.fundingMode.enum, ["NONE", "FREE", "SUBSIDISED"]);
   assert.match(t.description, /SUBSIDISED = families pay the class fee, taken by the organisation running it/);
@@ -37,7 +37,8 @@ test("3d: fundingMode on uiiq_classes_billing_set, a dry run like the rest; get 
   const out = await t.handler({ id: "cls_line", runForBillingOrganisationId: "bo_college", fundingMode: "SUBSIDISED" });
   assert.equal(out.dryRun, true);
   assert.equal(out.fundingMode, "SUBSIDISED");
-  assert.ok(tool("uiiq_classes_get").description.includes("fundingMode (NONE | FREE | SUBSIDISED)"));
+  // The class's detail route (with its funding) is refused to an AI session (it lists children): get says where funding is.
+  assert.match(tool("uiiq_classes_get").description, /its funding and Billed through \(change them with uiiq_classes_billing_set\)/);
 });
 
 test("4/7 fields are in the schemas and described", () => {

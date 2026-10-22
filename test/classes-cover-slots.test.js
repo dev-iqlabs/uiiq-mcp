@@ -58,8 +58,8 @@ test("create and update send coverSlots; update without it doesn't send one", as
 });
 
 test("get returns coverSlots and whether you may change it", async () => {
-  const { result } = await call("uiiq_classes_get", { id: "cls_mt" }, [200, { id: "cls_mt", coverSlots: 2, coverSlotsNote: "uses 2 slots", canSetCoverSlots: false }]);
-  assert.deepEqual([result.coverSlots, result.coverSlotsNote, result.canSetCoverSlots], [2, "uses 2 slots", false]);
+  const { result } = await call("uiiq_classes_get", { id: "cls_mt" }, [200, { classes: [{ id: "cls_mt", coverSlots: 2 }], canSetCoverSlots: false }], [200, { runs: [] }]);
+  assert.deepEqual([result.coverSlots, result.canSetCoverSlots], [2, false]);
 });
 
 test("a teacher's refusal comes back as UIIQ's message", async () => {

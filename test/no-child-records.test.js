@@ -121,17 +121,29 @@ test("no tool is named for a child's record: students (but the group picker), th
   assert.ok(tools.uiiq_students_groups && tools.uiiq_classes_register_settings && tools.uiiq_classes_get, "the kept tools are still there");
 });
 
-test("uiiq_classes_get leaves the roster out: no child's or guardian's name reaches the model, only how many", async () => {
-  const roster = [
-    { studentId: "stu1", studentName: "Ava Lee", guardian: { id: "c1", name: "Kim Lee", email: "kim@example.com" }, feePence: 5000 },
-    { studentId: "stu2", studentName: "Bo Smith", guardian: { id: "c2", name: "Sam Smith", email: "sam@example.com" }, feePence: 5000 },
+// GET /classes/<id> carries the class's roster, so UiiQ refuses it to this client (UiiQ-platform #1168). Its PATCH and
+// DELETE stay (a class's settings), so this is checked by method: no source GETs it, and uiiq_classes_get doesn't.
+test("no source file GETs a class's detail route (/classes/<id>): it lists the class's children", () => {
+  const getClassDetail = /api\([a-zA-Z]*\)\(\s*`\/classes\/\$\{[^}]+\}`\s*\)/;
+  const found = walk(join(ROOT, "src")).filter((f) => getClassDetail.test(readFileSync(f, "utf8")));
+  assert.deepEqual(found.map((f) => relative(ROOT, f)), []);
+});
+
+test("uiiq_classes_get reads the class list and its course runs, never the class's detail route; a count, never who", async () => {
+  const answers = [
+    [200, { classes: [{ id: "cls_other", name: "Tap" }, { id: "cls1", name: "Junior Ballet", activeEnrolments: 2 }], canSetCoverSlots: true }],
+    [200, { runs: [{ id: "run1", term: { id: "t1", name: "Autumn" }, activeEnrolments: 2 }] }],
   ];
-  reply = () => [200, { id: "cls1", name: "Junior Ballet", courseRuns: [], roster }];
+  reply = () => answers.shift();
   seen = [];
   const result = await tools.uiiq_classes_get.handler({ id: "cls1" });
-  assert.deepEqual(seen, [{ method: "GET", path: "/classes/cls1" }]);
-  assert.deepEqual(result, { id: "cls1", name: "Junior Ballet", courseRuns: [], rosterCount: 2, rosterOmitted: true });
-  for (const v of ["Ava Lee", "Bo Smith", "Kim Lee", "kim@example.com", "stu1"]) assert.equal(JSON.stringify(result).includes(v), false, v);
+  assert.deepEqual(seen.map((q) => `${q.method} ${q.path}`), ["GET /classes?includeInactive=1", "GET /classes/course-runs?classId=cls1"]);
+  assert.deepEqual(result, { id: "cls1", name: "Junior Ballet", activeEnrolments: 2, organisation: { id: null, name: null, sister: false }, courseRuns: [{ id: "run1", term: { id: "t1", name: "Autumn" }, activeEnrolments: 2 }], canSetCoverSlots: true, rosterOmitted: true });
+  // A class that isn't in the list: an error, and still no detail call.
+  reply = () => [200, { classes: [] }];
+  seen = [];
+  await assert.rejects(tools.uiiq_classes_get.handler({ id: "cls_gone" }), /No class cls_gone in this workspace/);
+  assert.deepEqual(seen.map((q) => q.path), ["/classes?includeInactive=1"]);
 });
 
 test("uiiq_form_app_status leaves the child's name out of a per-child row: the parent's row says forAChild", async () => {
