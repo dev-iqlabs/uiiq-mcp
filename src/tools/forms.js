@@ -17,6 +17,16 @@ const post = (tenant, path, body) => api(tenant)(path, { method: "POST", body: J
 // they are personal data about named parents and children, which UiiQ serves to a browser only (Steve, 22 Oct 2026:
 // no AI session reads children's records; UiiQ-platform #1168). They are in the UiiQ dashboard.
 
+// A survey's results to a machine session are COUNTS only (Steve's decision on #1168, 22 Oct 2026): the typed answers
+// and the response ids behind them are a person's, in a browser. Dropped here too, so nothing depends on them, even
+// from a UiiQ that still sends them.
+export const TYPED_ANSWERS_NOTE = "Typed answers aren't available here: open the results in the UiiQ dashboard.";
+export function countsOnly(results) {
+  const questions = results?.summary?.questions;
+  const summary = Array.isArray(questions) ? { ...results.summary, questions: questions.map(({ texts, ...q }) => q) } : results?.summary;
+  return { ...results, ...(summary !== undefined ? { summary } : {}), typedAnswersOmitted: true, note: TYPED_ANSWERS_NOTE };
+}
+
 function resultsQuery({ classId, group, fundedProjectId, from, to }) {
   const params = new URLSearchParams();
   for (const [k, v] of Object.entries({ classId, group, fundedProjectId, from, to })) if (v) params.set(k, v);
@@ -135,13 +145,13 @@ export const formsTools = [
   },
   {
     name: "uiiq_form_results",
-    description: "A survey's numbers — response rate against invitations, per-question aggregates and free-text answers verbatim — filtered by classId, group, fundedProjectId, from, to. OWNER/ADMIN (the answers are parents' prose about children).",
+    description: "A survey's numbers, COUNTS only: the response rate against invitations and, per question, how many answered and skipped, each choice's count, and a rating's average and spread, filtered by classId, group, fundedProjectId, from, to. Typed answers aren't available here: open the results in the UiiQ dashboard (they are parents' prose about children, so UiiQ gives an AI session the counts only: Steve, 22 Oct 2026). The answer says so in note, with typedAnswersOmitted: true. OWNER/ADMIN.",
     inputSchema: { type: "object", required: ["id"], properties: { id: { type: "string" }, ...RESULTS_FILTER, tenant: TENANT_PROP } },
     async handler({ id, tenant, ...filter }) {
       const qs = resultsQuery(filter);
       const res = await api(tenant)(`/forms/${encodeURIComponent(id)}/results${qs}`);
       if (!res.ok) throw await fail(res);
-      return res.json();
+      return countsOnly(await res.json());
     },
   },
 

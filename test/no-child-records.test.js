@@ -124,19 +124,26 @@ test("no tool is named for a child's record: students (but the group picker), th
 });
 
 // GET /classes/<id> carries the class's roster, so UiiQ refuses it to this client (UiiQ-platform #1168). Its PATCH and
-// DELETE stay (a class's settings), so this is checked by method. Every `/classes/${…}` template (nothing after the id
+// DELETE stay (a class's settings), so this is checked by method. Every way of writing the path (nothing after the id
 // but a query string) is read with the call around it: GET unless the call plainly says PATCH, PUT, POST or DELETE. A
 // path kept in a variable, or a call shape this can't read, counts as a GET: the check fails closed.
+const CLASS_DETAIL_PATHS = [
+  // `/classes/${id}`, `/api/classes/${id}?x=1`, `${base}/api/classes/${id}`
+  /`(?:\$\{[^}`]+\})?(?:\/api)?\/classes\/\$\{[^}`]+\}(?:\?[^`]*)?`/g,
+  // "/classes/" + id, '/api/classes/' + encodeURIComponent(id), "/classes/" + id + "?x=1" (not "/classes/" + id + "/billing")
+  /(["'`])(?:\/api)?\/classes\/\1\s*\+\s*[A-Za-z_$][\w$.]*(?:\((?:[^()]|\([^()]*\))*\))?(?![\w$.(])(?!\s*\+\s*["'`]\/)/g,
+];
 export function classDetailGets(src) {
   const found = [];
-  for (const m of src.matchAll(/`\/classes\/\$\{[^}`]+\}(?:\?[^`]*)?`/g)) {
+  for (const m of CLASS_DETAIL_PATHS.flatMap((re) => [...src.matchAll(re)])) {
     const before = src.slice(Math.max(0, m.index - 80), m.index);
-    const after = src.slice(m.index + m[0].length, m.index + m[0].length + 200);
+    // A query string added on ("…" + id + "?x=1") is still the detail route: read the call after it.
+    const after = src.slice(m.index + m[0].length, m.index + m[0].length + 200).replace(/^\s*\+\s*(["'`])\?[^"'`]*\1/, "");
     const method =
-      /"(PATCH|PUT|POST|DELETE)"\s*,\s*$/.exec(before)?.[1] ?? // send(tenant, "PATCH", `/classes/${id}`)
+      /["'](PATCH|PUT|POST|DELETE)["']\s*,\s*$/.exec(before)?.[1] ?? // send(tenant, "PATCH", `/classes/${id}`)
       (/\bpost\(\s*[a-zA-Z]+\s*,\s*$/.test(before) ? "POST" : undefined) ?? // post(tenant, `/classes/${id}`)
-      /^\s*,\s*"(GET|PATCH|PUT|POST|DELETE)"/.exec(after)?.[1] ?? // send(`/classes/${id}`, "DELETE")
-      /^\s*,\s*\{[^}]*?\bmethod:\s*"(GET|PATCH|PUT|POST|DELETE)"/.exec(after)?.[1] ?? // api(t)(`/classes/${id}`, { method: "PATCH" })
+      /^\s*,\s*["'](GET|PATCH|PUT|POST|DELETE)["']/.exec(after)?.[1] ?? // send(`/classes/${id}`, "DELETE")
+      /^\s*,\s*\{[^}]*?\bmethod:\s*["'](GET|PATCH|PUT|POST|DELETE)["']/.exec(after)?.[1] ?? // api(t)(`/classes/${id}`, { method: "PATCH" })
       "GET";
     if (method === "GET") found.push(m[0]);
   }
@@ -156,6 +163,14 @@ test("the class-detail check can fail: any GET shape is caught, a PATCH or DELET
     "api(tenant)(`/classes/${id}`, { method: \"GET\" })",
     "const p = `/classes/${id}`; api(tenant)(p)",
     "api(tenant)(`/classes/${id}?x=1`)",
+    "api(tenant)(`/api/classes/${id}`)",
+    "fetch(`${base}/api/classes/${encodeURIComponent(id)}`)",
+    "api(tenant)(\"/classes/\" + id)",
+    "api(tenant)('/classes/' + encodeURIComponent(id))",
+    "api(tenant)(\"/api/classes/\" + args.id)",
+    "api(tenant)(\"/classes/\" + encodeURIComponent(String(id)))",
+    "api(tenant)(\"/classes/\" + id + \"?x=1\")",
+    "api(tenant)(\"/classes/\" + id + \"?x=1\", { method: \"GET\" })",
   ];
   for (const src of gets) assert.equal(classDetailGets(src).length, 1, src);
   const writes = [
@@ -163,6 +178,13 @@ test("the class-detail check can fail: any GET shape is caught, a PATCH or DELET
     "send(tenant, \"DELETE\", `/classes/${encodeURIComponent(id)}`)",
     "post(tenant, `/classes/${id}`, body)",
     "api(tenant)(`/classes/${id}/billing`)",
+    "send(tenant, \"DELETE\", `/api/classes/${id}`)",
+    "send(tenant, \"DELETE\", \"/classes/\" + id)",
+    "api(tenant)(\"/classes/\" + id, { method: \"PATCH\", body })",
+    "api(tenant)('/api/classes/' + encodeURIComponent(id), { method: 'DELETE' })",
+    "api(tenant)(\"/classes/\" + id + \"/billing\")",
+    "api(tenant)(\"/classes/\" + encodeURIComponent(id) + `/billing`)",
+    "api(tenant)(\"/classes/course-runs?classId=\" + id)",
   ];
   for (const src of writes) assert.deepEqual(classDetailGets(src), [], src);
 });
@@ -194,4 +216,37 @@ test("a class photo is never picked from the MCP: refused before any request, an
     assert.equal("imageMediaId" in tools[name].inputSchema.properties, false, name);
     assert.equal("photoPermissionConfirmed" in tools[name].inputSchema.properties, false, name);
   }
+});
+
+// A survey's results, as UiiQ answers today: the counts, and each text question's typed answers with their response ids.
+const COUNTS = { responses: 3, firstResponseAt: "2026-10-01T09:00:00.000Z", lastResponseAt: "2026-10-03T09:00:00.000Z" };
+const CHOICE_Q = { key: "enjoy", label: "Enjoying the term?", kind: "choice", answered: 3, unanswered: 0, smallSample: true, options: [{ value: "Yes", count: 2 }, { value: "No", count: 1 }], average: null, numericAnswered: 0, distribution: [], scaleMin: null, scaleMax: null };
+const RATING_Q = { key: "rate", label: "Out of 5?", kind: "rating", answered: 2, unanswered: 1, smallSample: true, options: [], average: 4.5, numericAnswered: 2, distribution: [{ value: "4", count: 1 }, { value: "5", count: 1 }], scaleMin: 1, scaleMax: 5 };
+const TEXT_Q = { key: "more", label: "Anything else?", kind: "text", answered: 2, unanswered: 1, smallSample: true, options: [], average: null, numericAnswered: 0, distribution: [], scaleMin: null, scaleMax: null };
+const TYPED = [{ responseId: "resp_typed_1", submittedAt: "2026-10-01T09:00:00.000Z", text: "TYPED ANSWER ONE" }, { responseId: "resp_typed_2", submittedAt: "2026-10-03T09:00:00.000Z", text: "TYPED ANSWER TWO" }];
+const RESULTS = {
+  form: { id: "f1", name: "Autumn survey", isSurvey: true, surveyUrl: "https://example.test/s", surveyFormKey: "autumn", fundedProjectId: null },
+  summary: { ...COUNTS, questions: [{ ...CHOICE_Q, texts: [] }, { ...RATING_Q, texts: [] }, { ...TEXT_Q, texts: TYPED }] },
+  rate: { sent: 10, suppressed: 1, responded: 3, ratePct: 30 },
+  filters: { classes: [], groups: [], projects: [] },
+};
+
+test("uiiq_form_results gives the counts only: no typed answer or response id, and says they are in the dashboard", async () => {
+  // UiiQ sending the typed answers (before #1168 strips them), and UiiQ already leaving them out: the same counts back.
+  const stripped = { ...RESULTS, summary: { ...COUNTS, questions: [CHOICE_Q, RATING_Q, TEXT_Q] } };
+  for (const sent of [RESULTS, stripped]) {
+    reply = () => [200, sent];
+    seen = [];
+    const result = await tools.uiiq_form_results.handler({ id: "f1", classId: "cls1" });
+    assert.deepEqual(seen.map((q) => `${q.method} ${q.path}`), ["GET /forms/f1/results?classId=cls1"]);
+    assert.deepEqual(result.summary, { ...COUNTS, questions: [CHOICE_Q, RATING_Q, TEXT_Q] });
+    assert.deepEqual(result.rate, RESULTS.rate);
+    assert.deepEqual(result.form, RESULTS.form);
+    assert.equal(result.typedAnswersOmitted, true);
+    assert.equal(result.note, "Typed answers aren't available here: open the results in the UiiQ dashboard.");
+    assert.doesNotMatch(JSON.stringify(result), /TYPED ANSWER|resp_typed|"texts"/);
+  }
+  assert.match(tools.uiiq_form_results.description, /COUNTS only/);
+  assert.match(tools.uiiq_form_results.description, /Typed answers aren't available here: open the results in the UiiQ dashboard/);
+  assert.doesNotMatch(tools.uiiq_form_results.description, /verbatim/);
 });
