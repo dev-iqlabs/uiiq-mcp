@@ -1,5 +1,5 @@
-// node --test — UiiQ-platform self-enrolment (Members App): the office's
-// "Enrolled by parents" tools, auto-approve on the registration form, and a
+// node --test — UiiQ-platform self-enrolment (Members App): auto-approve on
+// the registration form, and a
 // class's byAudition, against a local stand-in for UIIQ (a throwaway HOME
 // with a fake session, so no real login is read or sent).
 import { test, before, after } from "node:test";
@@ -46,30 +46,6 @@ async function call(name, args, response) {
   const result = await tools[name].handler(args);
   return { result, requests: seen };
 }
-
-test("parent enrolments: the list is a GET; keep and undo POST the action", async () => {
-  let r = await call("uiiq_classes_parent_enrolments_list", {}, [200, { enrolments: [{ id: "e1", status: "ACTIVE" }] }]);
-  assert.deepEqual(r.requests, [{ method: "GET", path: "/classes/parent-enrolments" }]);
-  assert.equal(r.result.enrolments[0].id, "e1");
-  r = await call("uiiq_classes_parent_enrolment_answer", { id: "e 1", action: "undo" }, [200, { ok: true, status: "CANCELLED" }]);
-  assert.deepEqual(r.requests, [{ method: "POST", path: "/classes/parent-enrolments/e%201", body: { action: "undo" } }]);
-  r = await call("uiiq_classes_parent_enrolment_answer", { id: "e1", action: "keep" }, [200, { ok: true, status: "ACTIVE" }]);
-  assert.deepEqual(r.requests[0].body, { action: "keep" });
-});
-
-test("an answer other than keep or undo is refused before any request", async () => {
-  reply = () => [200, {}];
-  seen = [];
-  await assert.rejects(tools.uiiq_classes_parent_enrolment_answer.handler({ id: "e1", action: "delete" }), /keep" or "undo/);
-  assert.deepEqual(seen, []);
-  assert.deepEqual(tools.uiiq_classes_parent_enrolment_answer.inputSchema.properties.action.enum, ["keep", "undo"]);
-});
-
-test("the API's refusal comes back as the error", async () => {
-  await assert.rejects(call("uiiq_classes_parent_enrolment_answer", { id: "e1", action: "undo" }, [409, { error: "This enrolment has already been kept or undone." }]), {
-    message: "This enrolment has already been kept or undone.",
-  });
-});
 
 test("registration form: autoApprove alone leaves the form; ref alone as before; neither is refused", async () => {
   let r = await call("uiiq_classes_registration_form_set", { autoApprove: true }, [200, { ok: true, autoApprove: true }]);

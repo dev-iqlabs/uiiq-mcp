@@ -28,6 +28,39 @@ function authExpired(res) {
   return (res.headers.get("content-type") ?? "").includes("text/html");
 }
 
+/** What the MCP calls itself when it signs in (UiiQ-platform #1168). */
+export const SIGN_IN_CLIENT = "uiiq-mcp";
+
+// Children's records are served to a browser on UiiQ's own sign-in page only
+// (Steve, 22 Oct 2026; Kim's DPIA R3, DPA 6.6; UiiQ-platform #1168). UiiQ answers
+// this client with a 403 naming the rule. It is not an expired session: it is
+// never retried and never met with a new sign-in. The call stops with UiiQ's words.
+export const CHILD_RECORDS_CODE = "child_records_browser_only";
+const CHILD_RECORDS_STOP =
+  " This is UiiQ's rule for children's records (no AI session reads them), not an expired session: don't retry or sign in again. The person uses the UiiQ dashboard in a browser for it.";
+
+// A 403 is read to the end and handed back as a fresh Response, with its JSON body if it has one.
+async function readRefusal(res) {
+  if (res.status !== 403) return { res, body: null };
+  const text = await res.text();
+  let body = null;
+  try { body = JSON.parse(text); } catch { /* not JSON */ }
+  return { res: new Response(text, { status: res.status, statusText: res.statusText, headers: res.headers }), body };
+}
+
+// What a response means for the session: "refused" (the child-records rule: stop, never sign in
+// again), "expired" (sign in again and retry once) or "ok".
+function verdict(res, body) {
+  if (res.status === 403 && body?.code === CHILD_RECORDS_CODE) return "refused";
+  return authExpired(res) ? "expired" : "ok";
+}
+
+function childRecordsRefused(body) {
+  const e = new Error(`${body?.error || "UiiQ serves children's records to the UiiQ dashboard in a browser only."}${CHILD_RECORDS_STOP}`);
+  e.code = CHILD_RECORDS_CODE;
+  return e;
+}
+
 // Re-authenticate via the NextAuth credentials provider using the email +
 // password saved by `uiiq login`. Refreshes the session cookie in place so the
 // MCP never needs a manual re-login (rotate the stored password as needed).
@@ -47,6 +80,10 @@ async function relogin(creds) {
     csrfToken,
     email: creds.email,
     password: creds.password,
+    // Says what signed in (UiiQ-platform #1168, @ubms/auth session-client): any client that names itself is a
+    // machine session, which UiiQ never serves children's records. No Origin or Sec-Fetch-Site header is ever
+    // sent either (those are what a browser on UiiQ's own sign-in page sends).
+    client: SIGN_IN_CLIENT,
     redirect: "false",
     json: "true",
   });
@@ -282,19 +319,27 @@ function baseCaller() {
     }
   };
 
+  // One call and what it means: a child-records refusal throws at once, before anything else is tried.
+  const attempt = async (p, init, extraCookies) => {
+    const { res, body } = await readRefusal(await doFetch(creds, p, init, extraCookies));
+    const v = verdict(res, body);
+    if (v === "refused") throw childRecordsRefused(body);
+    return { res, expired: v === "expired" };
+  };
+
   return async (p, init = {}, extraCookies) => {
-    let res = await doFetch(creds, p, init, extraCookies);
-    if (!authExpired(res)) return res;
+    let { res, expired } = await attempt(p, init, extraCookies);
+    if (!expired) return res;
 
     const onDisk = freshFromDisk();
     if (onDisk) {
       creds = onDisk;
-      res = await doFetch(creds, p, init, extraCookies);
-      if (!authExpired(res)) return res;
+      ({ res, expired } = await attempt(p, init, extraCookies));
+      if (!expired) return res;
     }
 
     creds = await relogin(creds);
-    return doFetch(creds, p, init, extraCookies);
+    return (await attempt(p, init, extraCookies)).res;
   };
 }
 

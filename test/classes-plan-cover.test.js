@@ -69,10 +69,14 @@ test("a 409 asking first comes back as its question; confirmCoverChange is sent 
   assert.equal(ok.result.affected, 2);
 });
 
-test("get passes the setting, what it comes to, and the organisation through", async () => {
-  const answer = { id: "cls_hc", planCover: "AUTO", coveredByWeeklyPlans: false, planCoverAutomatic: false, organisation: { id: "bo_college", name: "Street Beat College", sister: true } };
-  const { result } = await call("uiiq_classes_get", { id: "cls_hc" }, [200, answer]);
-  assert.deepEqual(result, answer);
+test("get passes the setting, what it comes to, and the organisation through (from the class list, with its runs)", async () => {
+  const cls = { id: "cls_hc", planCover: "AUTO", coveredByWeeklyPlans: false, organisationId: "bo_college", organisationName: "Street Beat College", activeEnrolments: 3 };
+  const { result, requests } = await call("uiiq_classes_get", { id: "cls_hc" }, [200, { classes: [{ id: "cls_other" }, cls], canSetCoverSlots: true, workspaceName: "Street Beat Dance Academy" }], [200, { runs: [] }]);
+  assert.deepEqual(requests.map((q) => q.path), ["/classes?includeInactive=1", "/classes/course-runs?classId=cls_hc"]);
+  assert.deepEqual(result, { ...cls, organisation: { id: "bo_college", name: "Street Beat College", sister: true }, courseRuns: [], canSetCoverSlots: true, rosterOmitted: true });
+  // The workspace's own class: no organisation id, so its name is the workspace's.
+  const own = await call("uiiq_classes_get", { id: "cls_own" }, [200, { classes: [{ id: "cls_own", organisationId: null, organisationName: null }], workspaceName: "Street Beat Dance Academy" }], [200, { runs: [] }]);
+  assert.deepEqual(own.result.organisation, { id: null, name: "Street Beat Dance Academy", sister: false });
 });
 
 test("the schema: the three values, owner or admin, kept when omitted; the count to confirm", () => {

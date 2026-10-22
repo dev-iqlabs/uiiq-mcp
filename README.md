@@ -22,11 +22,11 @@ UIIQ is one subscription whose modules are grouped as **Sell**, **Grow** and **R
 | Retail | `uiiq_retail_*` | Products, categories, suppliers, low-stock alerts, shop sync, stock reasons and reports |
 | Till and kitchen | `uiiq_till_*` | Ping a paired till, verify a staff PIN, take a sale or payment intent, redeem an IQPlant plan code |
 | Menus (food and drink) | `uiiq_menu_*` | Generate a menu kit, build the live menu, manage menu documents |
-| Classes and students | `uiiq_classes_*`, `uiiq_students_*` | Terms, course runs, enrolments (pay now or instalments), registers (attendance, scan, stars, costumes), notices, parent policies; student records, progress notes, check-in cards (medical fields only on get), absences (illness and time off), family registration (the public Register form, children awaiting the office check, approve or decline) |
-| Customer cards | `uiiq_cards_*` | Issue, reissue, revoke, hand over and print member and student cards through IQEX (QR/NFC and branding only, never a name; printing spends credits) |
+| Classes | `uiiq_classes_*`, `uiiq_students_groups` | Classes, terms, course runs, session cover and cancellation, notices, parent policies, the family Register form's settings, the register settings, and the student group labels (counts only). Children's records aren't available from the CLI/MCP (Steve, 22 Oct 2026: no AI session reads children's records). Use the UiiQ dashboard in a browser. |
+| Customer cards | `uiiq_cards_*` | Issue, reissue, revoke, hand over and print member cards through IQEX (QR/NFC and branding only, never a name; printing spends credits). Children's check-in cards are in the UiiQ dashboard |
 | Till back office, kitchen, tables | `uiiq_till_*` | Devices, staff, day close, daily summary, refunds, payment config, food orders and settlement, KDS tickets, tables and their QR codes (floor routes take the device token) |
 | Bookings admin | `uiiq_blockout_*`, `uiiq_checkin_*`, `uiiq_custom_field_*`, `uiiq_waiver_*`, `uiiq_ticket_type_*`, `uiiq_booking_refund`, `uiiq_promo_code_*` | Blockouts, the calendar, door check-in, custom booking fields, waivers, ticket types, refunds (real money), promo codes |
-| Forms | `uiiq_form_*` | Build and send forms (counts against the email allowance), read results and export CSV (owner/admin), publish IQForms to the Members App |
+| Forms | `uiiq_form_*` | Build and send forms (counts against the email allowance), read results (owner/admin), publish IQForms to the Members App. The raw-responses export and a published form's completion per child are in the UiiQ dashboard (they're about named parents and children) |
 
 ### Grow — marketing, CRM and prospecting
 
@@ -1410,20 +1410,18 @@ Needs the `competitions` feature. Setting up, rounds, the nominee confirmation a
 | `uiiq_cards_mark_encoded` | Mark a PRINTED card's NFC tag as written and verified, from the URL/token the tag holds (what a staff phone reads when it taps the card). |
 | `uiiq_cards_print` | SEND up to 5 unprinted customer cards to IQEX to be printed on a design (slug from uiiq_cards_templates) with the card URL in the QR and NFC. |
 | `uiiq_cards_print_refresh` | Ask IQEX where the venue's unprinted customer cards are and move them along: queued → SENT, finished → PRINTED, failed → back to NOT_SENT. |
-| `uiiq_cards_students_print` | SEND up to 5 children's check-in cards to IQEX to be printed on a design, each with the child's check-in URL in the QR and NFC. |
-| `uiiq_cards_students_refresh` | Move children's printed cards along from IQEX's job status (SENT / PRINTED / back to NOT_SENT on failure). |
-| `uiiq_cards_student_handed_over` | Record that a child's PRINTED check-in card is on their lanyard. |
-| `uiiq_cards_student_proof_url` | A fresh presigned link (about 15 minutes) to the proof of a child's printed check-in card. |
 
 ### Classes — `src/tools/classes.js`
+
+Children's records aren't available from the CLI/MCP (Steve, 22 Oct 2026: no AI session reads children's records). Use the UiiQ dashboard in a browser. That covers student records, registrations, health, SEND and allergies, emergency contacts, photos, photo and health consent, progress notes, check-in cards, absences, enrolments, the registers and attendance reports, a session's audience, costume refunds and picking a class photo. `test/no-child-records.test.js` fails if a tool for one comes back.
 
 | Tool | What it does |
 |---|---|
 | `uiiq_classes_list` | List the school's classes (active only unless includeInactive) with teachers, venue, show, schedule type, prices and the active-enrolment count; `planCover` / `coveredByWeeklyPlans` say whether weekly plans cover each. |
-| `uiiq_classes_get` | One class in full: editor fields, every teacher, its course runs, and the roster (enrolments with student names, guardian, fee/paid/owed); `fundingMode` / `funding` say whether it is run for a sister organisation, free or subsidised; `planCover`, `coveredByWeeklyPlans`, `planCoverAutomatic` and `organisation` say whether weekly plans cover it and why. |
+| `uiiq_classes_get` | One class by id (inactive ones too), read from the class list and its course runs: editor fields, teachers, venue, show, prices, `coverSlots`, `planCover` and `coveredByWeeklyPlans`, `organisationId` / `organisationName`, `activeEnrolments` (a count, never who) and `courseRuns`. Never the class's detail route: it lists the class's children, so UiiQ refuses it to this client (UiiQ-platform #1168). Who is in it, and its funding and Billed through, are in the UiiQ dashboard. |
 | `uiiq_classes_plan_cover_impact` | Who changes with "Covered by weekly plans" (read-only, owner/admin): the classes weekly plans covered under the rule before and don't now, each with `scheduleType`, `dropInPricePence` (what the register collects per session from a family on a plan; null = none set, so nothing is collected) and `affectedFamilies` (families on plans it leaves paying at the register). Class and organisation names and counts only. |
-| `uiiq_classes_create` | Create a class. `planCover` (AUTO / COVERED / NOT_COVERED, owner or admin): covered by weekly plans. A photo (`imageMediaId`) needs `photoPermissionConfirmed: true`, after the user confirms permission. |
-| `uiiq_classes_update` | Replace a class's details. `planCover` turning plan cover off asks first (409 with `affected`; resend `confirmCoverChange: <n>` once the user agrees). `imageMediaId` picks or replaces the photo (needs `photoPermissionConfirmed: true`, after the user confirms permission); null removes it. |
+| `uiiq_classes_create` | Create a class. `planCover` (AUTO / COVERED / NOT_COVERED, owner or admin): covered by weekly plans. The class photo is picked in the dashboard (children may be identifiable in it). |
+| `uiiq_classes_update` | Replace a class's details. `planCover` turning plan cover off asks first (409 with `affected`; resend `confirmCoverChange: <n>` once the user agrees). The class photo is kept as it is; it is changed in the dashboard. |
 | `uiiq_classes_delete` | DELETE a class outright. |
 | `uiiq_classes_terms_list` | The school's terms (newest first) with dates, excluded dates and how many course runs each has. |
 | `uiiq_classes_term_create` | Create a term: name, startDate and endDate (YYYY-MM-DD), optional excludedDates (half-term etc.) and active. |
@@ -1436,7 +1434,6 @@ Needs the `competitions` feature. Setting up, rounds, the nominee confirmation a
 | `uiiq_classes_session_overrides` | Dated changes to sessions (CANCELLED / COVERED / MOVED): by classId and/or a from-to window, or every class's changes on one date (the register's view). |
 | `uiiq_classes_session_override` | Cancel, arrange cover for, or move ONE session of a class on a date — and TELL PEOPLE: unless notifyParents=false this messages every household in the class and the covering teacher (email/SMS through the tenant's comms; suppressed pre-launch, in which case the reply says so). |
 | `uiiq_classes_session_restore` | Remove the dated change for a class on a date, putting the ordinary session back. |
-| `uiiq_classes_session_audience` | Who a message about a class would reach (one row per household, children named, unsubscribed/archived dropped), plus the staff who could cover and the rooms available. |
 | `uiiq_classes_notices_list` | Parent notices (drafts and published, newest first) with their audience, plus the classes and group labels available to address one to. |
 | `uiiq_classes_notice_create` | Create a parent notice for an audience ({ classIds, groups, all } — at least one). |
 | `uiiq_classes_notice_update` | Replace a notice's title, body, audience, publishedAt and expiresAt (full replace — all of title/body/audience are required). |
@@ -1445,30 +1442,9 @@ Needs the `competitions` feature. Setting up, rounds, the nominee confirmation a
 | `uiiq_classes_policies_set` | Replace the WHOLE parent-policy list (max 25; each needs a unique key and a title; url must be https://, or documentId a Document Vault file). |
 | `uiiq_classes_registration_form_get` | The school's public "Register your family" IQForm (enabled, iqformId, url); enabled=false when family registration is switched off. |
 | `uiiq_classes_registration_form_set` | Set (IQForm id or form-id= link; must be Public and the venue's own) or clear (null / "") the public "Register your family" form, and/or `autoApprove` (children parents add go on the roll at once; the office keeps or removes them). OWNER/ADMIN; 404 unless family registration is switched on. |
-| `uiiq_classes_parent_enrolments_list` | "Enrolled by parents": enrolments parents made in the Members App that the office hasn't kept or undone (names only). |
-| `uiiq_classes_parent_enrolment_answer` | Keep, or undo (cancel), an enrolment a parent made in the Members App. |
-| `uiiq_classes_enrolments_list` | Enrolments (newest first), filtered by classId and/or studentId: student and class names, term, status, payment mode, fee/paid/owed and instalment arrears. |
-| `uiiq_classes_enrolment_get` | One enrolment with its payment ledger (amount, method, till sale, date). |
-| `uiiq_classes_enrol` | Enrol a student in a class. |
-| `uiiq_classes_enrolment_update` | Change an enrolment's status (TRIAL \| ACTIVE \| WAITLIST \| CANCELLED \| COMPLETED — activating re-checks capacity; CANCELLED keeps the ledger), feePence or notes. |
-| `uiiq_classes_enrolment_instalment_link` | Regenerate the Stripe Checkout link for an ACTIVE INSTALMENTS enrolment whose guardian never completed checkout. |
-| `uiiq_classes_enrolment_plan_options` | The student's guardian's ACTIVE memberships, each flagged with whether its plan covers the class — what to pass as membershipId for a PLAN enrolment. |
-| `uiiq_classes_enrolment_plan_load` | Would enrolling the student in the class on this membership take them over their plan's weekly classes, and which plan would they need? |
-| `uiiq_classes_register_day` | The day's registers (default today): every class running on that date with its students, attendance marks, check-in/out times, paid chip (PAID / OWES / DROP_IN_DUE / PLAN / PLAN_OVER / ARREARS …), stars and costume ticks; cancelled sessions listed separately. With family registration on, each child's photography and video consent (yes / no / not_answered) and whether the school holds their photo (the photo itself is not returned). |
-| `uiiq_classes_register_students` | Names-only student search (id, name, guardian name; max 20) for adding a walk-in to a register. |
-| `uiiq_classes_register_mark` | Mark a student PRESENT, ABSENT or LATE for a class on a date. With student absences on, ILL too (stored as ABSENT, linked to an illness, a neutral "noted as unwell" notice instead of "Missed class"); ILL only by the class's teachers, cover or owners/admins, for an enrolled child, today or earlier. |
-| `uiiq_classes_register_payment` | Refused on a funded, free class (run for a sister; families never pay for it); a funded, subsidised class is charged like any other. TAKE A PAYMENT at the register against an enrolment (drop-in fee, plan excess or owed balance): raises a CASH/CARD till sale so it lands in daily takings, records it on the ledger, and with sessionDate stamps that day's attendance as paid (creating a PRESENT mark if none). A drop-in or plan payment must pass sessionDate and is taken once per session (409 on a second take); 2.104.0. |
-| `uiiq_classes_register_star` | Toggle a star for a student in a class on a date (calling again removes it; the reply says starred true/false). |
-| `uiiq_classes_register_costume` | Tick a student's costume for a show as handedOut and/or paid (send at least one). A routine's paid tick needs the student enrolled in it; unticking a paid routine is owner or admin only; both are audited. |
 | `uiiq_classes_billing_set` | Owner or admin only: Run for the workspace or a sister organisation, with `fundingMode` FREE (nobody pays) or SUBSIDISED (families pay the class fee, taken by the organisation running it), Billed through for a paid class, and this routine's costume price and pay-by date; making a class free or moving where its fees go is refused while families still pay. Dry run without `confirm: true`. |
-| `uiiq_classes_costume_refund` | Owner or admin only: refund one routine's costume paid online, on the account it was paid on (clears its tick). Dry run without `confirm: true`. |
-| `uiiq_classes_attendance_report` | Attendance rate by class and by student over a date range (inclusive; default the last 8 weeks), flagging students under the tenant's low-attendance threshold. |
-| `uiiq_classes_absences_list` | Every student's absences (student absences on): requests waiting, who is away, history; filters status/from/to/order, paged by cursor. Owners/admins see all plus the waiting count; others only excused absences, with detail on their own classes. Notes only with includeNotes=true. |
 | `uiiq_classes_register_settings` | The register-hook settings: lapseWeeks, arrearsGraceDays, lowAttendancePct, lateGraceMins, ageBands, timetablePageUrl (where a class page's "Back to timetable" goes; null = "Back to website"); with student absences on, absenceApprovalRequired (parents' time off waits for approval; default false). |
 | `uiiq_classes_register_settings_set` | Update any of lapseWeeks (1-52), arrearsGraceDays (0-90), lowAttendancePct (1-100), lateGraceMins (0-120), timetablePageUrl (an https page on the workspace's website, else 400; null or "" clears it; audited), and (student absences on) absenceApprovalRequired. OWNER/ADMIN. |
-| `uiiq_classes_register_scan` | Record ONE scan of a child's check-in card/QR/NFC tag (token = the scanned URL or token) for a date, as the signed-in staff member would from the scanner: checks the child in to the class running now (or classId), or signs them out on a second scan where the class requires it. |
-| `uiiq_classes_register_scan_sync` | Drain an offline scan queue: up to 100 scans [{ clientId, token, sessionDate, classId?, signedOutBy?, scannedAt }] processed in order, idempotently; results keyed by clientId. |
-| `uiiq_classes_scan_cards` | The printable check-in card sheet for a class: each enrolled child's QR (data URI; max 120) with their name as a SEPARATE field and their printed-card status. |
 
 ### Estimates and proposals — `src/tools/estimates.js`
 
@@ -1510,14 +1486,12 @@ Needs the `competitions` feature. Setting up, rounds, the nominee confirmation a
 | `uiiq_form_delete` | DELETE a signup form / survey permanently. |
 | `uiiq_form_embed` | The embed snippet for an active signup form: the <script> tag to paste into any website, plus the iframe URL. |
 | `uiiq_form_send` | SEND a survey's link BY EMAIL to an audience — every subscribed, unsuppressed contact the audience matches (audience: { type:'all' } \| { type:'tag', value } \| { type:'segment', value:segmentId } \| { type:'class', value:<class spec> }; omit for everyone). |
-| `uiiq_form_results` | A survey's numbers — response rate against invitations, per-question aggregates and free-text answers verbatim — filtered by classId, group, fundedProjectId, from, to. |
-| `uiiq_form_results_export` | Save a survey's raw responses as CSV (one row per submission, one column per question, respondent name + email alongside — PERSONAL DATA) to outPath (default ./<form id>-responses.csv). |
+| `uiiq_form_results` | A survey's numbers, counts only: the response rate against invitations and, per question, how many answered and skipped, each choice's count and a rating's average and spread, filtered by classId, group, fundedProjectId, from, to. Typed answers aren't available here (UiiQ gives an AI session the counts only, Steve 22 Oct 2026): open the results in the UiiQ dashboard. |
 | `uiiq_form_app_list` | The IQForms published to the venue's Members App (title, iqformId, audienceType/Value, required, perChild, dueAt, active, position, done count) plus the audience pickers (plans, classes, groups) the office chooses from. |
 | `uiiq_form_app_iqforms` | The venue's own IQEX forms available to publish (id, title, whether Public — only those can go in the app — and whether already published), plus createUrl for the guided IQForm builder. |
 | `uiiq_form_app_publish` | PUBLISH an IQForm into the Members App: ref is the IQForm id or a link containing form-id= (must exist on the venue's own IQEX org and be Public). purpose "add_child" makes it the Family tab's "Add another child" form (needs family registration; one active per tenant, 409). |
 | `uiiq_form_app_update` | Update a published Members-App form: title, audience (audienceType + audienceValue), required, perChild, active, position, dueAt (null clears), purpose ("add_child" or null; one active add-a-child form per tenant, 409). |
 | `uiiq_form_app_remove` | Take a form out of the Members App (deletes the publication; the IQForm itself and its submissions on IQEX are untouched). |
-| `uiiq_form_app_status` | Who a published Members-App form is for and who has done it (per member / per child) — the office's completion view. |
 
 ### Funding tracker — `src/tools/funding.js`
 
@@ -1661,33 +1635,11 @@ Needs the `competitions` feature. Setting up, rounds, the nominee confirmation a
 
 ### Students — `src/tools/students.js`
 
+Children's records aren't available from the CLI/MCP (Steve, 22 Oct 2026: no AI session reads children's records). Use the UiiQ dashboard in a browser. Only the group picker is here.
+
 | Tool | What it does |
 |---|---|
-| `uiiq_students_list` | The student directory grouped by guardian (name, email, phone, owed balance) with each child's dob, groups, photography and video consent (`photoConsentState` yes / no / not_answered; not answered counts as No), active enrolments, owed balance and printed-card status. Children awaiting the registration check are not in it. |
-| `uiiq_students_get` | One student in full — the ONLY place medical notes, SEND needs, allergies and emergency contact are returned — plus guardian, policy acknowledgements, costumes, shows and every enrolment with its ledger, and the photography and video consent with what is on record (`photoConsentState`, `photoConsentDetail`). |
-| `uiiq_students_create` | Create a student. `photoConsent: true` records Yes as the office's answer ("Recorded when the child was added"); false or left out records nothing (Not answered). |
-| `uiiq_students_update` | Partial update of a student: any of the record fields, plus active (false = the child has left; keeps every register), tshirtSize and costumes (full replace of the per-show ledger). active on a child awaiting the registration check is a 409. `photoConsent` (Yes or No) needs `photoConsentNote` (who asked and how, at most 300 characters); without it nothing is sent. |
-| `uiiq_students_photo_consent_status` | A child's photography and video consent on its own, without the rest of their record: Yes, No or Not answered, and what is on record (from the parent's form, the parent withdrawing it online, or the office; when; the office member and their note; the name the parent typed; what they were shown and chose). Reads only. OWNER/ADMIN. |
-| `uiiq_students_photo_consent_set` | Record a child's photography and video consent as the school's, from what the parent or carer told it: `answer` yes or no, with a required `note` (who asked and how, at most 300 characters). Sends only the answer and the note; you are recorded as the office member, and it is audited. The answer the child already has changes nothing; there is no way back to Not answered. Confirm first. OWNER/ADMIN. |
-| `uiiq_students_delete_impact` | What hard-deleting a student would destroy and what forbids it (registers, payments…). |
-| `uiiq_students_delete` | HARD-DELETE a student record — for a duplicate or test row only. |
-| `uiiq_students_progress_list` | A student's progression notes (newest first, up to 100) and star tally with the 20 most recent stars. |
-| `uiiq_students_progress_add` | Add a progression note (visible to the parent): what they're working on, what they've achieved and/or a level — at least one — optionally against a class. |
-| `uiiq_students_progress_delete` | DELETE a progression note (the parent may already have seen it). |
-| `uiiq_students_card_status` | Whether a child has a check-in card token, when it was issued and when it was last used. |
-| `uiiq_students_card_issue` | Mint a child's check-in token if they have none; with regenerate=true REPLACE it (card lost): the old card, printed sheet and NFC tag stop working at once and the print status goes back to NOT_SENT. |
-| `uiiq_students_scan_qr` | A child's check-in QR as an SVG (mints the token on first call). |
-| `uiiq_students_absences_list` | A student's recorded absences (illness, holiday, appointment, other) with status, whether each is excused and the classes covered. Staff notes only with includeNotes=true (health information). OWNER/ADMIN; 404 unless student absences are switched on. |
-| `uiiq_students_absences_record` | Record an absence as staff: a holiday is APPROVED, illness/appointment/other REPORTED; excused at once (register badge, no "Missed class", not counted against attendance). |
-| `uiiq_students_absences_update` | Cancel (kept as history, note cleared) or edit a recorded absence; shortening it unlinks register marks it no longer covers. An empty class list is refused. |
-| `uiiq_students_absences_approve` | Approve a parent's waiting time-off request (REQUESTED only): APPROVED, authorised, excused; the optional message is shown to the parent. OWNER/ADMIN. |
-| `uiiq_students_absences_decline` | Decline a parent's waiting time-off request (REQUESTED only): DECLINED, unauthorised, final; the optional message is shown to the parent. OWNER/ADMIN. |
-| `uiiq_students_absences_delete` | ERASE an absence recorded in error (permanent; linked register marks stay, unlinked). Audited with the id and kind only. OWNER/ADMIN. |
-| `uiiq_students_registrations_list` | The office's "Awaiting check": children parents added (with medical, SEND, allergies, emergency contact, consents, photography and video consent as yes / no / not_answered, and guardian) and parents who registered but added no child yet (signedIn false = not signed in yet), plus whether family registration is on. Works with it off. OWNER/ADMIN. |
-| `uiiq_students_registration_approve` | Approve a child a parent added: active on the roll, you as reviewer; subscribes nobody to marketing. Confirm first. 409 if already checked; 404 when family registration is off. OWNER/ADMIN. |
-| `uiiq_students_registration_decline` | DECLINE a child a parent added: the record is DELETED (and a bare guardian contact a registration made, when the parent has no registration left). Can't be undone; confirm first. Optional `reason` (at most 200 characters) is kept 30 days on a refusal record (guardian email, date, reason; nothing about the child). Works with the feature off. 409 if already checked, or with blockers if the child has history. OWNER/ADMIN. |
-| `uiiq_students_registered_parent_remove` | REMOVE a registered parent with no child: their registrations are deleted, and the contact too when a registration made it, nothing is attached and they did not say yes to news in the Members App (a parent who ticked news on the form is asked in the Members App whether they'd like news by email, and only a Yes there subscribes them; a form tick with no Yes keeps nothing) ({ ok, contactRemoved }). Can't be undone; confirm first. Works with the feature off. 409 if they have a child, 404 if not a registered parent. OWNER/ADMIN. |
-| `uiiq_students_groups` | The distinct group labels in use across active students, with a student count each (the group picker for notices, campaigns and SMS). |
+| `uiiq_students_groups` | The distinct group labels in use across active students, with a student count each (the group picker for notices, campaigns and SMS). Labels and counts only, no child named. |
 
 ### Team (Mastermind) — `src/tools/team.js`
 
@@ -1736,4 +1688,4 @@ Needs the `competitions` feature. Setting up, rounds, the nominee confirmation a
 | `uiiq_workflow_order_assign` | Assign a workflow order to a user in the tenant (assignedUserId null unassigns). |
 | `uiiq_workflow_order_request_approval` | Ask the customer to approve a stage of their order: creates an approval link, moves the order to AWAITING_APPROVAL and EMAILS the customer. |
 
-1214 tools.
+1162 tools.

@@ -1,5 +1,3 @@
-import fs from "fs";
-import path from "path";
 import { apiClient } from "../auth.js";
 
 const TENANT_PROP = {
@@ -14,6 +12,20 @@ async function fail(res) {
   return new Error(text || `HTTP ${res.status}`);
 }
 const post = (tenant, path, body) => api(tenant)(path, { method: "POST", body: JSON.stringify(body) });
+
+// A form's raw responses (the CSV export) and a published form's completion per member and per child aren't here:
+// they are personal data about named parents and children, which UiiQ serves to a browser only (Steve, 22 Oct 2026:
+// no AI session reads children's records; UiiQ-platform #1168). They are in the UiiQ dashboard.
+
+// A survey's results to a machine session are COUNTS only (Steve's decision on #1168, 22 Oct 2026): the typed answers
+// and the response ids behind them are a person's, in a browser. Dropped here too, so nothing depends on them, even
+// from a UiiQ that still sends them.
+export const TYPED_ANSWERS_NOTE = "Typed answers aren't available here: open the results in the UiiQ dashboard.";
+export function countsOnly(results) {
+  const questions = results?.summary?.questions;
+  const summary = Array.isArray(questions) ? { ...results.summary, questions: questions.map(({ texts, ...q }) => q) } : results?.summary;
+  return { ...results, ...(summary !== undefined ? { summary } : {}), typedAnswersOmitted: true, note: TYPED_ANSWERS_NOTE };
+}
 
 function resultsQuery({ classId, group, fundedProjectId, from, to }) {
   const params = new URLSearchParams();
@@ -133,28 +145,13 @@ export const formsTools = [
   },
   {
     name: "uiiq_form_results",
-    description: "A survey's numbers — response rate against invitations, per-question aggregates and free-text answers verbatim — filtered by classId, group, fundedProjectId, from, to. OWNER/ADMIN (the answers are parents' prose about children).",
+    description: "A survey's numbers, COUNTS only: the response rate against invitations and, per question, how many answered and skipped, each choice's count, and a rating's average and spread, filtered by classId, group, fundedProjectId, from, to. Typed answers aren't available here: open the results in the UiiQ dashboard (they are parents' prose about children, so UiiQ gives an AI session the counts only: Steve, 22 Oct 2026). The answer says so in note, with typedAnswersOmitted: true. OWNER/ADMIN.",
     inputSchema: { type: "object", required: ["id"], properties: { id: { type: "string" }, ...RESULTS_FILTER, tenant: TENANT_PROP } },
     async handler({ id, tenant, ...filter }) {
       const qs = resultsQuery(filter);
       const res = await api(tenant)(`/forms/${encodeURIComponent(id)}/results${qs}`);
       if (!res.ok) throw await fail(res);
-      return res.json();
-    },
-  },
-  {
-    name: "uiiq_form_results_export",
-    description: "Save a survey's raw responses as CSV (one row per submission, one column per question, respondent name + email alongside — PERSONAL DATA) to outPath (default ./<form id>-responses.csv). Same filters as uiiq_form_results. OWNER/ADMIN.",
-    inputSchema: { type: "object", required: ["id"], properties: { id: { type: "string" }, outPath: { type: "string" }, ...RESULTS_FILTER, tenant: TENANT_PROP } },
-    async handler({ id, outPath, tenant, ...filter }) {
-      const qs = resultsQuery(filter);
-      const res = await api(tenant)(`/forms/${encodeURIComponent(id)}/results/export${qs}`);
-      if (!res.ok) throw await fail(res);
-      const csv = await res.text();
-      const target = path.resolve(outPath || `${id}-responses.csv`);
-      fs.mkdirSync(path.dirname(target), { recursive: true });
-      fs.writeFileSync(target, csv, "utf8");
-      return { path: target, bytes: Buffer.byteLength(csv), rows: Math.max(0, csv.trim().split("\n").length - 1) };
+      return countsOnly(await res.json());
     },
   },
 
@@ -181,7 +178,7 @@ export const formsTools = [
   },
   {
     name: "uiiq_form_app_publish",
-    description: "PUBLISH an IQForm into the Members App: ref is the IQForm id or a link containing form-id= (must exist on the venue's own IQEX org and be Public). audienceType everyone|plan|parents|class|group with audienceValue (plan/class/group id); required default true; perChild = one submission per child (not for plan); dueAt ISO date. 409 if already published. purpose \"add_child\" publishes it instead as the Members App Family tab's \"Add another child\" form (children added through it wait for the office's check, see uiiq_students_registrations_list): it needs family registration switched on (403 otherwise), only one can be active per tenant (409 naming the other), and it always takes one shape whatever else is sent: audience parents, not required, not per child, no due date. Omit purpose (or null) for a normal form.",
+    description: "PUBLISH an IQForm into the Members App: ref is the IQForm id or a link containing form-id= (must exist on the venue's own IQEX org and be Public). audienceType everyone|plan|parents|class|group with audienceValue (plan/class/group id); required default true; perChild = one submission per child (not for plan); dueAt ISO date. 409 if already published. purpose \"add_child\" publishes it instead as the Members App Family tab's \"Add another child\" form (children added through it wait for the office's check in the UiiQ dashboard's Awaiting check): it needs family registration switched on (403 otherwise), only one can be active per tenant (409 naming the other), and it always takes one shape whatever else is sent: audience parents, not required, not per child, no due date. Omit purpose (or null) for a normal form.",
     inputSchema: {
       type: "object",
       required: ["ref"],
@@ -224,16 +221,6 @@ export const formsTools = [
     inputSchema: { type: "object", required: ["id"], properties: { id: { type: "string" }, tenant: TENANT_PROP } },
     async handler({ id, tenant }) {
       const res = await api(tenant)(`/forms/app/${encodeURIComponent(id)}`, { method: "DELETE" });
-      if (!res.ok) throw await fail(res);
-      return res.json();
-    },
-  },
-  {
-    name: "uiiq_form_app_status",
-    description: "Who a published Members-App form is for and who has done it (per member / per child) — the office's completion view.",
-    inputSchema: { type: "object", required: ["id"], properties: { id: { type: "string" }, tenant: TENANT_PROP } },
-    async handler({ id, tenant }) {
-      const res = await api(tenant)(`/forms/app/${encodeURIComponent(id)}/status`);
       if (!res.ok) throw await fail(res);
       return res.json();
     },

@@ -23,8 +23,9 @@ async function proofUrl(tenant, path) {
   throw await fail(res);
 }
 
-// CUSTOMER CARDS — the venue's scannable member cards (QR + NFC) and the
-// children's printed check-in cards, both under /admin/cards. Tenant data,
+// CUSTOMER CARDS — the venue's scannable member cards (QR + NFC), under
+// /admin/cards. Children's printed check-in cards aren't here (Steve, 22 Oct
+// 2026: no AI session reads children's records; use the dashboard). Tenant data,
 // not the operator control plane: OWNER/ADMIN/SUPER_ADMIN in the tenant
 // (encoded: STAFF too). Never returns a raw card token. Sending cards to
 // print needs the `customer_card_print` feature AND the platform print
@@ -121,46 +122,6 @@ export const cardsTools = [
       const res = await post(tenant, "/admin/cards/print/refresh", {});
       if (!res.ok) throw await fail(res);
       return res.json();
-    },
-  },
-
-  // ── Children's printed check-in cards ──
-  {
-    name: "uiiq_cards_students_print",
-    description: "SEND up to 5 children's check-in cards to IQEX to be printed on a design, each with the child's check-in URL in the QR and NFC. SPENDS the school's IQEX credits per card; shares the daily cap with customer cards. Nothing about the child goes to IQEX and no name is printed on the card. Needs `customer_card_print` + the platform switch; OWNER/ADMIN only.",
-    inputSchema: { type: "object", required: ["template", "studentIds"], properties: { template: { type: "string" }, studentIds: { type: "array", items: { type: "string" }, maxItems: 5 }, tenant: TENANT_PROP } },
-    async handler({ template, studentIds, tenant }) {
-      const res = await post(tenant, "/admin/cards/students/print", { template, studentIds });
-      if (!res.ok) throw await fail(res);
-      return res.json();
-    },
-  },
-  {
-    name: "uiiq_cards_students_refresh",
-    description: "Move children's printed cards along from IQEX's job status (SENT / PRINTED / back to NOT_SENT on failure). Spends nothing; needs only the platform switch.",
-    inputSchema: { type: "object", properties: { tenant: TENANT_PROP } },
-    async handler({ tenant } = {}) {
-      const res = await post(tenant, "/admin/cards/students/refresh", {});
-      if (!res.ok) throw await fail(res);
-      return res.json();
-    },
-  },
-  {
-    name: "uiiq_cards_student_handed_over",
-    description: "Record that a child's PRINTED check-in card is on their lanyard. 409 unless it has been printed. A lost card is replaced with uiiq_students_card_issue regenerate=true.",
-    inputSchema: { type: "object", required: ["studentId"], properties: { studentId: { type: "string" }, tenant: TENANT_PROP } },
-    async handler({ studentId, tenant }) {
-      const res = await post(tenant, `/admin/cards/students/${encodeURIComponent(studentId)}`, { action: "handed-over" });
-      if (!res.ok) throw await fail(res);
-      return res.json();
-    },
-  },
-  {
-    name: "uiiq_cards_student_proof_url",
-    description: "A fresh presigned link (about 15 minutes) to the proof of a child's printed check-in card. 404 until it has been sent to print; needs the platform switch and the school linked to IQEX.",
-    inputSchema: { type: "object", required: ["studentId"], properties: { studentId: { type: "string" }, tenant: TENANT_PROP } },
-    async handler({ studentId, tenant }) {
-      return proofUrl(tenant, `/admin/cards/students/${encodeURIComponent(studentId)}/proof`);
     },
   },
 ];
