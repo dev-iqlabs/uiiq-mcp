@@ -26,7 +26,7 @@ UIIQ is one subscription whose modules are grouped as **Sell**, **Grow** and **R
 | Customer cards | `uiiq_cards_*` | Issue, reissue, revoke, hand over and print member cards through IQEX (QR/NFC and branding only, never a name; printing spends credits). Children's check-in cards are in the UiiQ dashboard |
 | Till back office, kitchen, tables | `uiiq_till_*` | Devices, staff, day close, daily summary, refunds, payment config, food orders and settlement, KDS tickets, tables and their QR codes (floor routes take the device token) |
 | Bookings admin | `uiiq_blockout_*`, `uiiq_checkin_*`, `uiiq_custom_field_*`, `uiiq_waiver_*`, `uiiq_ticket_type_*`, `uiiq_booking_refund`, `uiiq_promo_code_*` | Blockouts, the calendar, door check-in, custom booking fields, waivers, ticket types, refunds (real money), promo codes |
-| Forms | `uiiq_form_*` | Build and send forms (counts against the email allowance), read results and export CSV (owner/admin), publish IQForms to the Members App |
+| Forms | `uiiq_form_*` | Build and send forms (counts against the email allowance), read results (owner/admin), publish IQForms to the Members App. The raw-responses export and a published form's completion per child are in the UiiQ dashboard (they're about named parents and children) |
 
 ### Grow — marketing, CRM and prospecting
 
@@ -1487,13 +1487,11 @@ Children's records aren't available from the CLI/MCP (Steve, 22 Oct 2026: no AI 
 | `uiiq_form_embed` | The embed snippet for an active signup form: the <script> tag to paste into any website, plus the iframe URL. |
 | `uiiq_form_send` | SEND a survey's link BY EMAIL to an audience — every subscribed, unsuppressed contact the audience matches (audience: { type:'all' } \| { type:'tag', value } \| { type:'segment', value:segmentId } \| { type:'class', value:<class spec> }; omit for everyone). |
 | `uiiq_form_results` | A survey's numbers — response rate against invitations, per-question aggregates and free-text answers verbatim — filtered by classId, group, fundedProjectId, from, to. |
-| `uiiq_form_results_export` | Save a survey's raw responses as CSV (one row per submission, one column per question, respondent name + email alongside — PERSONAL DATA) to outPath (default ./<form id>-responses.csv). |
 | `uiiq_form_app_list` | The IQForms published to the venue's Members App (title, iqformId, audienceType/Value, required, perChild, dueAt, active, position, done count) plus the audience pickers (plans, classes, groups) the office chooses from. |
 | `uiiq_form_app_iqforms` | The venue's own IQEX forms available to publish (id, title, whether Public — only those can go in the app — and whether already published), plus createUrl for the guided IQForm builder. |
 | `uiiq_form_app_publish` | PUBLISH an IQForm into the Members App: ref is the IQForm id or a link containing form-id= (must exist on the venue's own IQEX org and be Public). purpose "add_child" makes it the Family tab's "Add another child" form (needs family registration; one active per tenant, 409). |
 | `uiiq_form_app_update` | Update a published Members-App form: title, audience (audienceType + audienceValue), required, perChild, active, position, dueAt (null clears), purpose ("add_child" or null; one active add-a-child form per tenant, 409). |
 | `uiiq_form_app_remove` | Take a form out of the Members App (deletes the publication; the IQForm itself and its submissions on IQEX are untouched). |
-| `uiiq_form_app_status` | Who a published Members-App form is for and who has done it — the office's completion view. A per-child form's rows are the parent's, marked `forAChild`, without the child's name (that is in the dashboard). |
 
 ### Funding tracker — `src/tools/funding.js`
 
@@ -1690,4 +1688,4 @@ Children's records aren't available from the CLI/MCP (Steve, 22 Oct 2026: no AI 
 | `uiiq_workflow_order_assign` | Assign a workflow order to a user in the tenant (assignedUserId null unassigns). |
 | `uiiq_workflow_order_request_approval` | Ask the customer to approve a stage of their order: creates an approval link, moves the order to AWAITING_APPROVAL and EMAILS the customer. |
 
-1164 tools.
+1162 tools.

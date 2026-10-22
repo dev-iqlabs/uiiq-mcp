@@ -1,5 +1,3 @@
-import fs from "fs";
-import path from "path";
 import { apiClient } from "../auth.js";
 
 const TENANT_PROP = {
@@ -14,6 +12,10 @@ async function fail(res) {
   return new Error(text || `HTTP ${res.status}`);
 }
 const post = (tenant, path, body) => api(tenant)(path, { method: "POST", body: JSON.stringify(body) });
+
+// A form's raw responses (the CSV export) and a published form's completion per member and per child aren't here:
+// they are personal data about named parents and children, which UiiQ serves to a browser only (Steve, 22 Oct 2026:
+// no AI session reads children's records; UiiQ-platform #1168). They are in the UiiQ dashboard.
 
 function resultsQuery({ classId, group, fundedProjectId, from, to }) {
   const params = new URLSearchParams();
@@ -142,21 +144,6 @@ export const formsTools = [
       return res.json();
     },
   },
-  {
-    name: "uiiq_form_results_export",
-    description: "Save a survey's raw responses as CSV (one row per submission, one column per question, respondent name + email alongside — PERSONAL DATA) to outPath (default ./<form id>-responses.csv). Same filters as uiiq_form_results. OWNER/ADMIN.",
-    inputSchema: { type: "object", required: ["id"], properties: { id: { type: "string" }, outPath: { type: "string" }, ...RESULTS_FILTER, tenant: TENANT_PROP } },
-    async handler({ id, outPath, tenant, ...filter }) {
-      const qs = resultsQuery(filter);
-      const res = await api(tenant)(`/forms/${encodeURIComponent(id)}/results/export${qs}`);
-      if (!res.ok) throw await fail(res);
-      const csv = await res.text();
-      const target = path.resolve(outPath || `${id}-responses.csv`);
-      fs.mkdirSync(path.dirname(target), { recursive: true });
-      fs.writeFileSync(target, csv, "utf8");
-      return { path: target, bytes: Buffer.byteLength(csv), rows: Math.max(0, csv.trim().split("\n").length - 1) };
-    },
-  },
 
   // ── Members App forms (published IQForms) ──
   {
@@ -226,19 +213,6 @@ export const formsTools = [
       const res = await api(tenant)(`/forms/app/${encodeURIComponent(id)}`, { method: "DELETE" });
       if (!res.ok) throw await fail(res);
       return res.json();
-    },
-  },
-  {
-    name: "uiiq_form_app_status",
-    description: "Who a published Members-App form is for and who has done it — the office's completion view: { people: [{ email, name, done, completedAt, forAChild? }], done, total }. A per-child form's rows are the parent's, marked forAChild: true, without the child's name: children's records aren't available from the MCP (Steve, 22 Oct 2026: no AI session reads children's records); the UiiQ dashboard shows which child.",
-    inputSchema: { type: "object", required: ["id"], properties: { id: { type: "string" }, tenant: TENANT_PROP } },
-    async handler({ id, tenant }) {
-      const res = await api(tenant)(`/forms/app/${encodeURIComponent(id)}/status`);
-      if (!res.ok) throw await fail(res);
-      const status = await res.json();
-      if (!Array.isArray(status?.people)) return status;
-      // A child's name never reaches the model: a per-child row says only that it is for a child.
-      return { ...status, people: status.people.map(({ child, ...p }) => (child ? { ...p, forAChild: true } : p)) };
     },
   },
 ];

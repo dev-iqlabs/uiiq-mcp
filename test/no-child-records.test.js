@@ -25,6 +25,8 @@ export const CHILD_RECORD_ROUTES = [
   { re: /^\/classes\/sessions\/audience(\/|$)/, what: "a session's households, with their children named" },
   { re: /^\/classes\/costumes(\/|$)/, what: "a child's routine costume (its refund)" },
   { re: /^\/portal(\/|$)/, what: "the parent area: a family's children" },
+  { re: /^\/forms\/app\/[^/]+\/status$/, what: "a published Members App form's completion, per member and per child" },
+  { re: /^\/forms\/[^/]+\/results\/export$/, what: "a form's raw responses: personal data about named parents and children" },
 ];
 // Kept on purpose, each with why it carries no child.
 export const ALLOWED = {
@@ -115,18 +117,54 @@ after(async () => {
 });
 
 test("no tool is named for a child's record: students (but the group picker), their cards, registers, enrolments, absences, a session's audience", () => {
-  const childNamed = /^uiiq_students_(?!groups$)|^uiiq_cards_students?_|^uiiq_classes_(register_(?!settings$|settings_set$)|enrol|parent_enrol|absences|attendance|costume|scan_cards|session_audience)/;
+  const childNamed = /^uiiq_students_(?!groups$)|^uiiq_cards_students?_|^uiiq_classes_(register_(?!settings$|settings_set$)|enrol|parent_enrol|absences|attendance|costume|scan_cards|session_audience)|^uiiq_form_app_status$|^uiiq_form_results_export$/;
   const found = Object.keys(tools).filter((n) => childNamed.test(n));
   assert.deepEqual(found, []);
   assert.ok(tools.uiiq_students_groups && tools.uiiq_classes_register_settings && tools.uiiq_classes_get, "the kept tools are still there");
 });
 
 // GET /classes/<id> carries the class's roster, so UiiQ refuses it to this client (UiiQ-platform #1168). Its PATCH and
-// DELETE stay (a class's settings), so this is checked by method: no source GETs it, and uiiq_classes_get doesn't.
+// DELETE stay (a class's settings), so this is checked by method. Every `/classes/${…}` template (nothing after the id
+// but a query string) is read with the call around it: GET unless the call plainly says PATCH, PUT, POST or DELETE. A
+// path kept in a variable, or a call shape this can't read, counts as a GET: the check fails closed.
+export function classDetailGets(src) {
+  const found = [];
+  for (const m of src.matchAll(/`\/classes\/\$\{[^}`]+\}(?:\?[^`]*)?`/g)) {
+    const before = src.slice(Math.max(0, m.index - 80), m.index);
+    const after = src.slice(m.index + m[0].length, m.index + m[0].length + 200);
+    const method =
+      /"(PATCH|PUT|POST|DELETE)"\s*,\s*$/.exec(before)?.[1] ?? // send(tenant, "PATCH", `/classes/${id}`)
+      (/\bpost\(\s*[a-zA-Z]+\s*,\s*$/.test(before) ? "POST" : undefined) ?? // post(tenant, `/classes/${id}`)
+      /^\s*,\s*"(GET|PATCH|PUT|POST|DELETE)"/.exec(after)?.[1] ?? // send(`/classes/${id}`, "DELETE")
+      /^\s*,\s*\{[^}]*?\bmethod:\s*"(GET|PATCH|PUT|POST|DELETE)"/.exec(after)?.[1] ?? // api(t)(`/classes/${id}`, { method: "PATCH" })
+      "GET";
+    if (method === "GET") found.push(m[0]);
+  }
+  return found;
+}
+
 test("no source file GETs a class's detail route (/classes/<id>): it lists the class's children", () => {
-  const getClassDetail = /api\([a-zA-Z]*\)\(\s*`\/classes\/\$\{[^}]+\}`\s*\)/;
-  const found = walk(join(ROOT, "src")).filter((f) => getClassDetail.test(readFileSync(f, "utf8")));
-  assert.deepEqual(found.map((f) => relative(ROOT, f)), []);
+  const found = walk(join(ROOT, "src")).flatMap((f) => classDetailGets(readFileSync(f, "utf8")).map((t) => `${relative(ROOT, f)}: ${t}`));
+  assert.deepEqual(found, []);
+});
+
+test("the class-detail check can fail: any GET shape is caught, a PATCH or DELETE isn't", () => {
+  const gets = [
+    "const call = api(t); call(`/classes/${id}`)",
+    "api(tenant)(`/classes/${encodeURIComponent(id)}`)",
+    "send(tenant, \"GET\", `/classes/${id}`)",
+    "api(tenant)(`/classes/${id}`, { method: \"GET\" })",
+    "const p = `/classes/${id}`; api(tenant)(p)",
+    "api(tenant)(`/classes/${id}?x=1`)",
+  ];
+  for (const src of gets) assert.equal(classDetailGets(src).length, 1, src);
+  const writes = [
+    "send(tenant, \"PATCH\", `/classes/${encodeURIComponent(id)}`, body)",
+    "send(tenant, \"DELETE\", `/classes/${encodeURIComponent(id)}`)",
+    "post(tenant, `/classes/${id}`, body)",
+    "api(tenant)(`/classes/${id}/billing`)",
+  ];
+  for (const src of writes) assert.deepEqual(classDetailGets(src), [], src);
 });
 
 test("uiiq_classes_get reads the class list and its course runs, never the class's detail route; a count, never who", async () => {
@@ -144,22 +182,6 @@ test("uiiq_classes_get reads the class list and its course runs, never the class
   seen = [];
   await assert.rejects(tools.uiiq_classes_get.handler({ id: "cls_gone" }), /No class cls_gone in this workspace/);
   assert.deepEqual(seen.map((q) => q.path), ["/classes?includeInactive=1"]);
-});
-
-test("uiiq_form_app_status leaves the child's name out of a per-child row: the parent's row says forAChild", async () => {
-  const people = [
-    { email: "kim@example.com", name: "Kim Lee", child: { id: "stu1", firstName: "Ava", lastName: "Lee" }, done: true, completedAt: "2026-10-21T10:00:00.000Z" },
-    { email: "pat@example.com", name: "Pat Jones", child: null, done: false, completedAt: null },
-  ];
-  reply = () => [200, { people, done: 1, total: 2 }];
-  seen = [];
-  const result = await tools.uiiq_form_app_status.handler({ id: "af1" });
-  assert.deepEqual(seen, [{ method: "GET", path: "/forms/app/af1/status" }]);
-  assert.deepEqual(result, { people: [
-    { email: "kim@example.com", name: "Kim Lee", done: true, completedAt: "2026-10-21T10:00:00.000Z", forAChild: true },
-    { email: "pat@example.com", name: "Pat Jones", done: false, completedAt: null },
-  ], done: 1, total: 2 });
-  for (const v of ["Ava", "stu1"]) assert.equal(JSON.stringify(result).includes(v), false, v);
 });
 
 test("a class photo is never picked from the MCP: refused before any request, and not in the schemas", async () => {
