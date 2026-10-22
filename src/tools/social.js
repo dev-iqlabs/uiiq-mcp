@@ -21,6 +21,36 @@ const POST_STATUS = ["DRAFT", "QUEUED", "SCHEDULED"];
 const CAROUSEL_FOLLOW = (id, rid, video = false) => `IQEX is making it (${video ? "up to 12 minutes: Meta processes the video first" : "about a minute"}). Ask uiiq_social_carousel_ad_status with id "${id}" and requestId "${rid}" every ${video ? "10 seconds" : "few seconds"} until it says done, failed or unknown; never make a new request meanwhile.`;
 const CAROUSEL_RUN_IT = "To run it, the campaign, its ad set AND its ad must each be switched on in Ads Manager: enabling the campaign alone runs nothing. A budget changed in Ads Manager isn't held to UiiQ's £10 a day.";
 
+// A carousel ad's spin video cards (UiiQ-platform #1151): a product card as the product's plain spin
+// (products[].video { ratio? }), card 1 as any product's (collectionVideo { productId, ratio? }). Only the
+// product and the shape are ever sent: UiiQ reads the video from the shop's feed when the ad is made.
+// Anything else is refused here, before any request.
+const SPIN_RATIOS = ["1:1", "4:5"];
+function spinShape(v, where) {
+  if (!v || typeof v !== "object" || Array.isArray(v)) throw new Error(`${where} is { ratio? }: the product's spin video, ratio "1:1" or "4:5". Nothing was sent.`);
+  if (v.ratio !== undefined && !SPIN_RATIOS.includes(v.ratio)) throw new Error(`${where}.ratio is "1:1" or "4:5". Nothing was sent.`);
+  return v.ratio !== undefined ? { ratio: v.ratio } : {};
+}
+function cardOneVideo(v) {
+  if (v === undefined || v === null) return undefined;
+  if (typeof v !== "object" || Array.isArray(v)) throw new Error("collectionVideo is { postId }, { assetId } or { productId, ratio? }. Nothing was sent.");
+  const given = ["postId", "assetId", "productId"].filter((k) => v[k] !== undefined);
+  if (given.length !== 1) throw new Error("collectionVideo is exactly one of { postId } (a published post's video), { assetId } (the media library's) or { productId, ratio? } (a shop product's spin). Nothing was sent.");
+  if (given[0] !== "productId") {
+    if (v.ratio !== undefined) throw new Error("collectionVideo.ratio goes with productId (a shop product's spin). Nothing was sent.");
+    return { [given[0]]: v[given[0]] };
+  }
+  return { productId: v.productId, ...spinShape(v, "collectionVideo") };
+}
+// A spin card's shape as UiiQ will pick it (the one asked for, else 1:1, else 4:5), from the context's productVideos; or why UiiQ will refuse it.
+function spinCard(productId, asked, productVideos) {
+  if (!Array.isArray(productVideos)) return { ratio: asked ?? null, problem: "This UiiQ doesn't list product spin videos (productVideos) yet: it will refuse a spin card" };
+  const videos = productVideos.find((s) => s?.productId === productId)?.videos ?? [];
+  const pick = asked ? videos.find((x) => x?.ratio === asked) : videos.find((x) => x?.ratio === "1:1") ?? videos.find((x) => x?.ratio === "4:5");
+  if (pick) return { ratio: pick.ratio };
+  return { ratio: asked ?? null, problem: `UiiQ will refuse this card: ${productId} has no ${asked ? `${asked} ` : ""}spin video IQEX can use${videos.length ? ` (it has ${videos.map((x) => x?.ratio).join(", ")})` : " (it isn't in the context's productVideos)"}` };
+}
+
 // Scheduling is a publish path: on a workspace with auto-publish on, the
 // 5-minute cron publishes a SCHEDULED post once it is due (a past scheduledAt
 // means at once), with nobody pressing Publish. So setting SCHEDULED or a
@@ -263,7 +293,7 @@ export const socialTools = [
   },
   {
     name: "uiiq_social_post_carousel_ad",
-    description: `Make a Meta carousel ad from a PUBLISHED promo post (its image is public then; a draft's never is): a NEW campaign, ad set and ad in the workspace's own Meta ad account, ALL PAUSED. Card 1 is the post's collection image, or a video (collectionVideo: one of the context's videos[].ref, a published post's MP4 or the media library's); then 1 to 9 of the shop's products, each { productId, photoIndex } from uiiq_social_promo_products (photoIndex 0 = the main photo, then the mockups): UiiQ reads each one's photo and page from the shop's feed itself, so no other image or link can get into an ad. linkUrl must be on the workspace's website or its shop. Website events go on the workspace's own Meta pixel (trackWebsiteEvents, default on when it has one; a pixel is never named here); objective OUTCOME_TRAFFIC (default) or OUTCOME_SALES, which needs website events; urlTags are the URL parameters on every card's link (key=value joined by &, no spaces, at most 1000 characters; "" for none; left out, UiiQ's UTM default). Without confirm: true this is a DRY RUN: it returns the form's context (adAccount, the connected Facebook pages to pick pageId from, collectionImage, videos, pixelId, defaults), each card's type (photo or video) and what would be sent, and nothing is made. Only pass confirm: true once the person responsible has seen it and said to make it. ${CAROUSEL_RUN_IT} dailyBudgetPence: 100 to 1000 (£1 to £10 a day). Owners and admins only, at most 10 an hour, needs the Social Templates feature. requestId: leave it out for a fresh one; after a timeout (504) retry with the SAME one, which never makes a second ad. A 409 means that request has ENDED (it failed, or Meta may already have made it): it is never sent again, and you never send it again with a new requestId by yourself; a new requestId is only for the person's own Try again, after they've checked Ads Manager. A 429 means IQEX has three going and nothing was made: the SAME requestId can go again in a minute. "Meta ads aren't switched on for this workspace yet" (a 502) and a 403 that the ad account or Page isn't registered are both for UiiQ support. Meta's own reason comes back in error, as a 502. Returns { campaignId, adSetId, adId, adsManagerUrl, status: PAUSED, duplicate, requestId } when it's made at once. IQEX usually takes about a minute and makes it in the background: then this returns { status: "running", requestId } (also when UiiQ didn't answer in time), and uiiq_social_carousel_ad_status with the same id and requestId says when it's done (ask every few seconds, for up to about 3 minutes; with a video card, every 10 seconds for up to 12 minutes, while Meta processes the video: the answer says video: true).`,
+    description: `Make a Meta carousel ad from a PUBLISHED promo post (its image is public then; a draft's never is): a NEW campaign, ad set and ad in the workspace's own Meta ad account, ALL PAUSED. Card 1 is the post's collection image, or a video (collectionVideo: one of the context's videos[].ref, a published post's MP4 or the media library's); then 1 to 9 of the shop's products, each { productId, photoIndex } from uiiq_social_promo_products (photoIndex 0 = the main photo, then the mockups): UiiQ reads each one's photo and page from the shop's feed itself, so no other image or link can get into an ad. SPIN VIDEOS: a product card can be the product's spin video instead of its photo, with video { ratio? } ("1:1" or "4:5"; left out, 1:1 when it has one, else 4:5); its photoIndex photo is then the card's thumbnail when IQEX has no still of its own. Card 1 can be any shop product's spin too: collectionVideo { productId, ratio? } (a post or library video, if one were also named, wins, so send exactly one). A spin is always the product's plain spin, never the end card, and only IQEX's own render: UiiQ reads it from the shop's feed when the ad is made, so no video address can be sent, and only a product the context's productVideos lists can be one ([{ productId, title, photoUrl, videos: [{ ratio, url, posterUrl }] }]; [] when none has one or the feed can't be read). Meta processes every video card before the ad is made, which can take up to 10 minutes. linkUrl must be on the workspace's website or its shop. Website events go on the workspace's own Meta pixel (trackWebsiteEvents, default on when it has one; a pixel is never named here); objective OUTCOME_TRAFFIC (default) or OUTCOME_SALES, which needs website events; urlTags are the URL parameters on every card's link (key=value joined by &, no spaces, at most 1000 characters; "" for none; left out, UiiQ's UTM default). Without confirm: true this is a DRY RUN: it returns the form's context (adAccount, the connected Facebook pages to pick pageId from, collectionImage, videos, productVideos, pixelId, defaults), each card's type (photo, video, or spin video with the shape UiiQ will use, and a problem when UiiQ will refuse that spin) and what would be sent, and nothing is made. Only pass confirm: true once the person responsible has seen it and said to make it. ${CAROUSEL_RUN_IT} dailyBudgetPence: 100 to 1000 (£1 to £10 a day). Owners and admins only, at most 10 an hour, needs the Social Templates feature. requestId: leave it out for a fresh one; after a timeout (504) retry with the SAME one, which never makes a second ad. A 409 means that request has ENDED (it failed, or Meta may already have made it): it is never sent again, and you never send it again with a new requestId by yourself; a new requestId is only for the person's own Try again, after they've checked Ads Manager. A 429 means IQEX has three going and nothing was made: the SAME requestId can go again in a minute. "Meta ads aren't switched on for this workspace yet" (a 502) and a 403 that the ad account or Page isn't registered are both for UiiQ support. Meta's own reason comes back in error, as a 502. Returns { campaignId, adSetId, adId, adsManagerUrl, status: PAUSED, duplicate, requestId } when it's made at once. IQEX usually takes about a minute and makes it in the background: then this returns { status: "running", requestId } (also when UiiQ didn't answer in time), and uiiq_social_carousel_ad_status with the same id and requestId says when it's done (ask every few seconds, for up to about 3 minutes; with a video card, every 10 seconds for up to 12 minutes, while Meta processes the video: the answer says video: true).`,
     inputSchema: {
       type: "object",
       additionalProperties: false,
@@ -281,13 +311,31 @@ export const socialTools = [
         collectionName: { type: "string", description: "Card 1's name, at most 100 characters" },
         products: {
           type: "array", minItems: 1, maxItems: 9,
-          items: { type: "object", additionalProperties: false, required: ["productId"], properties: { productId: { type: "string", description: "A product id from uiiq_social_promo_products" }, photoIndex: { type: "integer", minimum: 0, description: "Which of its photos: 0 = the main one (default), then the mockups" }, name: { type: "string", description: "The card's name, at most 100 characters (default: \"title · price\")" }, description: { type: "string", description: "At most 200 characters" } } },
-          description: "Cards 2 to 10, in order: the shop's products",
+          items: {
+            type: "object", additionalProperties: false, required: ["productId"],
+            properties: {
+              productId: { type: "string", description: "A product id from uiiq_social_promo_products" },
+              photoIndex: { type: "integer", minimum: 0, description: "Which of its photos: 0 = the main one (default), then the mockups (a spin card's thumbnail when IQEX has no still)" },
+              name: { type: "string", description: "The card's name, at most 100 characters (default: \"title · price\")" },
+              description: { type: "string", description: "At most 200 characters" },
+              video: {
+                type: "object", additionalProperties: false,
+                properties: { ratio: { type: "string", enum: SPIN_RATIOS, description: "Its shape: 1:1 or 4:5 (left out, 1:1 when it has one, else 4:5)" } },
+                description: "Optional: the card is this product's plain spin video instead of its photo (one of the context's productVideos; never a video address)",
+              },
+            },
+          },
+          description: "Cards 2 to 10, in order: the shop's products, each its photo or (video) its spin video",
         },
         collectionVideo: {
           type: "object", additionalProperties: false,
-          properties: { postId: { type: "string", description: "A published post with a public MP4 (the context's videos[].ref)" }, assetId: { type: "integer", description: "A media library video (the context's videos[].ref)" } },
-          description: "Card 1 as a video instead of the collection image: exactly one of postId or assetId, from the context's videos",
+          properties: {
+            postId: { type: "string", description: "A published post with a public MP4 (the context's videos[].ref)" },
+            assetId: { type: "integer", description: "A media library video (the context's videos[].ref)" },
+            productId: { type: "string", description: "A shop product's plain spin video (one of the context's productVideos[].productId)" },
+            ratio: { type: "string", enum: SPIN_RATIOS, description: "With productId: its shape, 1:1 or 4:5 (left out, 1:1 when it has one, else 4:5)" },
+          },
+          description: "Card 1 as a video instead of the collection image: exactly one of postId or assetId (from the context's videos) or productId with ratio? (from the context's productVideos)",
         },
         trackWebsiteEvents: { type: "boolean", description: "Website events on the workspace's own Meta pixel (default: on when it has one)" },
         urlTags: { type: "string", description: "URL parameters on every card's link: key=value pairs joined by &, no spaces, at most 1000 characters; \"\" for none; left out, UiiQ's UTM default" },
@@ -303,19 +351,28 @@ export const socialTools = [
       const defined = (o) => Object.fromEntries(Object.entries(o).filter(([, v]) => v !== undefined));
       const body = defined({
         pageId, name, dailyBudgetPence, countries, primaryText, headline, ctaType, linkUrl, collectionName,
-        products: Array.isArray(products) ? products.map((p) => defined({ productId: p?.productId, photoIndex: p?.photoIndex, name: p?.name, description: p?.description })) : products,
-        collectionVideo: collectionVideo && typeof collectionVideo === "object" ? defined({ postId: collectionVideo.postId, assetId: collectionVideo.assetId }) : collectionVideo,
+        // A spin card's shape only (products[].video, collectionVideo's productId): refused before any request otherwise.
+        products: Array.isArray(products) ? products.map((p, i) => defined({ productId: p?.productId, photoIndex: p?.photoIndex, name: p?.name, description: p?.description, video: p?.video === undefined || p?.video === null ? undefined : spinShape(p.video, `products[${i}].video`) })) : products,
+        collectionVideo: cardOneVideo(collectionVideo),
         trackWebsiteEvents, urlTags, objective,
       });
-      // Each card's type, for the person to see: card 1 a video when collectionVideo is set; the products are photos.
-      const cards = [{ card: 1, type: body.collectionVideo ? "video" : "photo" }, ...(Array.isArray(body.products) ? body.products : []).map((p, i) => ({ card: i + 2, type: "photo", productId: p.productId }))];
+      const productCards = Array.isArray(body.products) ? body.products : [];
+      // A video card in it (card 1's video or spin, or a product's spin): Meta processes it first, up to 10 minutes.
+      const hasVideo = !!body.collectionVideo || productCards.some((p) => p?.video);
       if (confirm !== true) {
         const preview = await api(tenant)(path);
         if (!preview.ok) throw await fail(preview);
+        const context = await preview.json();
+        // Each card's type, for the person to see: photo, video, or spin video with the shape UiiQ will use (or why it will refuse it).
+        const one = body.collectionVideo;
+        const cards = [
+          one?.productId ? { card: 1, type: "spin video", productId: one.productId, ...spinCard(one.productId, one.ratio, context?.productVideos) } : { card: 1, type: one ? "video" : "photo" },
+          ...productCards.map((p, i) => (p?.video ? { card: i + 2, type: "spin video", productId: p.productId, ...spinCard(p.productId, p.video.ratio, context?.productVideos) } : { card: i + 2, type: "photo", productId: p?.productId })),
+        ];
         return {
           dryRun: true,
-          message: `Nothing was made. Pass confirm: true to make it, only once the person responsible has seen this. ${CAROUSEL_RUN_IT}`,
-          context: await preview.json(),
+          message: `Nothing was made. Pass confirm: true to make it, only once the person responsible has seen this. ${CAROUSEL_RUN_IT}${hasVideo ? " Meta processes the video cards first: up to 10 minutes once it's made." : ""}`,
+          context,
           cards,
           wouldSend: body,
         };
@@ -330,7 +387,7 @@ export const socialTools = [
           const text = await res.text().catch(() => "");
           try { first = JSON.parse(text); } catch { /* not JSON */ }
         }
-        const video = !!body.collectionVideo || first?.video === true;
+        const video = hasVideo || first?.video === true;
         return { status: "running", requestId: rid, video, next: CAROUSEL_FOLLOW(id, rid, video) };
       }
       if (!res.ok) {
