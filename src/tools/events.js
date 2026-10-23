@@ -121,7 +121,7 @@ export const eventsTools = [
   },
   {
     name: "uiiq_event_tickets_on",
-    description: "Switch UiiQ ticket sales ON for this event. Idempotent: an event already selling comes back unchanged, and switching back on after a switch-off restores the SAME performances, prices and sales history rather than making a second set, reopening any performance left CLOSED (which also reopens one the office had closed by hand). Owner or admin. Nothing is on PUBLIC sale until the event itself is PUBLISHED. Without confirm: true it is ALWAYS a dry run that changes nothing. Add performances with the sessions route and prices with uiiq_ticket_type_create, using the experience id this returns.",
+    description: "Switch UiiQ ticket sales ON for this event. Idempotent: an event already selling comes back unchanged, and switching back on after a switch-off restores the SAME performances, prices and sales history rather than making a second set. It reopens ONLY the performances that switch-off closed: a night the office shut by hand with uiiq_event_performance_set stays shut, as does one whose date has passed. Owner or admin. Nothing is on PUBLIC sale until the event itself is PUBLISHED. Without confirm: true it is ALWAYS a dry run that changes nothing. Add performances with the sessions route and prices with uiiq_ticket_type_create, using the experience id this returns.",
     inputSchema: {
       type: "object",
       required: ["id"],
@@ -135,7 +135,7 @@ export const eventsTools = [
       // It reopens the performances a switch-off closed, so it changes what the
       // public can buy and takes the same dry run as _off (Lucas L-b).
       if (confirm !== true) {
-        return { dryRun: true, changed: false, wouldDo: "switch_tickets_on", id, note: "Nothing was changed. This puts tickets on sale and reopens any performance a switch-off closed. Call again with confirm: true." };
+        return { dryRun: true, changed: false, wouldDo: "switch_tickets_on", id, note: "Nothing was changed. This puts tickets on sale and reopens the performances a switch-off closed — not ones closed by hand, and not ones already over. Call again with confirm: true." };
       }
       const res = await post(tenant, `/events/${encodeURIComponent(id)}/tickets`);
       if (!res.ok) throw await fail(res);
@@ -144,7 +144,7 @@ export const eventsTools = [
   },
   {
     name: "uiiq_event_tickets_off",
-    description: "Switch ticket sales OFF for this event: the performances are closed and the ticketing is archived, so nothing more can be bought. REFUSED (409) once any seat is booked \u2014 refund or cancel those first, or close individual performances instead. Nothing is destroyed: the performances, prices and sales stay, and uiiq_event_tickets_on brings them back, reopening any performance left CLOSED. Without confirm: true it is ALWAYS a dry run that changes nothing. Owner or admin.",
+    description: "Switch ticket sales OFF for this event: the performances are closed and the ticketing is archived, so nothing more can be bought. REFUSED (409) once any seat is booked \u2014 refund or cancel those first, or close individual performances instead. Nothing is destroyed: the performances, prices and sales stay, and uiiq_event_tickets_on brings back the ones this closed (not a night closed by hand, and not one already over). To stop selling ONE performance instead, use uiiq_event_performance_set. Without confirm: true it is ALWAYS a dry run that changes nothing. Owner or admin.",
     inputSchema: {
       type: "object",
       required: ["id"],
@@ -159,6 +159,47 @@ export const eventsTools = [
         return { dryRun: true, changed: false, wouldDo: "switch_tickets_off", id, note: "Nothing was changed. This stops the public buying tickets. Call again with confirm: true." };
       }
       const res = await api(tenant)(`/events/${encodeURIComponent(id)}/tickets`, { method: "DELETE" });
+      if (!res.ok) throw await fail(res);
+      return res.json();
+    },
+  },
+  {
+    name: "uiiq_event_performance_set",
+    description: "Stop selling ONE of an event's performances, or put it back: action 'close' or 'open'. This is what the switch-off's refusal means by \"close the performances\" when a seat is already booked \u2014 it stops further sales for that night and leaves the seats already sold with their tickets. A night closed this way is the OFFICE's decision, so uiiq_event_tickets_on leaves it shut; one closed by a switch-off comes back. Opening sets it FULL or OPEN on what is actually sold. REFUSED (409): a CANCELLED performance, a performance whose night has already finished (open only), an event whose ticket sales are switched off anyway, and an event changed by someone else while this was saving. Already in the asked-for state is a no-op, not an error. CANCELLING a performance is not here \u2014 that has to deal with the seats already sold. Without confirm: true it is ALWAYS a dry run that changes nothing. Owner or admin; needs the `events` feature.",
+    inputSchema: {
+      type: "object",
+      required: ["id", "performanceId", "action"],
+      properties: {
+        id: { type: "string", description: "The event's id" },
+        performanceId: { type: "string", description: "The performance (session) id, from uiiq_event_tickets" },
+        action: { type: "string", enum: ["close", "open"], description: "close = stop selling this night; open = put it back on sale" },
+        confirm: { type: "boolean", description: "true = do it; omit for the dry run" },
+        tenant: TENANT_PROP,
+      },
+    },
+    async handler({ id, performanceId, action, tenant, confirm }) {
+      if (action !== "close" && action !== "open") {
+        throw new Error("action must be 'close' or 'open'");
+      }
+      // It changes what the public can buy, so it takes the same dry run as the
+      // switch-off does.
+      if (confirm !== true) {
+        return {
+          dryRun: true,
+          changed: false,
+          wouldDo: action === "close" ? "close_performance" : "open_performance",
+          id,
+          performanceId,
+          note:
+            action === "close"
+              ? "Nothing was changed. This stops the public buying THIS performance; seats already sold keep their tickets. Call again with confirm: true."
+              : "Nothing was changed. This puts THIS performance back on sale. Call again with confirm: true.",
+        };
+      }
+      const res = await api(tenant)(`/events/${encodeURIComponent(id)}/tickets/performances`, {
+        method: "PATCH",
+        body: JSON.stringify({ performanceId, action }),
+      });
       if (!res.ok) throw await fail(res);
       return res.json();
     },
