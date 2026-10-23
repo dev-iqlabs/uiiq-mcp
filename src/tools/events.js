@@ -131,9 +131,20 @@ export const eventsTools = [
   },
   {
     name: "uiiq_event_tickets_off",
-    description: "Switch ticket sales OFF for this event: the performances are closed and the ticketing is archived, so nothing more can be bought. REFUSED (409) once any seat is booked \u2014 refund or cancel those first, or close individual performances instead. Nothing is destroyed: the performances, prices and sales stay, and uiiq_event_tickets_on brings them back. Owner or admin.",
-    inputSchema: { type: "object", required: ["id"], properties: { id: { type: "string" }, tenant: TENANT_PROP } },
-    async handler({ id, tenant }) {
+    description: "Switch ticket sales OFF for this event: the performances are closed and the ticketing is archived, so nothing more can be bought. REFUSED (409) once any seat is booked \u2014 refund or cancel those first, or close individual performances instead. Nothing is destroyed: the performances, prices and sales stay, and uiiq_event_tickets_on brings them back, reopening the performances it closed. Without confirm: true it is ALWAYS a dry run that changes nothing. Owner or admin.",
+    inputSchema: {
+      type: "object",
+      required: ["id"],
+      properties: {
+        id: { type: "string" },
+        confirm: { type: "boolean", description: "true = do it; omit for the dry run" },
+        tenant: TENANT_PROP,
+      },
+    },
+    async handler({ id, tenant, confirm }) {
+      if (confirm !== true) {
+        return { dryRun: true, changed: false, wouldDo: "switch_tickets_off", id, note: "Nothing was changed. This stops the public buying tickets. Call again with confirm: true." };
+      }
       const res = await api(tenant)(`/events/${encodeURIComponent(id)}/tickets`, { method: "DELETE" });
       if (!res.ok) throw await fail(res);
       return res.json();
@@ -141,21 +152,43 @@ export const eventsTools = [
   },
   {
     name: "uiiq_event_tickets_link_set",
-    description: "Sell this event's tickets on ANOTHER site instead of through UiiQ \u2014 a button label and an https link, the way a class links to EEQU. Both together, or both empty to put it back on UiiQ's own checkout. Set, they win over UiiQ's checkout wherever a Buy tickets button is drawn (the event page, the Members App, the website). Owner or admin.",
+    description: "Sell this event's tickets on ANOTHER site instead of through UiiQ \u2014 a button label and an https link, the way a class links to EEQU. Give ticketsLabel AND ticketsUrl together, or clear: true to put it back on UiiQ's own checkout; omitting the fields is NOT a clear, because that would quietly move ticket money back to UiiQ. Set, they win over UiiQ's checkout wherever a Buy tickets button is drawn (the event page, the Members App, the website). Without confirm: true it is ALWAYS a dry run that changes nothing. Owner or admin.",
     inputSchema: {
       type: "object",
       required: ["id"],
       properties: {
         id: { type: "string" },
-        ticketsLabel: { type: "string", description: "Button label, e.g. \"Book on EEQU\". Empty with ticketsUrl empty clears both." },
+        ticketsLabel: { type: "string", description: "Button label, e.g. \"Book on EEQU\". Required with ticketsUrl unless clear: true." },
         ticketsUrl: { type: "string", description: "Where it goes. https only, no embedded credentials." },
+        clear: { type: "boolean", description: "true = back to UiiQ's own checkout. Use this rather than omitting the fields." },
+        confirm: { type: "boolean", description: "true = do it; omit for the dry run" },
         tenant: TENANT_PROP,
       },
     },
-    async handler({ id, tenant, ticketsLabel = "", ticketsUrl = "" }) {
+    async handler({ id, tenant, ticketsLabel, ticketsUrl, clear, confirm }) {
+      // Lucas L2: defaulting both to "" meant a call that sent neither field
+      // silently cleared the link and moved ticket money back to UiiQ's
+      // checkout. Say which you mean.
+      if (clear === true && (ticketsLabel !== undefined || ticketsUrl !== undefined)) {
+        throw new Error("Send clear: true on its own, or ticketsLabel and ticketsUrl together \u2014 not both.");
+      }
+      if (clear !== true && (ticketsLabel === undefined || ticketsUrl === undefined)) {
+        throw new Error("Send ticketsLabel and ticketsUrl together, or clear: true to go back to UiiQ's checkout.");
+      }
+      const body = clear === true ? { ticketsLabel: "", ticketsUrl: "" } : { ticketsLabel, ticketsUrl };
+      if (confirm !== true) {
+        return {
+          dryRun: true,
+          changed: false,
+          wouldDo: clear === true ? "clear_tickets_link" : "set_tickets_link",
+          id,
+          ...body,
+          note: "Nothing was changed. This decides where ticket money goes. Call again with confirm: true.",
+        };
+      }
       const res = await api(tenant)(`/events/${encodeURIComponent(id)}/tickets`, {
         method: "PATCH",
-        body: JSON.stringify({ ticketsLabel, ticketsUrl }),
+        body: JSON.stringify(body),
       });
       if (!res.ok) throw await fail(res);
       return res.json();

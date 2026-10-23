@@ -1473,8 +1473,8 @@ Children's records aren't available from the CLI/MCP (Steve, 22 Oct 2026: no AI 
 | `uiiq_event_delete` | DELETE an event and its unapproved generated drafts (draft social posts, draft campaign, draft press release); approved pieces stay in their own systems and the event's display board token is revoked so screens go dark. |
 | `uiiq_event_tickets` | Whether this event sells tickets through UiiQ and what it is selling: on, managed, live (nothing is on public sale until the event is PUBLISHED), the sell-elsewhere link, and the performances and ticket types behind it. |
 | `uiiq_event_tickets_on` | Switch UiiQ ticket sales ON. Idempotent, and switching back on after a switch-off restores the SAME performances, prices and sales. Owner or admin. |
-| `uiiq_event_tickets_off` | Switch ticket sales OFF: performances closed, ticketing archived. Refused (409) once a seat is booked; nothing is destroyed. Owner or admin. |
-| `uiiq_event_tickets_link_set` | Sell on ANOTHER site instead — a button label and an https link, the way a class links to EEQU. Both empty puts it back on UiiQ's checkout. Owner or admin. |
+| `uiiq_event_tickets_off` | Switch ticket sales OFF: performances closed, ticketing archived. Refused (409) once a seat is booked; nothing is destroyed, and `_on` reopens the performances it closed. Dry run without `confirm: true`. Owner or admin. |
+| `uiiq_event_tickets_link_set` | Sell on ANOTHER site instead — a button label and an https link, the way a class links to EEQU. Give both together, or `clear: true` to go back to UiiQ's checkout; omitting them is not a clear. Dry run without `confirm: true`. Owner or admin. |
 | `uiiq_event_generate` | Generate the event's marketing in one go: social posts + email campaign drafted by Anthropic, a press release via the IQEX Chris pipeline, and a display board slide. |
 | `uiiq_event_content` | The event's generated marketing, assembled live: social posts (with platforms + approved), the email campaign, the press release, the display board (with its /board URL) and how many social accounts are connected. |
 | `uiiq_event_content_review` | Approve or discard one generated piece. |
