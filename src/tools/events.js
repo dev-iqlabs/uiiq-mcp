@@ -121,9 +121,22 @@ export const eventsTools = [
   },
   {
     name: "uiiq_event_tickets_on",
-    description: "Switch UiiQ ticket sales ON for this event. Idempotent: an event already selling comes back unchanged, and switching back on after a switch-off restores the SAME performances, prices and sales history rather than making a second set. Owner or admin. Nothing is on PUBLIC sale until the event itself is PUBLISHED. Add performances with uiiq_sell_session_generate / the sessions route and prices with uiiq_ticket_type_create, using the experience id this returns.",
-    inputSchema: { type: "object", required: ["id"], properties: { id: { type: "string" }, tenant: TENANT_PROP } },
-    async handler({ id, tenant }) {
+    description: "Switch UiiQ ticket sales ON for this event. Idempotent: an event already selling comes back unchanged, and switching back on after a switch-off restores the SAME performances, prices and sales history rather than making a second set, reopening any performance left CLOSED (which also reopens one the office had closed by hand). Owner or admin. Nothing is on PUBLIC sale until the event itself is PUBLISHED. Without confirm: true it is ALWAYS a dry run that changes nothing. Add performances with the sessions route and prices with uiiq_ticket_type_create, using the experience id this returns.",
+    inputSchema: {
+      type: "object",
+      required: ["id"],
+      properties: {
+        id: { type: "string" },
+        confirm: { type: "boolean", description: "true = do it; omit for the dry run" },
+        tenant: TENANT_PROP,
+      },
+    },
+    async handler({ id, tenant, confirm }) {
+      // It reopens the performances a switch-off closed, so it changes what the
+      // public can buy and takes the same dry run as _off (Lucas L-b).
+      if (confirm !== true) {
+        return { dryRun: true, changed: false, wouldDo: "switch_tickets_on", id, note: "Nothing was changed. This puts tickets on sale and reopens any performance a switch-off closed. Call again with confirm: true." };
+      }
       const res = await post(tenant, `/events/${encodeURIComponent(id)}/tickets`);
       if (!res.ok) throw await fail(res);
       return res.json();
@@ -131,7 +144,7 @@ export const eventsTools = [
   },
   {
     name: "uiiq_event_tickets_off",
-    description: "Switch ticket sales OFF for this event: the performances are closed and the ticketing is archived, so nothing more can be bought. REFUSED (409) once any seat is booked \u2014 refund or cancel those first, or close individual performances instead. Nothing is destroyed: the performances, prices and sales stay, and uiiq_event_tickets_on brings them back, reopening the performances it closed. Without confirm: true it is ALWAYS a dry run that changes nothing. Owner or admin.",
+    description: "Switch ticket sales OFF for this event: the performances are closed and the ticketing is archived, so nothing more can be bought. REFUSED (409) once any seat is booked \u2014 refund or cancel those first, or close individual performances instead. Nothing is destroyed: the performances, prices and sales stay, and uiiq_event_tickets_on brings them back, reopening any performance left CLOSED. Without confirm: true it is ALWAYS a dry run that changes nothing. Owner or admin.",
     inputSchema: {
       type: "object",
       required: ["id"],
@@ -166,14 +179,17 @@ export const eventsTools = [
       },
     },
     async handler({ id, tenant, ticketsLabel, ticketsUrl, clear, confirm }) {
-      // Lucas L2: defaulting both to "" meant a call that sent neither field
-      // silently cleared the link and moved ticket money back to UiiQ's
-      // checkout. Say which you mean.
+      // Lucas L2 then L-a: defaulting both to "" meant a call that sent
+      // NEITHER field silently cleared the link and moved ticket money back to
+      // UiiQ's checkout; testing only for `undefined` then let "" or null do
+      // the same, while the dry run still called it "set_tickets_link". Blank
+      // is not a value here — say clear: true, or send two real strings.
+      const given = (v) => typeof v === "string" && v.trim() !== "";
       if (clear === true && (ticketsLabel !== undefined || ticketsUrl !== undefined)) {
         throw new Error("Send clear: true on its own, or ticketsLabel and ticketsUrl together \u2014 not both.");
       }
-      if (clear !== true && (ticketsLabel === undefined || ticketsUrl === undefined)) {
-        throw new Error("Send ticketsLabel and ticketsUrl together, or clear: true to go back to UiiQ's checkout.");
+      if (clear !== true && !(given(ticketsLabel) && given(ticketsUrl))) {
+        throw new Error("Send ticketsLabel and ticketsUrl together, both non-blank, or clear: true to go back to UiiQ's checkout.");
       }
       const body = clear === true ? { ticketsLabel: "", ticketsUrl: "" } : { ticketsLabel, ticketsUrl };
       if (confirm !== true) {
