@@ -106,6 +106,61 @@ export const eventsTools = [
       return res.json();
     },
   },
+  // TICKETS — selling an event through UiiQ. The API is owner-or-admin and
+  // writes an `event.tickets_link_changed` audit entry for every change,
+  // because it moves where ticket money goes.
+  {
+    name: "uiiq_event_tickets",
+    description: "Whether this event sells tickets through UiiQ, and what it is selling: `on`, `managed` (UiiQ made the ticketing, as opposed to a linked experience of the workspace's own), `live` (on AND the event is PUBLISHED \u2014 nothing is on public sale until it is), the sell-elsewhere link, and the experience behind it with its performances (date, times, seats, sold, left, status) and ticket types (price, ages, per-order limit, how many on sale, how many sold, which performance). Needs the `events` feature.",
+    inputSchema: { type: "object", required: ["id"], properties: { id: { type: "string" }, tenant: TENANT_PROP } },
+    async handler({ id, tenant }) {
+      const res = await api(tenant)(`/events/${encodeURIComponent(id)}/tickets`);
+      if (!res.ok) throw await fail(res);
+      return res.json();
+    },
+  },
+  {
+    name: "uiiq_event_tickets_on",
+    description: "Switch UiiQ ticket sales ON for this event. Idempotent: an event already selling comes back unchanged, and switching back on after a switch-off restores the SAME performances, prices and sales history rather than making a second set. Owner or admin. Nothing is on PUBLIC sale until the event itself is PUBLISHED. Add performances with uiiq_sell_session_generate / the sessions route and prices with uiiq_ticket_type_create, using the experience id this returns.",
+    inputSchema: { type: "object", required: ["id"], properties: { id: { type: "string" }, tenant: TENANT_PROP } },
+    async handler({ id, tenant }) {
+      const res = await post(tenant, `/events/${encodeURIComponent(id)}/tickets`);
+      if (!res.ok) throw await fail(res);
+      return res.json();
+    },
+  },
+  {
+    name: "uiiq_event_tickets_off",
+    description: "Switch ticket sales OFF for this event: the performances are closed and the ticketing is archived, so nothing more can be bought. REFUSED (409) once any seat is booked \u2014 refund or cancel those first, or close individual performances instead. Nothing is destroyed: the performances, prices and sales stay, and uiiq_event_tickets_on brings them back. Owner or admin.",
+    inputSchema: { type: "object", required: ["id"], properties: { id: { type: "string" }, tenant: TENANT_PROP } },
+    async handler({ id, tenant }) {
+      const res = await api(tenant)(`/events/${encodeURIComponent(id)}/tickets`, { method: "DELETE" });
+      if (!res.ok) throw await fail(res);
+      return res.json();
+    },
+  },
+  {
+    name: "uiiq_event_tickets_link_set",
+    description: "Sell this event's tickets on ANOTHER site instead of through UiiQ \u2014 a button label and an https link, the way a class links to EEQU. Both together, or both empty to put it back on UiiQ's own checkout. Set, they win over UiiQ's checkout wherever a Buy tickets button is drawn (the event page, the Members App, the website). Owner or admin.",
+    inputSchema: {
+      type: "object",
+      required: ["id"],
+      properties: {
+        id: { type: "string" },
+        ticketsLabel: { type: "string", description: "Button label, e.g. \"Book on EEQU\". Empty with ticketsUrl empty clears both." },
+        ticketsUrl: { type: "string", description: "Where it goes. https only, no embedded credentials." },
+        tenant: TENANT_PROP,
+      },
+    },
+    async handler({ id, tenant, ticketsLabel = "", ticketsUrl = "" }) {
+      const res = await api(tenant)(`/events/${encodeURIComponent(id)}/tickets`, {
+        method: "PATCH",
+        body: JSON.stringify({ ticketsLabel, ticketsUrl }),
+      });
+      if (!res.ok) throw await fail(res);
+      return res.json();
+    },
+  },
   {
     name: "uiiq_event_generate",
     description: "Generate the event's marketing in one go: social posts + email campaign drafted by Anthropic, a press release via the IQEX Chris pipeline, and a display board slide. Everything lands as a DRAFT to approve with uiiq_event_content_review; regenerating replaces unapproved drafts only. SPENDS CREDITS (tariff grow_event_fanout; 402 when short). Slow (up to 2 min).",
