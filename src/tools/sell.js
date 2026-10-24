@@ -138,7 +138,8 @@ export const sellTools = [
       "Stripe-paid: the subscription is repriced on the account it was taken on; when 'now' prorates the rest of the period and CHARGES the difference at once (a refused card: 502 and nothing changes), when 'next_renewal' changes nothing until the next renewal is paid at the new price (UIIQ's plan follows then). " +
       "Their CURRENT plan as planId cancels a move lined up for the next renewal: they keep paying what they pay now, and the answer says undone: true (409 'already on' when nothing is lined up). 'now' while a move is lined up is refused (409): cancel it first. " +
       "Recorded by the office (no subscription): 'now' only (409 for next_renewal). Never an inactive plan, a plan with fewer places, a fixed-term pass (to or from), a residents-only plan, a plan billed through another organisation, or an ended subscription (409). " +
-      "If Stripe refuses, nothing is changed. No refund is made. The answer's `warning` says what the new plan means for the family's classes; pass it on.",
+      "If Stripe refuses, nothing is changed. No refund is made. The answer's `warning` says what the new plan means for the family's classes; pass it on. " +
+      "The answer's `discount` is what became of a promo code's discount on the subscription: null (none), or { code, outcome }: kept (the code covers the new plan, so what is left of it carries on), dropped (the code doesn't cover the new plan: removed in the same Stripe update, so a refused card leaves it on) or restored (cancelling a lined-up move that had removed it put back what was left). Pass on dropped and restored.",
     inputSchema: {
       type: "object",
       required: ["id", "planId", "when"],
@@ -159,21 +160,30 @@ export const sellTools = [
   },
   {
     name: "uiiq_sell_promo_create",
-    description: "Create a UIIQ promo discount code.",
+    description:
+      "Create a promo code (owner/admin). The code is upper-cased; one the workspace already has is refused (409). " +
+      "appliesTo says what it is for: BOOKINGS (the default), PLANS (membership plans) or BOTH. " +
+      "On a plan, planDuration says how long the discount lasts: FIRST_PAYMENT (the default), MONTHS (with planDurationMonths, 1-120) or EVERY_PAYMENT; planIds limits it to some plans (empty = every plan). " +
+      "maxUses caps the uses in all; maxUsesPerEmail caps them per email address, counting its bookings and plan sign-ups together.",
     inputSchema: {
       type: "object",
-      required: ["code", "discount", "type"],
+      required: ["code", "discountType", "discountValue"],
       properties: {
-        code: { type: "string" },
-        discount: { type: "number" },
-        type: { type: "string", description: "percent | fixed" },
-        expires: { type: "string", description: "Expiry date YYYY-MM-DD" },
+        code: { type: "string", description: "What customers type, 1-64 characters" },
+        discountType: { type: "string", enum: ["PERCENTAGE", "FIXED"] },
+        discountValue: { type: "number", description: "A whole number: percent for PERCENTAGE (1-100), pence for FIXED (500 = £5)" },
+        maxUses: { type: "number" },
+        maxUsesPerEmail: { type: "number" },
+        validUntil: { type: "string", description: "Expiry date YYYY-MM-DD; none when omitted" },
+        appliesTo: { type: "string", enum: ["BOOKINGS", "PLANS", "BOTH"] },
+        planDuration: { type: "string", enum: ["FIRST_PAYMENT", "MONTHS", "EVERY_PAYMENT"] },
+        planDurationMonths: { type: "number", description: "1-120, MONTHS only" },
+        planIds: { type: "array", items: { type: "string" }, description: "Membership plan ids (uiiq_sell_membership_plan_list); empty = every plan" },
         tenant: TENANT_PROP,
       }
     },
-    async handler({ code, discount, type, expires, tenant }) {
-      const body = { code, discount, type };
-      if (expires) body.expiresAt = expires;
+    async handler({ code, discountType, discountValue, maxUses, maxUsesPerEmail, validUntil, appliesTo, planDuration, planDurationMonths, planIds, tenant }) {
+      const body = { code, discountType, discountValue, maxUses, maxUsesPerEmail, validUntil, appliesTo, planDuration, planDurationMonths, planIds };
       const res = await api(tenant)("/admin/promo-codes", {
         method: "POST",
         body: JSON.stringify(body),
