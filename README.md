@@ -15,7 +15,7 @@ UIIQ is one subscription whose modules are grouped as **Sell**, **Grow** and **R
 | Field visits and visit subscriptions | `uiiq_sell_field_visit_*`, `uiiq_sell_visit_subscription_*`, `uiiq_sell_visit_reminder_status` | Track recurring visits and their reminders |
 | Pricing and promotions | `uiiq_sell_pricing_rule_*`, `uiiq_sell_pricing_intelligence_recommend`, `uiiq_sell_promo_create` | Quote a price under the rules, ask for a recommended price, issue promo codes |
 | Gift cards, vouchers, memberships | `uiiq_sell_gift_card_*`, `uiiq_sell_voucher_*`, `uiiq_sell_membership_plan_*`, `uiiq_sell_subscription_*` | Issue and bulk-issue gift cards, resend or regenerate vouchers, manage membership plans, review and cancel members |
-| Tickets | `uiiq_ticket_*` | Issue tickets, scan them at the door, see scan stats, forward tickets |
+| Tickets | `uiiq_ticket_*` | Issue tickets, email them to buyers, scan them at the door (set to one performance), see scan stats, forward tickets |
 | Donations | `uiiq_donations_*` | Run causes, report on giving, export Gift Aid |
 | Sister organisations | `uiiq_billing_org_*`, `uiiq_admin_billing_org_*` | With the `sister_organisations` feature: list the workspace's own and sister organisations; the owner adds, edits, connects Stripe for, switches off or removes a sister (create, connect and remove are dry runs without `confirm: true`); a platform admin turns sisters off, sets their fee terms, ends a switched-off sister's subscriptions and works the payment reviews |
 | Orders and commerce | `uiiq_order_*`, `uiiq_commerce_*`, `uiiq_channels_*`, `uiiq_merch_set_*` | Hold and annotate orders, provision hosted shops, set fee rates, settle payouts, sync marketplace channels |
@@ -343,8 +343,10 @@ A tenant is the organisation: list, detail and feature flags are `uiiq_tenant_li
 | --- | --- |
 | `uiiq_ticket_list` | List the individual scannable tickets on a booking (one per seat), with admit status. |
 | `uiiq_ticket_issue` | Issue individual QR tickets for a confirmed booking (one per seat). |
-| `uiiq_ticket_scan` | Admit (or undo) a single ticket by its code — the door-scan action. |
-| `uiiq_ticket_scan_stats` | Today's door-scan stats for the tenant: tickets admitted today and total issued. |
+| `uiiq_ticket_scan` | Scan a single ticket by its code — the door-scan action: admit, sign out, or undo. With `performanceId` (the door set to one performance), a ticket for another performance is refused as WRONG_PERFORMANCE and nothing changes. |
+| `uiiq_ticket_scan_stats` | Door-scan stats: today's across the workspace, or one performance's (`performanceId`: sold, admitted, signed out, still in); lists the performances a door can be set to and the default one. |
+| `uiiq_ticket_email_status` | How many of an event's confirmed bookings have been emailed their tickets, in all and per performance. |
+| `uiiq_ticket_email_send` | EMAIL buyers their tickets: an event's (or one performance's) confirmed bookings not sent theirs yet, pressing again while it makes progress and returning the totals; or `bookingId` to send one booking's again. Owner or admin. Dry run without `confirm: true`. |
 | `uiiq_ticket_forward_list` | List this tenant's scan fan-out targets — downstream products (Acts Direct / CountryComp) that receive a presence-verified scan when a ticket is admitted. |
 | `uiiq_ticket_forward_create` | Register a downstream target that receives a scan event whenever a ticket is admitted (presence-verified reviews for Acts Direct / CountryComp). |
 | `uiiq_ticket_forward_delete` | Remove a scan fan-out target by id. |
@@ -1693,4 +1695,4 @@ Children's records aren't available from the CLI/MCP (Steve, 22 Oct 2026: no AI 
 | `uiiq_workflow_order_assign` | Assign a workflow order to a user in the tenant (assignedUserId null unassigns). |
 | `uiiq_workflow_order_request_approval` | Ask the customer to approve a stage of their order: creates an approval link, moves the order to AWAITING_APPROVAL and EMAILS the customer. |
 
-1162 tools.
+1169 tools.
