@@ -13,7 +13,7 @@ UIIQ is one subscription whose modules are grouped as **Sell**, **Grow** and **R
 | Bookings and experiences | `uiiq_sell_experience_*`, `uiiq_sell_booking_*`, `uiiq_sell_calendar_week`, `uiiq_sell_session_generate` | Define bookable experiences, generate sessions, list a week's calendar, create and cancel bookings |
 | Staff, resources, service areas | `uiiq_sell_staff_availability_*`, `uiiq_sell_resource_*`, `uiiq_sell_service_area_*` | Block and unblock staff, manage rooms and equipment, set the areas a field service covers |
 | Field visits and visit subscriptions | `uiiq_sell_field_visit_*`, `uiiq_sell_visit_subscription_*`, `uiiq_sell_visit_reminder_status` | Track recurring visits and their reminders |
-| Pricing and promotions | `uiiq_sell_pricing_rule_*`, `uiiq_sell_pricing_intelligence_recommend`, `uiiq_sell_promo_create` | Quote a price under the rules, ask for a recommended price, issue promo codes |
+| Pricing and promotions | `uiiq_sell_pricing_rule_*`, `uiiq_sell_pricing_intelligence_recommend`, `uiiq_sell_promo_create` | Quote a price under the rules, ask for a recommended price, issue promo codes for bookings, membership plans or both |
 | Gift cards, vouchers, memberships | `uiiq_sell_gift_card_*`, `uiiq_sell_voucher_*`, `uiiq_sell_membership_plan_*`, `uiiq_sell_subscription_*` | Issue and bulk-issue gift cards, resend or regenerate vouchers, manage membership plans, review and cancel members |
 | Tickets | `uiiq_ticket_*` | Issue tickets, email them to buyers, scan them at the door (set to one performance), see scan stats, forward tickets |
 | Donations | `uiiq_donations_*` | Run causes, report on giving, export Gift Aid |
@@ -25,7 +25,7 @@ UIIQ is one subscription whose modules are grouped as **Sell**, **Grow** and **R
 | Classes | `uiiq_classes_*`, `uiiq_students_groups` | Classes, terms, course runs, session cover and cancellation, notices, parent policies, the family Register form's settings, the register settings, and the student group labels (counts only). Children's records aren't available from the CLI/MCP (Steve, 22 Oct 2026: no AI session reads children's records). Use the UiiQ dashboard in a browser. |
 | Customer cards | `uiiq_cards_*` | Issue, reissue, revoke, hand over and print member cards through IQEX (QR/NFC and branding only, never a name; printing spends credits). Children's check-in cards are in the UiiQ dashboard |
 | Till back office, kitchen, tables | `uiiq_till_*` | Devices, staff, day close, daily summary, refunds, payment config, food orders and settlement, KDS tickets, tables and their QR codes (floor routes take the device token) |
-| Bookings admin | `uiiq_blockout_*`, `uiiq_checkin_*`, `uiiq_custom_field_*`, `uiiq_waiver_*`, `uiiq_ticket_type_*`, `uiiq_booking_refund`, `uiiq_promo_code_*` | Blockouts, the calendar, door check-in, custom booking fields, waivers, ticket types, refunds (real money), promo codes |
+| Bookings admin | `uiiq_blockout_*`, `uiiq_checkin_*`, `uiiq_custom_field_*`, `uiiq_waiver_*`, `uiiq_ticket_type_*`, `uiiq_booking_refund`, `uiiq_promo_code_*` | Blockouts, the calendar, door check-in, custom booking fields, waivers, ticket types, refunds (real money), promo codes (list them, see the members on one and until when, edit what a code does on plans) |
 | Forms | `uiiq_form_*` | Build and send forms (counts against the email allowance), read results (owner/admin), publish IQForms to the Members App. The raw-responses export and a published form's completion per child are in the UiiQ dashboard (they're about named parents and children) |
 
 ### Grow — marketing, CRM and prospecting
@@ -288,8 +288,8 @@ A tenant is the organisation: list, detail and feature flags are `uiiq_tenant_li
 | `uiiq_sell_subscription_get` | One membership subscriber by id: plan, status, member code, address, residency-check outcome and who verified it. |
 | `uiiq_sell_subscription_review` | Residency review for a residents-only pass. |
 | `uiiq_sell_subscription_cancel` | Cancel a member (owner/admin). |
-| `uiiq_sell_subscription_change_plan` | Change plan, office only (owner/admin): move a member to another plan, now (prorated and charged at once) or at the next renewal (Stripe-paid only); their current plan cancels a move lined up for the renewal (`undone: true`). A dry run without `confirm: true`. Never a pass, fewer places, a residents-only plan, or another organisation's plan. |
-| `uiiq_sell_promo_create` | Create a UIIQ promo discount code. |
+| `uiiq_sell_subscription_change_plan` | Change plan, office only (owner/admin): move a member to another plan, now (prorated and charged at once) or at the next renewal (Stripe-paid only); their current plan cancels a move lined up for the renewal (`undone: true`). A dry run without `confirm: true`. Never a pass, fewer places, a residents-only plan, or another organisation's plan. The answer's `discount` says what became of a promo code's discount: `kept`, `dropped` (the code doesn't cover the new plan) or `restored`. |
+| `uiiq_sell_promo_create` | Create a promo code (owner/admin): `discountType` PERCENTAGE or FIXED, `discountValue` (percent, or pence), what it's for (`appliesTo` BOOKINGS, PLANS or BOTH), how long it lasts on a plan (`planDuration`, `planDurationMonths`), which plans (`planIds`), `maxUses`, `maxUsesPerEmail`, `validUntil`. |
 | `uiiq_sell_gift_card_issue` | Issue a UIIQ gift card / voucher. |
 | `uiiq_sell_gift_card_bulk_issue` | Bulk-issue vouchers (max 500). |
 | `uiiq_sell_gift_card_balance` | Check a voucher's validity/balance by code. |
@@ -1244,8 +1244,10 @@ Needs the `competitions` feature. Setting up, rounds, the nominee confirmation a
 | `uiiq_pricing_config_get` | The live platform pricing config (tiers, unit credit rates, top-up rate, marketing tariff, platform fee), the defaults, and the last 20 changes. |
 | `uiiq_pricing_config_set` | Replace the platform pricing config (audited). |
 | `uiiq_pricing_lead_delete` | GDPR-erase a pricing-calculator lead: deletes it AND suppresses the email so a later form can't recreate it. |
-| `uiiq_promo_code_update` | Edit or (de)activate a promo code; only the fields sent change and the code text itself is immutable. |
-| `uiiq_promo_code_delete` | Delete a promo code that was never used. |
+| `uiiq_promo_code_list` | The workspace's promo codes, newest first, each with what it's for, its plan settings, its uses and `membersOnPlans`. |
+| `uiiq_promo_code_get` | One promo code and the members on it: the plan each is on now, the terms they joined on, and until when (`discountUntil`; `droppedAt` when a plan change removed it); `inCheckout` counts uses held by unpaid checkouts. |
+| `uiiq_promo_code_update` | Edit or (de)activate a promo code (owner/admin); only the fields sent change and the code text itself is immutable. Takes the plan settings too: `appliesTo`, `planDuration`, `planDurationMonths`, `planIds`, and `maxUsesPerEmail`. |
+| `uiiq_promo_code_delete` | Delete a promo code that was never used (refused once bookings or plan sign-ups carry it). |
 | `uiiq_press_distribution_list` | The press-release distribution services (Pressat, PRLog, OpenPR): enabled flag and a masked key preview. |
 | `uiiq_press_distribution_set` | Set a distribution service's API key (stored encrypted) and/or enabled flag. |
 | `uiiq_journalist_admin_list` | Every journalist contact on the platform, global ones first. |
@@ -1695,4 +1697,4 @@ Children's records aren't available from the CLI/MCP (Steve, 22 Oct 2026: no AI 
 | `uiiq_workflow_order_assign` | Assign a workflow order to a user in the tenant (assignedUserId null unassigns). |
 | `uiiq_workflow_order_request_approval` | Ask the customer to approve a stage of their order: creates an approval link, moves the order to AWAITING_APPROVAL and EMAILS the customer. |
 
-1169 tools.
+1171 tools.

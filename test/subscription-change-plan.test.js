@@ -75,6 +75,18 @@ test("choosing the current plan cancels a lined-up move: the answer's undone rid
   assert.equal(out.undone, true);
 });
 
+test("a promo code's discount: the answer's discount rides through, and the description says what each outcome means", async () => {
+  for (const outcome of ["kept", "dropped", "restored"]) {
+    const out = await call([200, { ...OK, discount: { code: "SPRING10", outcome } }], { id: "mem_1", planId: "plan_3", when: "now", confirm: true });
+    assert.deepEqual(out.discount, { code: "SPRING10", outcome });
+  }
+  const none = await call([200, { ...OK, discount: null }], { id: "mem_1", planId: "plan_3", when: "now", confirm: true });
+  assert.equal(none.discount, null);
+  for (const re of [/`discount`/, /kept \(the code covers the new plan/, /dropped \(the code doesn't cover the new plan: removed in the same Stripe update/, /restored \(cancelling a lined-up move/, /Pass on dropped and restored/]) {
+    assert.match(tool.description, re);
+  }
+});
+
 test("the description carries the money rules", () => {
   for (const re of [/prorates/, /CHARGES the difference at once/, /refused card: 502 and nothing changes/, /CURRENT plan as planId cancels a move/, /undone: true/, /'now' while a move is lined up is refused/, /next_renewal/, /Recorded by the office/, /fewer places/, /fixed-term pass/, /residents-only/, /another organisation/, /ended subscription/, /If Stripe refuses, nothing is changed/, /No refund/]) {
     assert.match(tool.description, re);

@@ -359,14 +359,36 @@ export const adminOpsTools = [
 
   // ── Promo codes ──
   {
+    name: "uiiq_promo_code_list",
+    description: "The workspace's promo codes, newest first: { codes }. Each has discountType / discountValue, appliesTo (BOOKINGS, PLANS or BOTH), on a plan planDuration (FIRST_PAYMENT, MONTHS with planDurationMonths, or EVERY_PAYMENT) and planIds (empty = every plan), usedCount, maxUses, maxUsesPerEmail, validFrom, validUntil, isActive, and membersOnPlans: how many members are on it now.",
+    inputSchema: { type: "object", properties: { tenant: TENANT_PROP } },
+    async handler({ tenant } = {}) { return req(tenant, "/admin/promo-codes"); },
+  },
+  {
+    name: "uiiq_promo_code_get",
+    description: "One promo code and the members on it: { promoCode, members, inCheckout }. members are the plan sign-ups paid with the code, newest first (at most 500): membershipId, customerName, customerEmail, membershipStatus, the plan they are on now, the terms they joined on (duration, durationMonths, discountPence), joinedAt, discountUntil (when their discount ends: the first payment for FIRST_PAYMENT, N months on for MONTHS, null = every payment) and droppedAt (set when a plan change the code doesn't cover removed it). inCheckout counts the uses held by checkouts not yet paid.",
+    inputSchema: { type: "object", required: ["id"], properties: { id: { type: "string", description: "Promo code id — see uiiq_promo_code_list" }, tenant: TENANT_PROP } },
+    async handler({ id, tenant }) { return req(tenant, `/admin/promo-codes/${encodeURIComponent(id)}`); },
+  },
+  {
     name: "uiiq_promo_code_update",
-    description: "Edit or (de)activate a promo code; only the fields sent change and the code text itself is immutable. discountValue is percent for PERCENTAGE, pence for FIXED; maxUses/maxUsesPerEmail/validFrom/validUntil null clears.",
-    inputSchema: { type: "object", required: ["id"], properties: { id: { type: "string" }, discountType: { type: "string", enum: ["PERCENTAGE", "FIXED"] }, discountValue: { type: "number" }, maxUses: { type: ["number", "null"] }, maxUsesPerEmail: { type: ["number", "null"] }, validFrom: { type: ["string", "null"] }, validUntil: { type: ["string", "null"] }, isActive: { type: "boolean" }, tenant: TENANT_PROP } },
+    description: "Edit or (de)activate a promo code (owner/admin); only the fields sent change and the code text itself is immutable. discountValue is percent for PERCENTAGE, pence for FIXED; maxUses/maxUsesPerEmail/validFrom/validUntil null clears. maxUsesPerEmail counts an email's bookings and plan sign-ups together. appliesTo: BOOKINGS, PLANS or BOTH. planDuration: FIRST_PAYMENT, MONTHS (planDurationMonths 1-120; kept from the code when not sent) or EVERY_PAYMENT (no months). planIds: the plans it works on, at most 100 of this workspace's own ([] or null = every plan). The plan settings change what the code does from now on: a member already on it keeps the terms they joined on.",
+    inputSchema: {
+      type: "object", required: ["id"],
+      properties: {
+        id: { type: "string" }, discountType: { type: "string", enum: ["PERCENTAGE", "FIXED"] }, discountValue: { type: "number" }, maxUses: { type: ["number", "null"] }, maxUsesPerEmail: { type: ["number", "null"] }, validFrom: { type: ["string", "null"] }, validUntil: { type: ["string", "null"] }, isActive: { type: "boolean" },
+        appliesTo: { type: "string", enum: ["BOOKINGS", "PLANS", "BOTH"] },
+        planDuration: { type: "string", enum: ["FIRST_PAYMENT", "MONTHS", "EVERY_PAYMENT"] },
+        planDurationMonths: { type: ["number", "null"], description: "1-120, MONTHS only" },
+        planIds: { type: ["array", "null"], items: { type: "string" }, description: "Membership plan ids; [] or null = every plan" },
+        tenant: TENANT_PROP,
+      },
+    },
     async handler({ id, tenant, ...body }) { return req(tenant, `/admin/promo-codes/${encodeURIComponent(id)}`, "PATCH", defined(body)); },
   },
   {
     name: "uiiq_promo_code_delete",
-    description: "Delete a promo code that was never used. Refused (409) once bookings carry it: deactivate instead.",
+    description: "Delete a promo code that was never used (owner/admin). Refused (409) once bookings or plan sign-ups carry it: deactivate instead.",
     inputSchema: { type: "object", required: ["id"], properties: { id: { type: "string" }, tenant: TENANT_PROP } },
     async handler({ id, tenant }) { return req(tenant, `/admin/promo-codes/${encodeURIComponent(id)}`, "DELETE"); },
   },
