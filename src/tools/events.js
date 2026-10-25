@@ -1,4 +1,6 @@
+import fs from "node:fs";
 import { apiClient } from "../auth.js";
+import { printable } from "./tickets.js";
 
 const TENANT_PROP = {
   type: "string",
@@ -6,12 +8,50 @@ const TENANT_PROP = {
 };
 const api = (tenant) => apiClient(tenant ? { tenant } : {});
 
+// UiiQ's refusals can carry what the office typed (a ticket type's name), so
+// they reach the session printable, as the ticket tools' do.
 async function fail(res) {
   const text = await res.text();
-  try { const j = JSON.parse(text); if (j?.error) return new Error(j.error); } catch { /* not JSON */ }
-  return new Error(text || `HTTP ${res.status}`);
+  try { const j = JSON.parse(text); if (j?.error) return new Error(printable(j.error)); } catch { /* not JSON */ }
+  return new Error(printable(text) || `HTTP ${res.status}`);
 }
 const post = (tenant, path, body) => api(tenant)(path, { method: "POST", ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
+
+// THE DOOR LIST (UiiQ-platform events and tickets 6/6). Names on tickets can
+// be children's, so UiiQ leaves them out for this client: they open only in
+// UiiQ itself, in a person's browser. These keep it that way even if UiiQ
+// ever sent them: the names are emptied here, never looked up another way.
+const NAMES_COLUMN = "Names on tickets";
+function csvRows(text) {
+  const rows = []; let row = []; let cell = ""; let quoted = false;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (quoted) {
+      if (ch === '"') { if (text[i + 1] === '"') { cell += '"'; i++; } else quoted = false; } else cell += ch;
+    } else if (ch === '"') quoted = true;
+    else if (ch === ",") { row.push(cell); cell = ""; }
+    else if (ch === "\r" || ch === "\n") {
+      if (ch === "\r" && text[i + 1] === "\n") i++;
+      row.push(cell); rows.push(row); row = []; cell = "";
+    } else cell += ch;
+  }
+  if (cell || row.length) { row.push(cell); rows.push(row); }
+  return rows;
+}
+// Quoted as UiiQ's csvCell quotes, so a column that was already empty comes back byte for byte.
+const csvQuote = (s) => (/[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s);
+export function withoutTicketNamesCsv(csv) {
+  const rows = csvRows(csv);
+  const at = rows[0]?.indexOf(NAMES_COLUMN) ?? -1;
+  if (at < 0) return csv;
+  for (const row of rows.slice(1)) if (at < row.length) row[at] = "";
+  return rows.map((r) => r.map(csvQuote).join(",")).join("\r\n") + "\r\n";
+}
+export function withoutTicketNames(list) {
+  return { ...list, bookings: (list?.bookings ?? []).map((b) => ({ ...b, attendees: [] })), attendeeNamesWithheld: true };
+}
+
+const COMP_MAX = 50;
 
 // EVENTS — a venue's events (optionally tied to a bookable experience) and
 // the marketing fan-out: one generate call drafts social posts, an email
@@ -249,6 +289,176 @@ export const eventsTools = [
       });
       if (!res.ok) throw await fail(res);
       return res.json();
+    },
+  },
+  // THE OFFICE'S TOOLS (UiiQ-platform events and tickets 6/6): who's coming,
+  // free tickets, cancelling a free booking, reissuing a booking's tickets.
+  {
+    name: "uiiq_event_door_list",
+    description: "Who's coming to ONE of an event's performances: each booking that is coming (confirmed, or already checked in) in name order, with its reference, the buyer's name, its tickets by type, whether it is a comp, and the door's count (ticketCount, admitted, signedOut), plus totals. No email or phone. NAMES ON TICKETS ARE NEVER HERE: they can be children's, so UiiQ leaves them out for this client (`attendeeNamesWithheld: true`) and they open only in UiiQ itself, in a person's browser. format 'csv': the door list spreadsheet, with the buyer's email and an empty Names on tickets column; returns { filename, csv }, or writes it to savePath. Any staff member with the `events` feature.",
+    inputSchema: {
+      type: "object",
+      required: ["id", "performanceId"],
+      properties: {
+        id: { type: "string", description: "The event's id" },
+        performanceId: { type: "string", description: "The performance (session) id, from uiiq_event_tickets" },
+        format: { type: "string", enum: ["json", "csv"], description: "json (default) or csv" },
+        savePath: { type: "string", description: "csv only: a local file path to write the spreadsheet to" },
+        tenant: TENANT_PROP,
+      },
+    },
+    async handler({ id, performanceId, format, savePath, tenant }) {
+      const csv = format === "csv";
+      if (savePath && !csv) throw new Error("savePath goes with format: 'csv'");
+      const qs = `?performanceId=${encodeURIComponent(performanceId)}` + (csv ? "&format=csv" : "");
+      const res = await api(tenant)(`/events/${encodeURIComponent(id)}/tickets/attendees${qs}`);
+      if (!res.ok) throw await fail(res);
+      if (!csv) return withoutTicketNames(await res.json());
+      const text = withoutTicketNamesCsv(await res.text());
+      const m = (res.headers.get("content-disposition") ?? "").match(/filename="?([^"]+)"?/);
+      const filename = m ? m[1] : "door-list.csv";
+      if (savePath) {
+        fs.writeFileSync(savePath, text, "utf8");
+        return { saved: savePath, filename, bytes: Buffer.byteLength(text, "utf8") };
+      }
+      return { filename, csv: text };
+    },
+  },
+  {
+    name: "uiiq_event_comp_issue",
+    description: "Give FREE tickets (comps) for one of an event's performances. They take seats like a sale, through the checkout's own locks: refused (409) when the performance is full or has fewer seats left, closed, cancelled or already finished, when the ticket type's allocation is met or it belongs to another performance, or when the event's ticket sales are off. A type switched off, or not yet on sale, CAN be comped. It makes a CONFIRMED booking at £0 marked COMP for `name`, issues its tickets at once, and with an email AND sendEmail: true emails them the link. quantity 1 to 50. Returns { id, reference, seats, emailed }. Audited without the recipient. Owner or admin; needs the `events` feature. Without confirm: true it is ALWAYS a dry run that changes nothing. Undo with uiiq_event_booking_cancel.",
+    inputSchema: {
+      type: "object",
+      required: ["id", "performanceId", "ticketTypeId", "quantity", "name"],
+      properties: {
+        id: { type: "string", description: "The event's id" },
+        performanceId: { type: "string", description: "The performance (session) id, from uiiq_event_tickets" },
+        ticketTypeId: { type: "string", description: "The ticket type, from uiiq_event_tickets" },
+        quantity: { type: "integer", minimum: 1, maximum: COMP_MAX, description: "How many tickets" },
+        name: { type: "string", description: "Who they're for (the booking's name)" },
+        email: { type: "string", description: "Their email address, optional" },
+        sendEmail: { type: "boolean", description: "true = email them their tickets now (needs email)" },
+        confirm: { type: "boolean", description: "true = do it; omit for the dry run" },
+        tenant: TENANT_PROP,
+      },
+    },
+    async handler({ id, performanceId, ticketTypeId, quantity, name, email, sendEmail, confirm, tenant }) {
+      if (!Number.isInteger(quantity) || quantity < 1 || quantity > COMP_MAX) throw new Error(`quantity must be a whole number from 1 to ${COMP_MAX}`);
+      if (sendEmail === true && !(typeof email === "string" && email.trim())) throw new Error("sendEmail needs an email address");
+      const body = { performanceId, ticketTypeId, quantity, name, ...(email ? { email } : {}), sendEmail: sendEmail === true };
+      if (confirm !== true) {
+        return {
+          dryRun: true,
+          changed: false,
+          wouldDo: "give_free_tickets",
+          id,
+          performanceId,
+          ticketTypeId,
+          quantity,
+          wouldEmail: body.sendEmail,
+          note: `Nothing was changed. This gives away ${quantity} free ticket${quantity === 1 ? "" : "s"}: they take seats from this performance like a sale, and are refused once it's full. Call again with confirm: true.`,
+        };
+      }
+      const res = await post(tenant, `/events/${encodeURIComponent(id)}/tickets/comps`, body);
+      if (!res.ok) throw await fail(res);
+      return res.json();
+    },
+  },
+  {
+    name: "uiiq_event_booking_cancel",
+    description: "Cancel a booking of this event that took NO money (a comp, or a free ticket): its seats go back to the performance (a FULL night reopens; a CLOSED one stays shut) and its unused tickets are voided, so they no longer scan. Nothing goes to Stripe. A PAID booking is refused (409): refund it with uiiq_booking_refund instead. Also 409 when it is already cancelled or refunded. Owner or admin; needs the `events` feature; audited. Without confirm: true it is ALWAYS a dry run that changes nothing.",
+    inputSchema: {
+      type: "object",
+      required: ["id", "bookingId"],
+      properties: {
+        id: { type: "string", description: "The event's id" },
+        bookingId: { type: "string", description: "The booking's id, from uiiq_event_door_list" },
+        confirm: { type: "boolean", description: "true = do it; omit for the dry run" },
+        tenant: TENANT_PROP,
+      },
+    },
+    async handler({ id, bookingId, confirm, tenant }) {
+      if (confirm !== true) {
+        return { dryRun: true, changed: false, wouldDo: "cancel_free_booking", id, bookingId, note: "Nothing was changed. This cancels a booking that took no money: the seats go back and its tickets stop working at the door. A paid booking is refused: use uiiq_booking_refund. Call again with confirm: true." };
+      }
+      const res = await post(tenant, `/events/${encodeURIComponent(id)}/tickets/bookings/${encodeURIComponent(bookingId)}/cancel`);
+      if (!res.ok) throw await fail(res);
+      return res.json();
+    },
+  },
+  {
+    name: "uiiq_event_tickets_reissue",
+    description: "Reissue a booking's tickets: every ticket code on it is voided and replaced (same type, label and name, and the SAME door state, so an admitted ticket stays admitted), and the booking gets a new tickets link. The old link and every old QR code stop working at once; the door answers an old code VOID, reason 'replaced'. email: true then emails the buyer the new link, within Send again's limit (3 an hour per booking, 429 checked before anything changes). Refused (409) for a cancelled/refunded or unconfirmed booking, or one with no tickets yet. Returns { reissued, emailed }, never a link or a code. Owner or admin; needs the `events` feature; audited. Without confirm: true it is ALWAYS a dry run that changes nothing.",
+    inputSchema: {
+      type: "object",
+      required: ["id", "bookingId"],
+      properties: {
+        id: { type: "string", description: "The event's id" },
+        bookingId: { type: "string", description: "The booking's id, from uiiq_event_door_list" },
+        email: { type: "boolean", description: "true = email the buyer the new tickets link" },
+        confirm: { type: "boolean", description: "true = do it; omit for the dry run" },
+        tenant: TENANT_PROP,
+      },
+    },
+    async handler({ id, bookingId, email, confirm, tenant }) {
+      if (confirm !== true) {
+        return { dryRun: true, changed: false, wouldDo: "reissue_tickets", id, bookingId, wouldEmail: email === true, note: "Nothing was changed. This makes new tickets and a new link for the booking: the old link and every old QR code stop working at once, at the door too. Call again with confirm: true." };
+      }
+      const res = await post(tenant, `/events/${encodeURIComponent(id)}/tickets/bookings/${encodeURIComponent(bookingId)}/reissue`, { email: email === true });
+      if (!res.ok) throw await fail(res);
+      return res.json();
+    },
+  },
+  // EARLY ACCESS (UiiQ-platform events and tickets 3). UiiQ saves the whole
+  // setting at once, so this reads the event's current one and changes only
+  // what is given. The presale code is MADE by UiiQ: this can ask for a new
+  // one, and never sends one.
+  {
+    name: "uiiq_event_early_access_set",
+    description: "An event's early access: a window before the public on-sale date when only a chosen group can buy. on (true/false); group FAMILIES (performers' families: account holders with a student in an active class performing in the show, buying in the Members App; the cap is per student, per performance) or CODE (anyone with the presale code; the cap is per order); startsAt and publicSaleAt (ISO instants, early start strictly before the public date); cap 1 to 50, or null for none. Only what you give changes: the rest is read from the event first (null clears a date or the cap). Switched on, all of group, startsAt and publicSaleAt are needed, and the event must sell its own tickets through UiiQ; FAMILIES needs a class performing in the show. THE PRESALE CODE IS GENERATED BY UIIQ: one is made the first time CODE is saved, newCode: true asks for a fresh one (the old one stops working), and a code can never be set from here. Returns the event's ticket state, its earlyAccess with the code to hand out. Owner or admin; needs the `events` feature; audited (never the code). Without confirm: true it is ALWAYS a dry run that changes nothing.",
+    inputSchema: {
+      type: "object",
+      required: ["id"],
+      properties: {
+        id: { type: "string", description: "The event's id" },
+        on: { type: "boolean", description: "Early access on or off" },
+        group: { type: "string", enum: ["FAMILIES", "CODE"], description: "FAMILIES = performers' families; CODE = people with the presale code" },
+        startsAt: { type: ["string", "null"], description: "When early access starts (ISO); null clears" },
+        publicSaleAt: { type: ["string", "null"], description: "When the public sale opens (ISO); null clears" },
+        cap: { type: ["integer", "null"], minimum: 1, maximum: 50, description: "Seats per performer per performance (FAMILIES) or per order (CODE); null = no limit" },
+        newCode: { type: "boolean", description: "true = UiiQ makes a fresh presale code; the old one stops working" },
+        confirm: { type: "boolean", description: "true = do it; omit for the dry run" },
+        tenant: TENANT_PROP,
+      },
+    },
+    async handler({ id, on, group, startsAt, publicSaleAt, cap, newCode, confirm, tenant, ...rest }) {
+      if ("presaleCode" in rest || "code" in rest) throw new Error("The presale code is made by UiiQ, never sent: ask for a new one with newCode: true.");
+      const given = { on, group, startsAt, publicSaleAt, cap };
+      if (Object.values(given).every((v) => v === undefined) && newCode !== true) {
+        throw new Error("Send on, group, startsAt, publicSaleAt, cap or newCode");
+      }
+      const res = await api(tenant)(`/events/${encodeURIComponent(id)}/tickets`);
+      if (!res.ok) throw await fail(res);
+      const now = (await res.json())?.earlyAccess;
+      if (!now) throw new Error("UiiQ didn't send this event's early-access settings, so nothing was changed.");
+      const from = { on: now.on, group: now.group, startsAt: now.startsAt, publicSaleAt: now.publicSaleAt, cap: now.cap };
+      const to = Object.fromEntries(Object.entries(from).map(([k, v]) => [k, given[k] === undefined ? v : given[k]]));
+      const body = { ...to, ...(newCode === true ? { newCode: true } : {}) };
+      if (confirm !== true) {
+        return {
+          dryRun: true,
+          changed: false,
+          wouldDo: "set_early_access",
+          id,
+          from,
+          to,
+          newCode: newCode === true,
+          note: "Nothing was changed. This decides who can buy tickets before the public sale" + (newCode === true ? ", and replaces the presale code: the old one stops working" : "") + ". Call again with confirm: true.",
+        };
+      }
+      const saved = await api(tenant)(`/events/${encodeURIComponent(id)}/tickets/early-access`, { method: "PATCH", body: JSON.stringify(body) });
+      if (!saved.ok) throw await fail(saved);
+      return saved.json();
     },
   },
   {
