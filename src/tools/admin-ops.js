@@ -54,6 +54,23 @@ const PRESET_PROPS = {
   name: { type: "string" }, description: { type: "string" }, terminology: { type: "object", description: "Label overrides, e.g. { customer: 'Member' }" },
   featureKeys: { type: "array", items: { type: "string" } }, commerceActive: { type: "boolean" },
 };
+// A ticket type's fields as POST /admin/ticket-types and PATCH /admin/ticket-types/:id take them
+// (UiiQ-platform lib/sell/admin-patch); null clears the ones that can be empty.
+const TICKET_DATE = "YYYY-MM-DD (midnight UTC, the START of that day) or a date and time with its timezone (2027-01-18T00:00:00Z, 2027-06-18T00:00:00+01:00); null clears";
+const TICKET_TYPE_PROPS = {
+  description: { type: ["string", "null"], description: "Up to 2000 characters; null clears" },
+  isActive: { type: "boolean" },
+  minAge: { type: ["integer", "null"], minimum: 0, maximum: 120, description: "Youngest age; null clears" },
+  maxAge: { type: ["integer", "null"], minimum: 0, maximum: 120, description: "Oldest age; null clears" },
+  minQuantity: { type: "integer", minimum: 0, maximum: 500, description: "Fewest one order may take" },
+  maxQuantity: { type: "integer", minimum: 1, maximum: 500, description: "Most one order may take" },
+  totalAllocation: { type: ["integer", "null"], minimum: 0, maximum: 1000000, description: "How many are on sale; null = no limit. Never below what has sold" },
+  sessionId: { type: ["string", "null"], description: "The one performance (a session of this experience) it is for; null = every performance" },
+  earlyBirdPricePence: { type: ["integer", "null"], minimum: 0, description: "Early bird price in pence, below priceInPence. Given with earlyBirdUntil (both or neither); null clears" },
+  earlyBirdUntil: { type: ["string", "null"], description: `When the early bird ENDS: the early bird price is charged before this moment. ${TICKET_DATE}. An early bird whose last day is 17 Jan 2027 ends 2027-01-18` },
+  availableFrom: { type: ["string", "null"], description: `On sale from: ${TICKET_DATE}` },
+  availableUntil: { type: ["string", "null"], description: `On sale until, after availableFrom: ${TICKET_DATE}` },
+};
 
 export const adminOpsTools = [
   // ── Blockouts ──
@@ -258,14 +275,14 @@ export const adminOpsTools = [
   // ── Ticket types ──
   {
     name: "uiiq_ticket_type_create",
-    description: "Add a ticket type (name + price in pence) to an experience, placed last.",
-    inputSchema: { type: "object", required: ["experienceId", "name", "priceInPence"], properties: { experienceId: { type: "string" }, name: { type: "string" }, priceInPence: { type: "number" }, tenant: TENANT_PROP } },
+    description: "Add a ticket type to an experience (an event's tickets are on its experience), placed last. name and priceInPence are required. Optional: description, isActive, an age range (minAge, maxAge), how many one order may take (minQuantity, maxQuantity, up to 500), how many are on sale (totalAllocation), the one performance it is for (sessionId), an early bird price with the moment it ends (earlyBirdPricePence with earlyBirdUntil, both or neither, below the normal price), and when it is on sale (availableFrom, availableUntil). Dates are YYYY-MM-DD (midnight UTC at the start of that day) or a date and time with its timezone. The checkout charges the early bird before earlyBirdUntil and sells the type only inside its on-sale window. Returns { ticketType }.",
+    inputSchema: { type: "object", required: ["experienceId", "name", "priceInPence"], properties: { experienceId: { type: "string" }, name: { type: "string" }, priceInPence: { type: "number" }, ...TICKET_TYPE_PROPS, tenant: TENANT_PROP } },
     async handler({ tenant, ...body }) { return req(tenant, "/admin/ticket-types", "POST", body); },
   },
   {
     name: "uiiq_ticket_type_update",
-    description: "Edit a ticket type: name, description, priceInPence, isActive only.",
-    inputSchema: { type: "object", required: ["id"], properties: { id: { type: "string" }, name: { type: "string" }, description: { type: ["string", "null"] }, priceInPence: { type: "number" }, isActive: { type: "boolean" }, tenant: TENANT_PROP } },
+    description: "Edit a ticket type: the fields uiiq_ticket_type_create takes except experienceId. Only the fields given change; null clears description, minAge, maxAge, totalAllocation (no limit), sessionId (every performance), earlyBirdPricePence, earlyBirdUntil, availableFrom and availableUntil. UiiQ checks each pair against the type as it will be saved: the early bird price and its end both or neither (so clear an early bird with earlyBirdPricePence: null and earlyBirdUntil: null together), the early bird below the normal price (lowering priceInPence to it is refused too), availableFrom before availableUntil, minAge not above maxAge, minQuantity not above maxQuantity, and totalAllocation never below what has sold. Works on a type that has already sold.",
+    inputSchema: { type: "object", required: ["id"], properties: { id: { type: "string" }, name: { type: "string" }, priceInPence: { type: "number" }, ...TICKET_TYPE_PROPS, tenant: TENANT_PROP } },
     async handler({ id, tenant, ...body }) { return req(tenant, `/admin/ticket-types/${encodeURIComponent(id)}`, "PATCH", defined(body)); },
   },
   {
