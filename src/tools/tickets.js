@@ -15,7 +15,7 @@ const api = (tenant) => apiClient(tenant ? { tenant } : {});
 // UiiQ's text can carry what a client sent (a scanned code, a name typed at
 // checkout): control characters and bidi overrides become spaces before an
 // error reaches the session, as uiiq-cli's printable() does (Lucas, UiiQ #1205).
-const printable = (text) => String(text ?? "").replace(/[\u0000-\u001f\u007f-\u009f\u202a-\u202e\u2066-\u2069]/g, " ").replace(/\s+/g, " ").trim();
+export const printable = (text) => String(text ?? "").replace(/[\u0000-\u001f\u007f-\u009f\u202a-\u202e\u2066-\u2069]/g, " ").replace(/\s+/g, " ").trim();
 
 async function fail(res) {
   const text = await res.text();
