@@ -12,10 +12,15 @@ const TENANT_PROP = {
 };
 const api = (tenant) => apiClient(tenant ? { tenant } : {});
 
+// UiiQ's text can carry what a client sent (a scanned code, a name typed at
+// checkout): control characters and bidi overrides become spaces before an
+// error reaches the session, as uiiq-cli's printable() does (Lucas, UiiQ #1205).
+const printable = (text) => String(text ?? "").replace(/[\u0000-\u001f\u007f-\u009f\u202a-\u202e\u2066-\u2069]/g, " ").replace(/\s+/g, " ").trim();
+
 async function fail(res) {
   const text = await res.text();
-  try { const j = JSON.parse(text); if (j?.error) return new Error(j.error); } catch { /* not JSON */ }
-  return new Error(text || `HTTP ${res.status}`);
+  try { const j = JSON.parse(text); if (j?.error) return new Error(printable(j.error)); } catch { /* not JSON */ }
+  return new Error(printable(text) || `HTTP ${res.status}`);
 }
 
 // The send route works through 50 bookings a press and allows 30 presses a
@@ -37,7 +42,7 @@ export const ticketsTools = [
     },
     async handler({ bookingId, tenant }) {
       const res = await api(tenant)("/admin/tickets?bookingId=" + encodeURIComponent(bookingId));
-      if (!res.ok) throw new Error(await res.text());
+      if (!res.ok) throw await fail(res);
       const data = await res.json();
       return data.tickets ?? data;
     }
@@ -57,7 +62,7 @@ export const ticketsTools = [
         method: "POST",
         body: JSON.stringify({ bookingId }),
       });
-      if (!res.ok) throw new Error(await res.text());
+      if (!res.ok) throw await fail(res);
       return res.json();
     }
   },
@@ -80,7 +85,7 @@ export const ticketsTools = [
         method: "POST",
         body: JSON.stringify({ code, pin, undo: undo === true, performanceId }),
       });
-      if (!res.ok) throw new Error(await res.text());
+      if (!res.ok) throw await fail(res);
       return res.json();
     }
   },
@@ -96,7 +101,7 @@ export const ticketsTools = [
     },
     async handler({ performanceId, tenant } = {}) {
       const res = await api(tenant)("/admin/tickets/scan" + (performanceId ? "?performanceId=" + encodeURIComponent(performanceId) : ""));
-      if (!res.ok) throw new Error(await res.text());
+      if (!res.ok) throw await fail(res);
       return res.json();
     }
   },
@@ -192,7 +197,7 @@ export const ticketsTools = [
     inputSchema: { type: "object", properties: { tenant: TENANT_PROP } },
     async handler({ tenant } = {}) {
       const res = await api(tenant)("/admin/tickets/forwards");
-      if (!res.ok) throw new Error(await res.text());
+      if (!res.ok) throw await fail(res);
       const data = await res.json();
       return data.forwards ?? data;
     }
@@ -216,7 +221,7 @@ export const ticketsTools = [
         method: "POST",
         body: JSON.stringify({ kind, targetUrl, externalEventId, secret }),
       });
-      if (!res.ok) throw new Error(await res.text());
+      if (!res.ok) throw await fail(res);
       return res.json();
     }
   },
@@ -232,7 +237,7 @@ export const ticketsTools = [
     },
     async handler({ id, tenant }) {
       const res = await api(tenant)("/admin/tickets/forwards/" + encodeURIComponent(id), { method: "DELETE" });
-      if (!res.ok) throw new Error(await res.text());
+      if (!res.ok) throw await fail(res);
       return res.json();
     }
   },
@@ -242,7 +247,7 @@ export const ticketsTools = [
     inputSchema: { type: "object", required: ["code"], properties: { code: { type: "string", description: "Ticket code (from uiiq_ticket_list)" }, outPath: { type: "string" }, tenant: TENANT_PROP } },
     async handler({ code, outPath, tenant }) {
       const res = await api(tenant)(`/tickets/${encodeURIComponent(code)}/qr.png`);
-      if (!res.ok) throw new Error(await res.text());
+      if (!res.ok) throw await fail(res);
       const bytes = Buffer.from(await res.arrayBuffer());
       const target = path.resolve(outPath || `ticket-${code}.png`);
       fs.mkdirSync(path.dirname(target), { recursive: true });
