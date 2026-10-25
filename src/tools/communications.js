@@ -69,7 +69,7 @@ export const communicationsTools = [
       properties: {
         brand: {
           type: "string",
-          description: "uiiq | iqex | acts-direct | milestone-ranch | ultimate-image",
+          description: "The name the release goes out under: this workspace's own name, one of its billing organisations' names, or a website it owns (what the New press release screen offers). Never another client's name.",
         },
         announcementType: {
           type: "string",

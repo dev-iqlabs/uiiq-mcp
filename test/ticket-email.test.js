@@ -7,7 +7,9 @@
 // What these hold still: sending emails the workspace's customers, so it is a
 // dry run without confirm: true; the loop presses again only while a press is
 // sending something, and never more than the route allows a person in its
-// window; and a failure after some presses still says what was sent.
+// window; and a failure after some presses still says what was sent. Every
+// ticket tool's error reaches the session without control characters or
+// direction overrides (Lucas, on UiiQ #1205).
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import http from "node:http";
@@ -25,8 +27,9 @@ before(async () => {
       seen.push({ method: req.method, path: req.url.replace(/^\/api/, ""), ...(body ? { body: JSON.parse(body) } : {}) });
       // The last reply repeats, so a test can answer "still more" for ever.
       const [status, data] = replies.length > 1 ? replies.shift() : replies[0];
-      res.writeHead(status, { "content-type": "application/json" });
-      res.end(JSON.stringify(data));
+      // A string is sent as it is: a body that isn't JSON (a proxy's error page).
+      res.writeHead(status, { "content-type": typeof data === "string" ? "text/plain" : "application/json" });
+      res.end(typeof data === "string" ? data : JSON.stringify(data));
     });
   });
   await new Promise((r) => server.listen(0, "127.0.0.1", r));
@@ -195,4 +198,43 @@ test("the scan description names every result the route returns", () => {
   for (const r of ["ADMITTED", "SIGNED_OUT", "ALREADY", "ALREADY_OUT", "UNDONE", "SIGN_OUT_UNDONE", "VOID", "INVALID", "PIN_REQUIRED", "PIN_WRONG", "WRONG_PERFORMANCE"]) {
     assert.match(tools.uiiq_ticket_scan.description, new RegExp(`\\b${r}\\b`));
   }
+});
+
+// A refusal can quote what was sent: here a code with a colour escape, a C1
+// control, a direction override and a line break in it.
+const DIRTY = "No ticket \u001b[31mABC\u009b0m\u202e here\r\nfor this door";
+const CLEAN = "No ticket [31mABC 0m here for this door";
+
+test("every ticket tool's refusal reaches the session without control characters or direction overrides", async () => {
+  const calls = [
+    ["uiiq_ticket_list", { bookingId: "bk_1" }],
+    ["uiiq_ticket_issue", { bookingId: "bk_1" }],
+    ["uiiq_ticket_scan", { code: "ABC" }],
+    ["uiiq_ticket_scan_stats", { performanceId: "ses_sat" }],
+    ["uiiq_ticket_email_status", { eventId: "ev_hoedown" }],
+    ["uiiq_ticket_email_send", { eventId: "ev_hoedown" }],
+    ["uiiq_ticket_email_send", { bookingId: "bk_1", confirm: true }],
+    ["uiiq_ticket_forward_list", {}],
+    ["uiiq_ticket_forward_create", { kind: "WEBHOOK", targetUrl: "https://example.com/hook" }],
+    ["uiiq_ticket_forward_delete", { id: "fw_1" }],
+    ["uiiq_ticket_qr", { code: "ABC", outPath: join(home, "never.png") }],
+  ];
+  for (const [name, args] of calls) {
+    await assert.rejects(() => call(name, args, [404, { error: DIRTY }]), (e) => {
+      assert.equal(e.message, CLEAN, name);
+      return true;
+    });
+  }
+});
+
+test("a refusal that isn't JSON is cleaned the same way", async () => {
+  await assert.rejects(() => call("uiiq_ticket_scan", { code: "ABC" }, [502, `Bad gateway\u001b]8;;https://evil.example\u0007 ${DIRTY}`]), (e) => {
+    assert.equal(e.message, `Bad gateway ]8;;https://evil.example ${CLEAN}`);
+    return true;
+  });
+});
+
+test("send: a refusal after some presses is cleaned in `stopped` too", async () => {
+  const { result } = await call("uiiq_ticket_email_send", { eventId: "ev_hoedown", confirm: true }, [200, { sent: 50, notSent: 0, remaining: 40 }], [429, { error: DIRTY }]);
+  assert.equal(result.stopped, CLEAN);
 });

@@ -41,7 +41,7 @@ function resultsQuery({ classId, group, fundedProjectId, from, to }) {
 // venue's own IQForms published into its Members App for an audience
 // (everyone | plan | parents | class | group), with completion tracking.
 const AUDIENCE_TYPES = ["everyone", "plan", "parents", "class", "group"];
-const PURPOSE_PROP = { type: ["string", "null"], enum: ["add_child", null], description: "\"add_child\" = the Members App's \"Add another child\" form (family registration); null = a normal form" };
+const PURPOSE_PROP = { type: ["string", "null"], enum: ["add_child", "add_self", null], description: "\"add_child\" = the Members App's \"Add another child\" form; \"add_self\" = its \"Add myself\" form, the account holder adding themselves as a student (both family registration); null = a normal form" };
 const RESULTS_FILTER = {
   classId: { type: "string" }, group: { type: "string" }, fundedProjectId: { type: "string" },
   from: { type: "string", description: "ISO date" }, to: { type: "string", description: "ISO date" },
@@ -178,7 +178,7 @@ export const formsTools = [
   },
   {
     name: "uiiq_form_app_publish",
-    description: "PUBLISH an IQForm into the Members App: ref is the IQForm id or a link containing form-id= (must exist on the venue's own IQEX org and be Public). audienceType everyone|plan|parents|class|group with audienceValue (plan/class/group id); required default true; perChild = one submission per child (not for plan); dueAt ISO date. 409 if already published. purpose \"add_child\" publishes it instead as the Members App Family tab's \"Add another child\" form (children added through it wait for the office's check in the UiiQ dashboard's Awaiting check): it needs family registration switched on (403 otherwise), only one can be active per tenant (409 naming the other), and it always takes one shape whatever else is sent: audience parents, not required, not per child, no due date. Omit purpose (or null) for a normal form.",
+    description: "PUBLISH an IQForm into the Members App: ref is the IQForm id or a link containing form-id= (must exist on the venue's own IQEX org and be Public). audienceType everyone|plan|parents|class|group with audienceValue (plan/class/group id); required default true; perChild = one submission per child (not for plan); dueAt ISO date. 409 if already published. purpose \"add_child\" publishes it instead as the Members App Family tab's \"Add another child\" form (children added through it wait for the office's check in the UiiQ dashboard's Awaiting check), and \"add_self\" as its \"Add myself\" form (the account holder adding themselves as a student, once): either needs family registration switched on (403 otherwise), only one of each can be active per tenant (409 naming the other), and it always takes one shape whatever else is sent: audience parents, not required, not per child, no due date. Omit purpose (or null) for a normal form.",
     inputSchema: {
       type: "object",
       required: ["ref"],
@@ -197,7 +197,7 @@ export const formsTools = [
   },
   {
     name: "uiiq_form_app_update",
-    description: "Update a published Members-App form: title, audience (audienceType + audienceValue), required, perChild, active, position, dueAt (null clears), purpose. Only the fields you send change. purpose \"add_child\" makes it the Members App Family tab's \"Add another child\" form (null makes it a normal form again): while it is one it keeps that form's shape (audience parents, not required, not per child, no due date) whatever else the edit says, and making it the add-a-child form, or showing a hidden one again (active true), needs family registration switched on (403 otherwise) and no other active add-a-child form (409 naming it).",
+    description: "Update a published Members-App form: title, audience (audienceType + audienceValue), required, perChild, active, position, dueAt (null clears), purpose. Only the fields you send change. purpose \"add_child\" makes it the Members App Family tab's \"Add another child\" form, \"add_self\" its \"Add myself\" form (null makes it a normal form again): while it is one it keeps that form's shape (audience parents, not required, not per child, no due date) whatever else the edit says, and making it one, or showing a hidden one again (active true), needs family registration switched on (403 otherwise) and no other active form of that kind (409 naming it).",
     inputSchema: {
       type: "object",
       required: ["id"],
