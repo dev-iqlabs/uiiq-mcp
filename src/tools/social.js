@@ -53,23 +53,57 @@ function spinCard(productId, asked, productVideos) {
 
 // Scheduling is a publish path: on a workspace with auto-publish on, the
 // 5-minute cron publishes a SCHEDULED post once it is due (a past scheduledAt
-// means at once), with nobody pressing Publish. So setting SCHEDULED or a
+// means at once), and a QUEUED post in the next free slot (UiiQ-platform
+// #1229), with nobody pressing Publish. So setting SCHEDULED, QUEUED or a
 // scheduledAt needs confirm: true, like publishing does (Lucas, after #80).
-const CONFIRM_SCHEDULE_PROP = { type: "boolean", description: "Required (true) when setting status SCHEDULED or a scheduledAt; without it nothing is saved and a dry run is returned" };
+const CONFIRM_SCHEDULE_PROP = { type: "boolean", description: "Required (true) when setting status SCHEDULED or QUEUED, or a scheduledAt; without it nothing is saved and a dry run is returned" };
 async function scheduleDryRun(tenant, id, body, confirm) {
-  const scheduling = body.status === "SCHEDULED" || (body.scheduledAt !== undefined && body.scheduledAt !== null);
+  const queueing = body.status === "QUEUED";
+  const scheduling = queueing || body.status === "SCHEDULED" || (body.scheduledAt !== undefined && body.scheduledAt !== null);
   if (!scheduling || confirm === true) return null;
   const settings = await api(tenant)("/socials/settings");
   if (!settings.ok) throw await fail(settings);
   const { autoPublish } = await settings.json();
-  return {
-    dryRun: true,
-    message: autoPublish
+  const message = queueing
+    ? autoPublish
+      ? "Nothing was saved. Auto-publish is ON for this workspace, so a QUEUED post is published by the cron in the next free slot (after any scheduled post that is due, once the minimum gap has passed), with nobody pressing Publish. Pass confirm: true only once the person responsible has seen this post."
+      : "Nothing was saved. Auto-publish is off here, so a QUEUED post waits for someone to press Publish (if auto-publish is turned on, it goes out in the next free slot); it is still a publishing step, so pass confirm: true to go ahead."
+    : autoPublish
       ? "Nothing was saved. Auto-publish is ON for this workspace, so a SCHEDULED post is published by the cron when it falls due, with nobody pressing Publish. Pass confirm: true only once the person responsible has seen this post."
-      : "Nothing was saved. Auto-publish is off here, so a SCHEDULED post waits for someone to press Publish; it is still a scheduling step, so pass confirm: true to go ahead.",
-    autoPublish: !!autoPublish,
-    wouldSet: { id, status: body.status, scheduledAt: body.scheduledAt },
-  };
+      : "Nothing was saved. Auto-publish is off here, so a SCHEDULED post waits for someone to press Publish; it is still a scheduling step, so pass confirm: true to go ahead.";
+  return { dryRun: true, message, autoPublish: !!autoPublish, wouldSet: { id, status: body.status, scheduledAt: body.scheduledAt } };
+}
+// The save route defaults a missing status to DRAFT, so saving a QUEUED post without a status would
+// quietly take it out of the publish queue. Read the post first; without confirm it is a dry run that
+// says so, with confirm it is refused: the caller must name the status (DRAFT, or QUEUED to keep it).
+const UNQUEUE_ADVICE = "This post is QUEUED. Saving without a status would turn it back into a DRAFT and take it out of the queue. Pass status QUEUED (with confirm: true) to keep it queued, or status DRAFT to confirm you mean to.";
+async function unqueueGuard(tenant, id, body, confirm) {
+  if (body.status !== undefined) return null;
+  const res = await api(tenant)(`/socials/posts/${encodeURIComponent(id)}`);
+  if (!res.ok) throw await fail(res);
+  const post = await res.json();
+  if (String(post?.status ?? "").toUpperCase() !== "QUEUED") return null;
+  if (confirm === true) throw new Error(`${UNQUEUE_ADVICE} Nothing was sent.`);
+  return { dryRun: true, message: `Nothing was saved. ${UNQUEUE_ADVICE}`, currentStatus: "QUEUED", wouldSet: { id, status: "DRAFT" } };
+}
+// Instagram product tags (UiiQ-platform #1230): shop products tagged on a
+// post's photos, so a tap on Instagram opens the product in the Shop. Keyed by
+// the photo's address in mediaUrls; UiiQ checks them (lib/socials/product-tags).
+const PRODUCT_TAGS_PROP = {
+  type: ["object", "null"],
+  description: "Instagram product tags: { \"<photo address, exactly as in mediaUrls>\": [{ sku, x, y }] }. sku: the product's id in the shop's feed (uiiq_social_product_tags lists them). x, y: 0 to 1, from the photo's top left. At most 20 on a post's only photo, 5 on each photo of a carousel and 20 on the whole post; a product once per photo; videos take none. Only Instagram targets get them. null (or {}) clears them. Setting any needs the workspace's instagram_product_tags feature (a 403 otherwise); UiiQ refuses tags that break a rule with a 400, in its own words.",
+  additionalProperties: {
+    type: "array",
+    items: { type: "object", additionalProperties: false, required: ["sku", "x", "y"], properties: { sku: { type: "string", minLength: 1, maxLength: 100 }, x: { type: "number", minimum: 0, maximum: 1 }, y: { type: "number", minimum: 0, maximum: 1 } } },
+  },
+};
+// UiiQ keeps only the tags on the post's own photos and drops the rest without a word, so a photo
+// address that isn't one of mediaUrls is refused here, before any request.
+function tagsOffMedia(productTags, mediaUrls) {
+  if (!productTags || typeof productTags !== "object" || Array.isArray(productTags)) return;
+  const media = new Set(Array.isArray(mediaUrls) ? mediaUrls : []);
+  const off = Object.keys(productTags).filter((u) => Array.isArray(productTags[u]) && productTags[u].length && !media.has(u));
+  if (off.length) throw new Error(`productTags: ${off.join(", ")} isn't one of mediaUrls (tags are keyed by the photo's address, exactly as in mediaUrls). Nothing was sent.`);
 }
 // Per-platform text (UiiQ-platform #890): replaces the main content for that
 // platform's targets, e.g. Instagram "Tap the link in our bio" while Facebook
@@ -142,17 +176,19 @@ export const socialTools = [
   // ── Posts (one) ──
   {
     name: "uiiq_social_post_create",
-    description: "Creates a DRAFT only. It is never published or scheduled by this tool; a person reviews and publishes it in UiiQ. Takes content and targetAccountIds (at least one, ids from uiiq_social_accounts), plus optional mediaUrls (public URLs; Instagram needs at least one), hashtags (stored without '#'; published as #tags) and platformContent (different text per platform). Returns the draft with its targets.",
-    inputSchema: { type: "object", required: ["content", "targetAccountIds"], properties: { content: { type: "string" }, targetAccountIds: { type: "array", items: { type: "string" } }, mediaUrls: { type: "array", items: { type: "string" } }, hashtags: { type: "array", items: { type: "string" } }, platformContent: PLATFORM_CONTENT_PROP, tenant: TENANT_PROP } },
+    description: "Creates a DRAFT only. It is never published or scheduled by this tool; a person reviews and publishes it in UiiQ. Takes content and targetAccountIds (at least one, ids from uiiq_social_accounts), plus optional mediaUrls (public URLs; Instagram needs at least one), hashtags (stored without '#'; published as #tags), platformContent (different text per platform) and productTags (Instagram product tags on its photos, keyed by the photo's address in mediaUrls; ask uiiq_social_product_tags first whether the accounts can take them and for the SKUs). Returns the draft with its targets and productTags.",
+    inputSchema: { type: "object", required: ["content", "targetAccountIds"], properties: { content: { type: "string" }, targetAccountIds: { type: "array", items: { type: "string" } }, mediaUrls: { type: "array", items: { type: "string" } }, hashtags: { type: "array", items: { type: "string" } }, platformContent: PLATFORM_CONTENT_PROP, productTags: PRODUCT_TAGS_PROP, tenant: TENANT_PROP } },
     // Only these fields reach the API. The route makes a post with scheduledAt
     // SCHEDULED, which the cron publishes on an auto-publish workspace, so
     // forwarding "...body" would let a stray key schedule a post (Lucas,
     // uiiq-mcp #80 H1).
-    async handler({ tenant, content, targetAccountIds, mediaUrls, hashtags, platformContent }) {
+    async handler({ tenant, content, targetAccountIds, mediaUrls, hashtags, platformContent, productTags }) {
+      tagsOffMedia(productTags, mediaUrls);
       const body = { content, targetAccountIds };
       if (mediaUrls !== undefined) body.mediaUrls = mediaUrls;
       if (hashtags !== undefined) body.hashtags = hashtags;
       if (platformContent !== undefined) body.platformContent = platformContent;
+      if (productTags !== undefined) body.productTags = productTags;
       const res = await send(tenant, "/socials/posts", "POST", body);
       if (!res.ok) throw await fail(res);
       return res.json();
@@ -160,7 +196,7 @@ export const socialTools = [
   },
   {
     name: "uiiq_social_post_get",
-    description: "One social post with its targets (account, platform, status, permalink, error).",
+    description: "One social post with its targets (account, platform, status, permalink, error) and productTags: its Instagram product tags, { \"<photo address>\": [{ sku, x, y }] } keyed by its mediaUrls, or null. What became of them once published is on uiiq_social_post_publish_status.",
     inputSchema: { type: "object", required: ["id"], properties: { id: { type: "string" }, tenant: TENANT_PROP } },
     async handler({ id, tenant }) {
       const res = await api(tenant)(`/socials/posts/${encodeURIComponent(id)}`);
@@ -170,8 +206,8 @@ export const socialTools = [
   },
   {
     name: "uiiq_social_post_update",
-    description: "Partial update of a DRAFT, QUEUED or SCHEDULED post: content, hashtags, platformContent (per-platform text, PENDING targets only), scheduledAt (ISO, null to unschedule), status. Published posts are refused (409). Which accounts it targets is not changed here — use uiiq_social_post_save for that. Setting status SCHEDULED or a scheduledAt needs confirm: true (on an auto-publish workspace the cron then publishes it when due); without it this is a dry run and nothing is saved.",
-    inputSchema: { type: "object", required: ["id"], properties: { id: { type: "string" }, content: { type: "string" }, hashtags: { type: "array", items: { type: "string" } }, platformContent: PLATFORM_CONTENT_PROP, scheduledAt: { type: ["string", "null"] }, status: { type: "string", enum: POST_STATUS }, confirm: CONFIRM_SCHEDULE_PROP, tenant: TENANT_PROP } },
+    description: "Partial update of a DRAFT, QUEUED or SCHEDULED post: content, hashtags, platformContent (per-platform text, PENDING targets only), productTags (Instagram product tags, keyed by the post's own photo addresses: its mediaUrls from uiiq_social_post_get; left out, they stay as they are), scheduledAt (ISO, null to unschedule), status. Published posts are refused (409). Which accounts it targets is not changed here — use uiiq_social_post_save for that. Setting status SCHEDULED or QUEUED, or a scheduledAt, needs confirm: true: on an auto-publish workspace the cron then publishes a SCHEDULED post when it is due, and a QUEUED one in the next free slot, with nobody pressing Publish. Without it this is a dry run and nothing is saved.",
+    inputSchema: { type: "object", required: ["id"], properties: { id: { type: "string" }, content: { type: "string" }, hashtags: { type: "array", items: { type: "string" } }, platformContent: PLATFORM_CONTENT_PROP, productTags: PRODUCT_TAGS_PROP, scheduledAt: { type: ["string", "null"] }, status: { type: "string", enum: POST_STATUS }, confirm: CONFIRM_SCHEDULE_PROP, tenant: TENANT_PROP } },
     async handler({ id, tenant, confirm, ...body }) {
       const dry = await scheduleDryRun(tenant, id, body, confirm);
       if (dry) return dry;
@@ -182,9 +218,12 @@ export const socialTools = [
   },
   {
     name: "uiiq_social_post_save",
-    description: "The full composer save of a DRAFT, QUEUED or SCHEDULED post: content (required), mediaUrls, hashtags, targetAccountIds (at least one connected account; Instagram needs a media URL), status DRAFT | QUEUED | SCHEDULED (+ scheduledAt), platformContent (per-platform text). PENDING targets are replaced to match the selection; published/failed ones are history and kept. Setting status SCHEDULED or a scheduledAt needs confirm: true (on an auto-publish workspace the cron then publishes it when due); without it this is a dry run and nothing is saved.",
-    inputSchema: { type: "object", required: ["id", "content", "targetAccountIds"], properties: { id: { type: "string" }, content: { type: "string" }, mediaUrls: { type: "array", items: { type: "string" } }, hashtags: { type: "array", items: { type: "string" } }, platformContent: PLATFORM_CONTENT_PROP, targetAccountIds: { type: "array", items: { type: "string" } }, status: { type: "string", enum: POST_STATUS }, scheduledAt: { type: "string", description: "ISO datetime, with status SCHEDULED" }, confirm: CONFIRM_SCHEDULE_PROP, tenant: TENANT_PROP } },
+    description: "The full composer save of a DRAFT, QUEUED or SCHEDULED post: content (required), mediaUrls, hashtags, targetAccountIds (at least one connected account; Instagram needs a media URL), status DRAFT | QUEUED | SCHEDULED (+ scheduledAt; left out, DRAFT: so on a QUEUED post a save with no status is a dry run, or refused with confirm: true, because it would take the post out of the queue; send status QUEUED to keep it, DRAFT to unqueue it), platformContent (per-platform text), productTags (Instagram product tags, keyed by the photo's address in mediaUrls; left out, the post keeps its own on the photos it still has, and they must still fit: a second photo makes a carousel, where each photo takes 5). PENDING targets are replaced to match the selection; published/failed ones are history and kept. Setting status SCHEDULED or QUEUED, or a scheduledAt, needs confirm: true: on an auto-publish workspace the cron then publishes a SCHEDULED post when it is due, and a QUEUED one in the next free slot, with nobody pressing Publish. Without it this is a dry run and nothing is saved.",
+    inputSchema: { type: "object", required: ["id", "content", "targetAccountIds"], properties: { id: { type: "string" }, content: { type: "string" }, mediaUrls: { type: "array", items: { type: "string" } }, hashtags: { type: "array", items: { type: "string" } }, platformContent: PLATFORM_CONTENT_PROP, productTags: PRODUCT_TAGS_PROP, targetAccountIds: { type: "array", items: { type: "string" } }, status: { type: "string", enum: POST_STATUS }, scheduledAt: { type: "string", description: "ISO datetime, with status SCHEDULED" }, confirm: CONFIRM_SCHEDULE_PROP, tenant: TENANT_PROP } },
     async handler({ id, tenant, confirm, ...body }) {
+      tagsOffMedia(body.productTags, body.mediaUrls);
+      const unqueue = await unqueueGuard(tenant, id, body, confirm);
+      if (unqueue) return unqueue;
       const dry = await scheduleDryRun(tenant, id, body, confirm);
       if (dry) return dry;
       const res = await send(tenant, `/socials/posts/${encodeURIComponent(id)}`, "PUT", body);
@@ -204,7 +243,7 @@ export const socialTools = [
   },
   {
     name: "uiiq_social_post_duplicate",
-    description: "Copy a post (content, media, hashtags, same target accounts) as a new DRAFT.",
+    description: "Copy a post (content, media, hashtags, Instagram product tags, same target accounts) as a new DRAFT.",
     inputSchema: { type: "object", required: ["id"], properties: { id: { type: "string" }, tenant: TENANT_PROP } },
     async handler({ id, tenant }) {
       const res = await send(tenant, `/socials/posts/${encodeURIComponent(id)}/duplicate`, "POST");
@@ -263,6 +302,25 @@ export const socialTools = [
     inputSchema: { type: "object", properties: { tenant: TENANT_PROP } },
     async handler({ tenant } = {}) {
       const res = await api(tenant)("/socials/promo-products");
+      if (!res.ok) throw await fail(res);
+      return res.json();
+    },
+  },
+  {
+    name: "uiiq_social_product_tags",
+    description: "Whether Instagram product tags can go on a post to these Instagram accounts, and the products to tag. accountIds: 1 to 10 of the workspace's Instagram account ids (uiiq_social_accounts), the post's Instagram targets. Returns { enabled, show, accounts: [{ id, name, eligible, reason }], products: [{ sku, title, imageUrl }], productsError }. enabled: the workspace has the instagram_product_tags feature (off unless a platform admin ticks it); when false nothing else is asked. accounts: IQEX's answer for each (Meta must let its Instagram Shop tag products); reason is set only when Meta is missing a permission, which reconnecting the account fixes. show: at least one account is eligible; only then are products listed, from the shop's UiiQ Connect product feed, whose ids are the SKUs productTags takes on uiiq_social_post_create / _update / _save. productsError: why the feed couldn't be read. Reads only.",
+    inputSchema: {
+      type: "object",
+      additionalProperties: false,
+      required: ["accountIds"],
+      properties: {
+        accountIds: { type: "array", minItems: 1, maxItems: 10, items: { type: "string" }, description: "1 to 10 Instagram account ids (uiiq_social_accounts)" },
+        tenant: TENANT_PROP,
+      },
+    },
+    async handler({ accountIds, tenant }) {
+      const qs = new URLSearchParams({ accountIds: (Array.isArray(accountIds) ? accountIds : []).join(",") });
+      const res = await api(tenant)(`/socials/product-tags?${qs}`);
       if (!res.ok) throw await fail(res);
       return res.json();
     },
@@ -489,7 +547,7 @@ export const socialTools = [
   },
   {
     name: "uiiq_social_post_publish_status",
-    description: "Where a post's Facebook and Instagram targets are while IQEX posts them in the background (after uiiq_social_post_publish answered posting; it can take a minute): { status, posting, targets: [{ id, platform, status, label, permalink, errorMessage }] }. A target's status is PUBLISHING (still posting: ask again in a few seconds, for up to about 3 minutes), PUBLISHED (with its link), FAILED (nothing was posted), or NEEDS_CHECK: it may have been posted, so tell the person to check the Page/Instagram before posting again, and never publish it again yourself. Asking never posts anything again.",
+    description: "Where a post's Facebook and Instagram targets are while IQEX posts them in the background (after uiiq_social_post_publish answered posting; it can take a minute): { status, posting, targets: [{ id, platform, status, label, permalink, errorMessage, productTags }] }. A target's status is PUBLISHING (still posting: ask again in a few seconds, for up to about 3 minutes), PUBLISHED (with its link), FAILED (nothing was posted), or NEEDS_CHECK: it may have been posted, so tell the person to check the Page/Instagram before posting again, and never publish it again yourself. productTags (Instagram targets; null when it asked for none): { sent: [{ photo, skus }] (photo counts from 1), outcome: { asked, tagged, notes } }, where outcome is IQEX's word on how many tags went on, null until it has posted, and notes are IQEX's own for a SKU it refused or didn't find in the Shop's catalogue. Asking never posts anything again.",
     inputSchema: { type: "object", additionalProperties: false, required: ["id"], properties: { id: { type: "string" }, tenant: TENANT_PROP } },
     async handler({ id, tenant }) {
       const res = await api(tenant)(`/socials/posts/${encodeURIComponent(id)}/publish-status`);
@@ -638,7 +696,7 @@ export const socialTools = [
   // ── Settings ──
   {
     name: "uiiq_social_settings",
-    description: "The workspace's publishing mode: autoPublish (does a post go out by itself at its scheduled time, or wait for Publish — off by default) and minGapMinutes between automatic posts.",
+    description: "The workspace's publishing mode: autoPublish (does a post go out by itself at its scheduled time, and a queued post in the next free slot, or wait for Publish — off by default), minGapMinutes between automatic posts, and queued (how many queued posts the cron would take, in order).",
     inputSchema: { type: "object", properties: { tenant: TENANT_PROP } },
     async handler({ tenant } = {}) {
       const res = await api(tenant)("/socials/settings");
@@ -648,7 +706,7 @@ export const socialTools = [
   },
   {
     name: "uiiq_social_settings_update",
-    description: "Set autoPublish and/or minGapMinutes (0-1440). Turning autoPublish on lets the 5-minute cron PUBLISH every scheduled post that is already due — the reply's dueNow says how many go out at once. Turning it ON needs confirm: true; without it nothing changes and the reply says what would happen. Only confirm when the workspace owner has asked for automatic publishing.",
+    description: "Set autoPublish and/or minGapMinutes (0-1440). Turning autoPublish on lets the 5-minute cron PUBLISH every scheduled post that is already due, and the queued posts one at a time in the next free slots — the reply's dueNow says how many go. Turning it ON needs confirm: true; without it nothing changes and the reply says what would happen. Only confirm when the workspace owner has asked for automatic publishing.",
     inputSchema: { type: "object", properties: { autoPublish: { type: "boolean" }, minGapMinutes: { type: "integer", minimum: 0, maximum: 1440 }, confirm: { type: "boolean", description: "Required (true) to turn autoPublish on" }, tenant: TENANT_PROP } },
     async handler({ tenant, confirm, autoPublish, minGapMinutes } = {}) {
       if (autoPublish === true && confirm !== true) {
@@ -656,7 +714,7 @@ export const socialTools = [
         if (!cur.ok) throw await fail(cur);
         return {
           dryRun: true,
-          message: "Auto-publish was NOT turned on. With it on, the cron publishes every SCHEDULED post as it falls due, with nobody pressing Publish. Pass confirm: true only if the workspace owner asked for that.",
+          message: "Auto-publish was NOT turned on. With it on, the cron publishes every SCHEDULED post as it falls due, and QUEUED posts in the next free slot, with nobody pressing Publish. Pass confirm: true only if the workspace owner asked for that.",
           current: await cur.json(),
         };
       }
