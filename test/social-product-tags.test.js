@@ -145,7 +145,7 @@ test("UiiQ's refusals of tags come back in its own words (feature off, a broken 
     (e) => e.message === "Instagram product tags aren't switched on for this workspace",
   );
   await assert.rejects(
-    call("uiiq_social_post_save", { id: "post_1", content: "c", targetAccountIds: ["acc_ig"], mediaUrls: [PHOTO, PHOTO2], productTags: TAGS }, [400, { error: "A photo can have at most 5 product tags" }]),
+    call("uiiq_social_post_save", { id: "post_1", content: "c", targetAccountIds: ["acc_ig"], mediaUrls: [PHOTO, PHOTO2], productTags: TAGS, status: "DRAFT" }, [400, { error: "A photo can have at most 5 product tags" }]),
     (e) => e.message === "A photo can have at most 5 product tags",
   );
 });

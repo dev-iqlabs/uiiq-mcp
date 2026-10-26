@@ -73,6 +73,19 @@ async function scheduleDryRun(tenant, id, body, confirm) {
       : "Nothing was saved. Auto-publish is off here, so a SCHEDULED post waits for someone to press Publish; it is still a scheduling step, so pass confirm: true to go ahead.";
   return { dryRun: true, message, autoPublish: !!autoPublish, wouldSet: { id, status: body.status, scheduledAt: body.scheduledAt } };
 }
+// The save route defaults a missing status to DRAFT, so saving a QUEUED post without a status would
+// quietly take it out of the publish queue. Read the post first; without confirm it is a dry run that
+// says so, with confirm it is refused: the caller must name the status (DRAFT, or QUEUED to keep it).
+const UNQUEUE_ADVICE = "This post is QUEUED. Saving without a status would turn it back into a DRAFT and take it out of the queue. Pass status QUEUED (with confirm: true) to keep it queued, or status DRAFT to confirm you mean to.";
+async function unqueueGuard(tenant, id, body, confirm) {
+  if (body.status !== undefined) return null;
+  const res = await api(tenant)(`/socials/posts/${encodeURIComponent(id)}`);
+  if (!res.ok) throw await fail(res);
+  const post = await res.json();
+  if (String(post?.status ?? "").toUpperCase() !== "QUEUED") return null;
+  if (confirm === true) throw new Error(`${UNQUEUE_ADVICE} Nothing was sent.`);
+  return { dryRun: true, message: `Nothing was saved. ${UNQUEUE_ADVICE}`, currentStatus: "QUEUED", wouldSet: { id, status: "DRAFT" } };
+}
 // Instagram product tags (UiiQ-platform #1230): shop products tagged on a
 // post's photos, so a tap on Instagram opens the product in the Shop. Keyed by
 // the photo's address in mediaUrls; UiiQ checks them (lib/socials/product-tags).
@@ -205,10 +218,12 @@ export const socialTools = [
   },
   {
     name: "uiiq_social_post_save",
-    description: "The full composer save of a DRAFT, QUEUED or SCHEDULED post: content (required), mediaUrls, hashtags, targetAccountIds (at least one connected account; Instagram needs a media URL), status DRAFT | QUEUED | SCHEDULED (+ scheduledAt; left out, DRAFT), platformContent (per-platform text), productTags (Instagram product tags, keyed by the photo's address in mediaUrls; left out, the post keeps its own on the photos it still has, and they must still fit: a second photo makes a carousel, where each photo takes 5). PENDING targets are replaced to match the selection; published/failed ones are history and kept. Setting status SCHEDULED or QUEUED, or a scheduledAt, needs confirm: true: on an auto-publish workspace the cron then publishes a SCHEDULED post when it is due, and a QUEUED one in the next free slot, with nobody pressing Publish. Without it this is a dry run and nothing is saved.",
+    description: "The full composer save of a DRAFT, QUEUED or SCHEDULED post: content (required), mediaUrls, hashtags, targetAccountIds (at least one connected account; Instagram needs a media URL), status DRAFT | QUEUED | SCHEDULED (+ scheduledAt; left out, DRAFT: so on a QUEUED post a save with no status is a dry run, or refused with confirm: true, because it would take the post out of the queue; send status QUEUED to keep it, DRAFT to unqueue it), platformContent (per-platform text), productTags (Instagram product tags, keyed by the photo's address in mediaUrls; left out, the post keeps its own on the photos it still has, and they must still fit: a second photo makes a carousel, where each photo takes 5). PENDING targets are replaced to match the selection; published/failed ones are history and kept. Setting status SCHEDULED or QUEUED, or a scheduledAt, needs confirm: true: on an auto-publish workspace the cron then publishes a SCHEDULED post when it is due, and a QUEUED one in the next free slot, with nobody pressing Publish. Without it this is a dry run and nothing is saved.",
     inputSchema: { type: "object", required: ["id", "content", "targetAccountIds"], properties: { id: { type: "string" }, content: { type: "string" }, mediaUrls: { type: "array", items: { type: "string" } }, hashtags: { type: "array", items: { type: "string" } }, platformContent: PLATFORM_CONTENT_PROP, productTags: PRODUCT_TAGS_PROP, targetAccountIds: { type: "array", items: { type: "string" } }, status: { type: "string", enum: POST_STATUS }, scheduledAt: { type: "string", description: "ISO datetime, with status SCHEDULED" }, confirm: CONFIRM_SCHEDULE_PROP, tenant: TENANT_PROP } },
     async handler({ id, tenant, confirm, ...body }) {
       tagsOffMedia(body.productTags, body.mediaUrls);
+      const unqueue = await unqueueGuard(tenant, id, body, confirm);
+      if (unqueue) return unqueue;
       const dry = await scheduleDryRun(tenant, id, body, confirm);
       if (dry) return dry;
       const res = await send(tenant, `/socials/posts/${encodeURIComponent(id)}`, "PUT", body);
