@@ -56,7 +56,7 @@ test("every tool is named uiiq_competition_* and describes itself", () => {
     assert.ok(t.description.length > 20, name);
     assert.equal(t.inputSchema.type, "object", name);
   }
-  assert.equal(Object.keys(tools).length, 36);
+  assert.equal(Object.keys(tools).length, 37);
 });
 
 test("each tool calls its own route, with its own method and body", async () => {
@@ -772,4 +772,14 @@ test("the tie lock's void (UiiQ-platform #1304): owner/admin, a dry run until co
   ({ requests } = await call("uiiq_competition_round_vote_tie_lock", { id: "c1", roundId: "r1", void: false, confirm: true }));
   assert.deepEqual(requests, [{ method: "POST", path: "/competitions/c1/rounds/r1/vote/tie/lock" }]);
   await assert.rejects(call("uiiq_competition_round_vote_tie_lock", { id: "c1", roundId: "r/1", void: true, confirm: true }));
+});
+
+test("the type picker and the report (5c): create sends the kind as given; the report reads one route", async () => {
+  let { requests } = await call("uiiq_competition_create", { name: "Comment to win", slug: "comment-to-win", mechanic: "DRAW" });
+  assert.deepEqual(requests, [{ method: "POST", path: "/competitions", body: { name: "Comment to win", slug: "comment-to-win", mechanic: "DRAW" } }]);
+  assert.deepEqual(tools.uiiq_competition_create.inputSchema.properties.mechanic.enum, ["DRAW", "NOMINATION", "VOTE", "SPOTLIGHT"]);
+  assert.equal(tools.uiiq_competition_update.inputSchema.properties.mechanic, undefined);
+  ({ requests } = await call("uiiq_competition_report", { id: "c1" }, [200, { totals: {}, rounds: [] }]));
+  assert.deepEqual(requests, [{ method: "GET", path: "/competitions/c1/report" }]);
+  await assert.rejects(() => call("uiiq_competition_report", { id: "../x" }), /must be an id/);
 });
