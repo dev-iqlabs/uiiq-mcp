@@ -109,7 +109,7 @@ const COMPETITION_PROPS = {
   criteria: { type: "array", items: { type: "object", properties: { key: { type: "string" }, label: { type: "string" }, weight: { type: "number" } } }, description: "Up to 10 judging criteria, each with a weight 1-100 (relative)" },
   judgeUserIds: { type: "array", items: { type: "string" }, description: "This workspace's people (uiiq_task_members); none = owners/admins judge" },
   socialAccountIds: { type: "array", items: { type: "string" }, description: "This workspace's social accounts the round's posts are for (uiiq_social_accounts). A DRAW is entered by commenting on them, so it needs at least one to go live, and its call goes only to the Facebook and Instagram ones" },
-  postTemplates: { type: "object", description: "{ call, shortlist, winner, delivery }: the wording of each of the round's posts. Placeholders: {competition} {round} {closes} {prize} {promoter} {eligibility} {link} {rules}. A DRAW's call says how to enter with {enter} (\"comment below\", with the entry word when there is one) and must have {enter} and {closes}; a DRAW has no shortlist post" },
+  postTemplates: { type: "object", description: "{ call, shortlist, winner, delivery }: the wording of each of the round's posts. Placeholders: {competition} {round} {closes} {prize} {promoter} {eligibility} {link} {rules}. A DRAW's call says how to enter with {enter} (\"comment below\", with the entry word when there is one) and must have {enter} and {closes}; a DRAW has no shortlist post. A NOMINATION's call may place {nominate}, the \"Comment NOMINATE and we'll message you the form\" line: while the comment word is answered the line is always in the call (at the end when {nominate} isn't used), otherwise it's left out" },
   entriesPerEmail: { type: "number", description: "1-20, per round" },
   retentionDays: { type: "number", description: "7-90" },
   // Prize codes (UiiQ-platform #966): a workspace given the competition_prizes feature only.
@@ -117,9 +117,9 @@ const COMPETITION_PROPS = {
   prizeSiteId: { type: ["string", "null"], description: "The shop the codes are made on: an active site this workspace owns, with UiiQ Connect's Prize codes module" },
   prizeWinner: { type: ["object", "null"], description: "The winner's coupon: { percent 1-100, categoryIds, productIds (WooCommerce ids; at least one between them: never the whole shop), expiryDays 1-365 }" },
   prizeRunnerUp: { type: ["object", "null"], description: "Each runner-up's coupon, the same shape; null for none" },
-  // Comment-to-enter draws (competitions v2, 2a): used by a DRAW only.
-  entryKeyword: { type: ["string", "null"], description: "DRAW: a comment counts only if it contains this word (any case), e.g. \"COIN\" or \"#COIN\": one word of letters or numbers, an optional # in front, up to 30. null or \"\" for none: any comment counts" },
-  excludedAuthors: { type: "array", items: { type: "string" }, description: "DRAW: commenters whose comments never count (staff, the brand's own accounts), as handles (\"@name\") or author keys (\"FACEBOOK:123\"). Up to 50, each up to 100 characters; [] for none" },
+  // Comment-to-enter draws (competitions v2, 2a), and "Comment NOMINATE" (3a) for a NOMINATION.
+  entryKeyword: { type: ["string", "null"], description: "DRAW: a comment counts only if it contains this word (any case), e.g. \"COIN\" or \"#COIN\": one word of letters or numbers, an optional # in front, up to 30. null or \"\" for none: any comment counts. NOMINATION: the comment word, e.g. \"NOMINATE\": where the workspace has competition_social and UiiQ sends replies itself, anyone who comments it on a round's call post while the round is open gets ONE private message with the round's nomination form (never a public reply; the comment isn't a nomination), and the call post says so. null or \"\" turns it off" },
+  excludedAuthors: { type: "array", items: { type: "string" }, description: "DRAW: commenters whose comments never count; NOMINATION: commenters who never get the form by message (staff, the brand's own accounts), as handles (\"@name\") or author keys (\"FACEBOOK:123\"). Up to 50, each up to 100 characters; [] for none" },
   pastWinnerRounds: { type: "number", description: "DRAW: a winner of the last N rounds can't enter, 0-52 (0: no limit)" },
   claimDays: { type: "number", description: "DRAW: days a drawn winner has to claim their prize, 1-30 (default 7)" },
 };
@@ -147,7 +147,7 @@ export const competitionTools = [
   },
   {
     name: "uiiq_competition_get",
-    description: "One competition with its rounds, each with its phase (upcoming, open, closed, decided) and the entry form link for that round (share the round's link, never the bare form). A DRAW's rounds have no form link; each has lastCollectedAt, when its comments were last read into entries (null: not yet).",
+    description: "One competition with its rounds, each with its phase (upcoming, open, closed, decided) and the entry form link for that round (share the round's link, never the bare form). A DRAW's rounds have no form link; each has lastCollectedAt, when its comments were last read into entries (null: not yet). A NOMINATION's rounds have nominateReplies: the \"Comment NOMINATE\" private replies, { sent, failed, waiting, reasons } (reasons by code, e.g. too_old_here, maybe_sent, off), or null when none were sent.",
     inputSchema: { type: "object", required: ["id"], properties: { id: { type: "string" }, tenant: TENANT_PROP } },
     async handler({ id, tenant }) {
       return call(tenant, `/competitions/${seg(id)}`);
