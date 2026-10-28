@@ -378,7 +378,9 @@ test("erasing a commenter: author instead of email (exactly one), a dry run unti
   assert.match(description, /by exactly one of email or author/);
   assert.match(description, /the key shown on their entry \(authorKey, e\.g\. FACEBOOK:123\) or their @handle/);
   assert.match(description, /their comments in UiiQ's socials inbox too/);
-  assert.match(description, /IQEX keeps its own copy of the comments for up to 90 days/);
+  // UiiQ-platform ask E: IQEX is asked to forget its copy; a 503 with pendingForgets until it confirms.
+  assert.match(description, /IQEX is asked to forget its own copy/);
+  assert.match(description, /503 with pendingForgets \(never "erased"\)/);
   assert.match(description, /messagesDeleted/);
 });
 

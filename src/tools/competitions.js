@@ -169,7 +169,7 @@ export const competitionTools = [
   },
   {
     name: "uiiq_competition_get",
-    description: "One competition with its rounds, each with its phase (upcoming, open, closed, decided) and the entry form link for that round (share the round's link, never the bare form). A DRAW's rounds have no form link; each has lastCollectedAt, when its comments were last read into entries (null: not yet). A NOMINATION's rounds have nominateReplies: the \"Comment NOMINATE\" private replies, { sent, failed, waiting, reasons } (reasons by code, e.g. too_old_here, maybe_sent, off), or null when none were sent.",
+    description: "One competition with its rounds, each with its phase (upcoming, open, closed, decided) and the entry form link for that round; pendingForgets { count, oldest } counts the workspace's commenter erasures IQEX hasn't confirmed forgetting yet (share the round's link, never the bare form). A DRAW's rounds have no form link; each has lastCollectedAt, when its comments were last read into entries (null: not yet). A NOMINATION's rounds have nominateReplies: the \"Comment NOMINATE\" private replies, { sent, failed, waiting, reasons } (reasons by code, e.g. too_old_here, maybe_sent, off), or null when none were sent.",
     inputSchema: { type: "object", required: ["id"], properties: { id: { type: "string" }, tenant: TENANT_PROP } },
     async handler({ id, tenant }) {
       return call(tenant, `/competitions/${seg(id)}`);
@@ -708,7 +708,7 @@ export const competitionTools = [
   },
   {
     name: "uiiq_competition_erase_address",
-    description: "A person's erasure request (owner/admin), by exactly one of email or author. email: every entry that address sent to this workspace's competitions, photos included. author: a commenter's (comment to enter, who has no address), by the key shown on their entry (authorKey, e.g. FACEBOOK:123) or their @handle (any case): every entry of theirs, and their comments in UiiQ's socials inbox too, whether or not any became an entry. IQEX keeps its own copy of the comments for up to 90 days. Can't be undone; the audit keeps the address or commenter only as a hash. Returns { erased, photosDeleted, kept }, and messagesDeleted (the inbox comments) for a commenter; an entry whose photo couldn't be deleted is kept, and erasing again takes it. Without confirm: true it's a dry run that changes nothing.",
+    description: "A person's erasure request (owner/admin), by exactly one of email or author. email: every entry that address sent to this workspace's competitions, photos included. author: a commenter's (comment to enter, who has no address), by the key shown on their entry (authorKey, e.g. FACEBOOK:123) or their @handle (any case): every entry of theirs, and their comments in UiiQ's socials inbox too, whether or not any became an entry; then IQEX is asked to forget its own copy of everything they wrote on the workspace's Pages and Instagram accounts. While IQEX hasn't confirmed, the answer is a 503 with pendingForgets (never \"erased\"): UiiQ's copy is gone, IQEX is asked again by the cron every 10 minutes, and uiiq_competition_get shows pendingForgets { count, oldest }. Can't be undone; the audit keeps the address or commenter only as a hash. Returns { erased, photosDeleted, kept }, and messagesDeleted (the inbox comments) for a commenter; an entry whose photo couldn't be deleted is kept, and erasing again takes it. Without confirm: true it's a dry run that changes nothing.",
     inputSchema: {
       type: "object",
       properties: {
