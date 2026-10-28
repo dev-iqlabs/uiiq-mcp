@@ -102,6 +102,9 @@ const JUDGE_PROP = {
   description: "The independent judge: { userId } or { name, description? }, or null for none. A judged competition (NOMINATION or ENTRY) can't go live without one; one already live gets a judgingWarning instead, and each round is refused at Decide until it has one. Can't be replaced on a round they've already scored",
 };
 
+// Replacing an independent judge who stepped aside on one of a round's entries (UiiQ-platform #1269 N1).
+const JUDGE_CHANGE_REASON_PROP = { type: "string", description: "With independentJudge: why the independent judge is replaced, 3-300 characters. Needed when the judge being replaced stepped aside on one of the round's entries (e.g. a tie on it needs another judge); their scores on the other entries stay. Audited" };
+
 const COMPETITION_PROPS = {
   name: { type: "string" },
   slug: { type: "string", description: "Lower-case letters, numbers and hyphens, unique in the workspace" },
@@ -138,6 +141,7 @@ const COMPETITION_PROPS = {
   panelPct: { type: "number", description: "The judging panel's share of the result, 51-100 (default 100). With publicPct they add up to 100; one alone takes the other as the rest" },
   publicPct: { type: "number", description: "The public vote's share, 0-49: always less than half. The public vote isn't built yet, so a competition can't go live (and no round can be decided) with a public share above 0" },
   independentJudge: JUDGE_PROP,
+  judgeChangeReason: JUDGE_CHANGE_REASON_PROP,
 };
 
 // COMPETITIONS: a competition that runs in rounds (e.g. Ultimate Coins'
@@ -214,11 +218,11 @@ export const competitionTools = [
   },
   {
     name: "uiiq_competition_round_update",
-    description: "A round's theme and times, until it's decided (owner/admin). A DRAW's round may be open at most 6 days (refused if longer). independentJudge sets this round's own independent judge in place of the competition's (e.g. last week's winner, from round 2), or null to use the competition's; not once the judge it has now has scored the round, and never on a DRAW. Audited.",
+    description: "A round's theme and times, until it's decided (owner/admin). A DRAW's round may be open at most 6 days (refused if longer). independentJudge sets this round's own independent judge in place of the competition's (e.g. last week's winner, from round 2), or null to use the competition's; not once the judge it has now has scored the round, unless they stepped aside on one of its entries (then with judgeChangeReason), and never on a DRAW. Audited with both judges.",
     inputSchema: {
       type: "object",
       required: ["id", "roundId"],
-      properties: { id: { type: "string" }, roundId: { type: "string" }, ...ROUND_PROPS, independentJudge: JUDGE_PROP, tenant: TENANT_PROP },
+      properties: { id: { type: "string" }, roundId: { type: "string" }, ...ROUND_PROPS, independentJudge: JUDGE_PROP, judgeChangeReason: JUDGE_CHANGE_REASON_PROP, tenant: TENANT_PROP },
     },
     async handler({ id, roundId, tenant, ...body }) {
       return call(tenant, `/competitions/${seg(id)}/rounds/${seg(roundId)}`, send("PATCH", body));
@@ -376,7 +380,7 @@ export const competitionTools = [
   },
   {
     name: "uiiq_competition_entry_update",
-    description: "An entry's status (NEW, SHORTLISTED, REJECTED, WITHDRAWN: only a confirmed entry can be New or Shortlisted; a DRAW has no shortlist, so SHORTLISTED is refused there), staff notes, or your own judge's scores ({ criterionKey: 0-10 }, every criterion: a partial set is refused); with onBehalfOf: independent, an owner or admin enters an OUTSIDE independent judge's scores for them (recorded as entered by them, for the judge; one with a login enters their own). After the round closes, a scored entry goes to REJECTED or WITHDRAWN only by an owner or admin, with statusReason. stepAside records a judge stepping aside on this entry (owner/admin): their scores on it go and they can't score it; { judge, undo: true } steps them back. Locked once its round is decided. Audited. Answers with the entry's id, status, weightedScore and publishable, and any postWarnings (what changed on the round's posts); the full entry is on uiiq_competition_entry_get.",
+    description: "An entry's status (NEW, SHORTLISTED, REJECTED, WITHDRAWN: only a confirmed entry can be New or Shortlisted; a DRAW has no shortlist, so SHORTLISTED is refused there), staff notes, or your own judge's scores ({ criterionKey: 0-10 }, every criterion: a partial set is refused); with onBehalfOf: independent, an owner or admin enters an OUTSIDE independent judge's scores for them (recorded as entered by them, for the judge; one with a login enters their own). A scored entry moves into or out of the running (to or from NEW and SHORTLISTED) only by an owner or admin, with statusReason, whatever the round's phase. stepAside records a judge stepping aside on this entry (owner/admin): their scores on it go for good and they can't score it, so it's a dry run until confirm: true; { judge, undo: true } steps them back (no confirm). Locked once its round is decided. Audited. Answers with the entry's id, status, weightedScore and publishable, and any postWarnings (what changed on the round's posts); the full entry is on uiiq_competition_entry_get.",
     inputSchema: {
       type: "object",
       required: ["entryId"],
@@ -386,22 +390,30 @@ export const competitionTools = [
         notes: { type: "string" },
         scores: { type: "object", description: "{ criterionKey: 0-10 } for every criterion on the competition" },
         onBehalfOf: { type: "string", enum: ["independent"], description: "With scores: an outside independent judge's scores, entered for them by an owner or admin (they have no login). Recorded as entered by you, for that judge. Refused for a judge with their own login" },
-        statusReason: { type: "string", description: "Why a scored entry leaves the running after the round closed (REJECTED or WITHDRAWN): 3-300 characters, owner/admin, on the record" },
+        statusReason: { type: "string", description: "Why a scored entry moves into or out of the running (to or from NEW and SHORTLISTED), in any phase: 3-300 characters, owner/admin, on the record" },
         stepAside: {
           type: "object",
           properties: {
-            judge: { type: "string", description: "\"independent\" (the round's independent judge) or a panel judge's user id" },
+            judge: { type: "string", description: "\"independent\" (the round's independent judge), a panel judge's user id, or any judge's key that already has scores on the entry (a user id, or outside:<ref> for an outside judge since replaced)" },
             reason: { type: "string", description: "Why they step aside, 3-300 characters (e.g. a relative)" },
             undo: { type: "boolean", description: "true: step them back" },
           },
           required: ["judge"],
-          description: "A judge stepping aside on this entry (Kim, terms 6b.4), owner/admin, on its own (not with scores or status)",
+          description: "A judge stepping aside on this entry (Kim, terms 6b.4), owner/admin, on its own (not with scores or status). Stepping aside takes away any scores they gave it, so it's a dry run until confirm: true",
         },
+        confirm: { type: "boolean", description: "With stepAside (not undo): true = do it, taking away any scores that judge gave the entry; omit for the dry run, which changes nothing" },
         tenant: TENANT_PROP,
       },
     },
-    async handler({ entryId, tenant, ...body }) {
-      return entrySummary(await call(tenant, `/competitions/entries/${seg(entryId)}`, send("PATCH", body)));
+    async handler({ entryId, tenant, confirm, ...body }) {
+      const path = `/competitions/entries/${seg(entryId)}`;
+      // A step-aside removes the judge's scores on the entry for good: a dry run until confirm (Lucas, #1269 L-d).
+      const step = body.stepAside;
+      if (step && typeof step === "object" && step.undo !== true) {
+        if (confirm !== true) return dryRun("step_aside", tenant, { entryId, stepAside: step }, "Stepping a judge aside takes away any scores they gave this entry, and they can't be put back. Check who and why.");
+        body.stepAside = { ...step, confirm: true };
+      }
+      return entrySummary(await call(tenant, path, send("PATCH", body)));
     },
   },
   {

@@ -600,7 +600,17 @@ test("an act's confirmation goes through as given", async () => {
 test("a status reason and a step-aside go through to the entry route", async () => {
   let r = await call("uiiq_competition_entry_update", { entryId: "e1", status: "REJECTED", statusReason: "Nominated twice" }, [200, { id: "e1" }]);
   assert.deepEqual(r.requests[0], { method: "PATCH", path: "/competitions/entries/e1", body: { status: "REJECTED", statusReason: "Nominated twice" } });
+  // A step-aside takes away the judge's scores on the entry: a dry run until confirm (Lucas, #1269 L-d).
   r = await call("uiiq_competition_entry_update", { entryId: "e1", stepAside: { judge: "independent", reason: "Her nephew" } }, [200, { id: "e1" }]);
-  assert.deepEqual(r.requests[0].body, { stepAside: { judge: "independent", reason: "Her nephew" } });
+  assert.equal(r.result.dryRun, true);
+  assert.deepEqual(r.requests, []);
+  r = await call("uiiq_competition_entry_update", { entryId: "e1", stepAside: { judge: "independent", reason: "Her nephew" }, confirm: true }, [200, { id: "e1" }]);
+  assert.deepEqual(r.requests[0].body, { stepAside: { judge: "independent", reason: "Her nephew", confirm: true } });
+  // Stepping back needs no confirm; a judge since replaced goes by their key.
+  r = await call("uiiq_competition_entry_update", { entryId: "e1", stepAside: { judge: "outside:a1b2c3d4e5f6", undo: true } }, [200, { id: "e1" }]);
+  assert.deepEqual(r.requests[0].body, { stepAside: { judge: "outside:a1b2c3d4e5f6", undo: true } });
+  // Replacing a judge who stepped aside: the reason goes with the new judge.
+  r = await call("uiiq_competition_round_update", { id: "c", roundId: "r1", independentJudge: { name: "Jo Bloggs" }, judgeChangeReason: "Marion stepped aside on a tied entry" }, [200, {}]);
+  assert.deepEqual(r.requests[0].body, { independentJudge: { name: "Jo Bloggs" }, judgeChangeReason: "Marion stepped aside on a tied entry" });
   assert.deepEqual(tools.uiiq_competition_entry_update.inputSchema.properties.stepAside.required, ["judge"]);
 });
