@@ -56,7 +56,7 @@ test("every tool is named uiiq_competition_* and describes itself", () => {
     assert.ok(t.description.length > 20, name);
     assert.equal(t.inputSchema.type, "object", name);
   }
-  assert.equal(Object.keys(tools).length, 23);
+  assert.equal(Object.keys(tools).length, 24);
 });
 
 test("each tool calls its own route, with its own method and body", async () => {
@@ -211,7 +211,8 @@ test("the nominee confirmation sends exactly what was agreed, all four items", a
   const items = { publishFirstName: true, publishReason: true, publishPhoto: false, publishDelivery: false };
   const r = await call("uiiq_competition_nominee_confirm", { entryId: "e1", answeredBy: "guardian", how: "in-person", items, note: "At the handover" });
   assert.deepEqual(r.requests[0], { method: "POST", path: "/competitions/entries/e1/nominee-confirmation", body: { answeredBy: "guardian", how: "in-person", items, note: "At the handover" } });
-  assert.deepEqual(tools.uiiq_competition_nominee_confirm.inputSchema.properties.items.required, ["publishFirstName", "publishReason", "publishPhoto", "publishDelivery"]);
+  // A person and an act give different items (3b), so UiiQ checks that every one of the right set is given; the schema names both sets.
+  assert.match(tools.uiiq_competition_nominee_confirm.inputSchema.properties.items.description, /publishFirstName, publishReason, publishPhoto, publishDelivery.*publishAct, publishPhotos, publishClip, publishReason, publishAds/);
 });
 
 test("UiiQ's refusal comes back as its own words", async () => {
@@ -559,4 +560,38 @@ test("a drawn winner's naming: only its own fields, at least one; taking back go
   const done = await call("uiiq_competition_claim_naming", { entryId: "e1", naming: "firstName", basis: "winner_message", confirm: true });
   assert.deepEqual(done.requests, [{ method: "POST", path: "/competitions/entries/e1/claim-naming", body: { naming: "firstName", basis: "winner_message" } }]);
   await assert.rejects(() => tools.uiiq_competition_claim_naming.handler({ entryId: "../x", naming: "none" }), /must be an id/);
+});
+
+// Judging (UiiQ-platform competitions v2, 3b).
+test("the ranking is a read of the round's ranking route", async () => {
+  const { requests } = await call("uiiq_competition_round_ranking", { id: "comp_1", roundId: "r1" }, [200, { ranking: [], tie: null }]);
+  assert.deepEqual(requests, [{ method: "GET", path: "/competitions/comp_1/rounds/r1/ranking" }]);
+  await assert.rejects(tools.uiiq_competition_round_ranking.handler({ id: "comp_1", roundId: ".." }), /must be an id/);
+});
+
+test("Decide passes the casting vote only when given, and checks it is an id", async () => {
+  const { requests } = await call("uiiq_competition_round_decide", { id: "c", roundId: "r", winnerEntryId: "e2", castingVoteEntryId: "e2", confirm: true }, [200, {}]);
+  assert.deepEqual(requests[0].body, { winnerEntryId: "e2", castingVoteEntryId: "e2" });
+  const plain = await call("uiiq_competition_round_decide", { id: "c", roundId: "r", winnerEntryId: "e1", confirm: true }, [200, {}]);
+  assert.deepEqual(plain.requests[0].body, { winnerEntryId: "e1" });
+  await assert.rejects(tools.uiiq_competition_round_decide.handler({ id: "c", roundId: "r", winnerEntryId: "e1", castingVoteEntryId: "../x", confirm: true }), /castingVoteEntryId must be an id/);
+  // Still a dry run without confirm.
+  const dry = await call("uiiq_competition_round_decide", { id: "c", roundId: "r", winnerEntryId: "e2", castingVoteEntryId: "e2" });
+  assert.equal(dry.result.dryRun, true);
+  assert.deepEqual(dry.requests, []);
+});
+
+test("the independent judge's scores, entered for them, and a round's own judge", async () => {
+  const scored = await call("uiiq_competition_entry_update", { entryId: "e1", scores: { talent: 7 }, onBehalfOf: "independent" }, [200, { id: "e1", status: "NEW", weightedScore: 7, publishable: {} }]);
+  assert.deepEqual(scored.requests[0], { method: "PATCH", path: "/competitions/entries/e1", body: { scores: { talent: 7 }, onBehalfOf: "independent" } });
+  const round = await call("uiiq_competition_round_update", { id: "c", roundId: "r2", independentJudge: { name: "Marion Martin", description: "last week's winner" } }, [200, {}]);
+  assert.deepEqual(round.requests[0].body, { independentJudge: { name: "Marion Martin", description: "last week's winner" } });
+  const comp = await call("uiiq_competition_update", { id: "c", nomineeKind: "ACT", panelPct: 100, publicPct: 0, independentJudge: null }, [200, {}]);
+  assert.deepEqual(comp.requests[0].body, { nomineeKind: "ACT", panelPct: 100, publicPct: 0, independentJudge: null });
+});
+
+test("an act's confirmation goes through as given", async () => {
+  const body = { answeredBy: "member", how: "email", items: { publishAct: true, publishPhotos: false, publishClip: false, publishReason: true, publishAds: false }, rightsConfirmed: false, minorMembers: "none" };
+  const { requests } = await call("uiiq_competition_nominee_confirm", { entryId: "e1", ...body }, [200, { id: "e1" }]);
+  assert.deepEqual(requests[0], { method: "POST", path: "/competitions/entries/e1/nominee-confirmation", body });
 });
