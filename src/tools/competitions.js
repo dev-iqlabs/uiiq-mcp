@@ -64,11 +64,12 @@ function keptWarning(out) {
 // refused here too (Lucas, uiiq-mcp #100 L1). Checked, and trimmed, before
 // anything is sent.
 const COMMENTER_KEY = /^(FACEBOOK|INSTAGRAM):\d{1,40}$/;
-const COMMENTER_HANDLE = /^@?[A-Za-z0-9._]{1,60}$/;
+// As UiiQ-platform checks it, and IQEX takes it: an Instagram username is at most 30 (Lucas, #1276 M2 a).
+const COMMENTER_HANDLE = /^@?[A-Za-z0-9._]{1,30}$/;
 function commenterOf(value) {
   const s = value.trim();
   if (COMMENTER_KEY.test(s) || (COMMENTER_HANDLE.test(s) && /[A-Za-z0-9]/.test(s))) return s;
-  throw new Error("Give the commenter's @handle, or the key shown on their entry (e.g. FACEBOOK:123)");
+  throw new Error("Give the commenter's @handle, or the key shown on their entry (e.g. FACEBOOK:123). An Instagram handle is up to 30 letters, numbers, dots and underscores.");
 }
 
 // What a change to an entry answers with: never the entrant's or commenter's
@@ -698,7 +699,7 @@ export const competitionTools = [
   },
   {
     name: "uiiq_competition_entry_erase",
-    description: "Erase one entry for good, its photo included, e.g. when a nominee asks (owner/admin). Can't be undone; the audit keeps only that it happened. Without confirm: true it's a dry run that changes nothing.",
+    description: "Erase one entry for good, its photo included, e.g. when a nominee asks (owner/admin). A COMMENT entry (comment to enter) erases its commenter instead, as uiiq_competition_erase_address does with author: every entry of theirs here, their comments in UiiQ's socials inbox, and IQEX asked to forget its copy (the same 503 or 502 while IQEX hasn't). Can't be undone; the audit keeps only that it happened. Without confirm: true it's a dry run that changes nothing.",
     inputSchema: { type: "object", required: ["entryId"], properties: { entryId: { type: "string" }, confirm: CONFIRM_PROP, tenant: TENANT_PROP } },
     async handler({ entryId, tenant, confirm }) {
       const path = `/competitions/entries/${seg(entryId)}`;
@@ -708,12 +709,12 @@ export const competitionTools = [
   },
   {
     name: "uiiq_competition_erase_address",
-    description: "A person's erasure request (owner/admin), by exactly one of email or author. email: every entry that address sent to this workspace's competitions, photos included. author: a commenter's (comment to enter, who has no address), by the key shown on their entry (authorKey, e.g. FACEBOOK:123) or their @handle (any case): every entry of theirs, and their comments in UiiQ's socials inbox too, whether or not any became an entry; then IQEX is asked to forget its own copy of everything they wrote on the workspace's Pages and Instagram accounts. While IQEX hasn't confirmed, the answer is a 503 with pendingForgets (never \"erased\"): UiiQ's copy is gone, IQEX is asked again by the cron every 10 minutes, and uiiq_competition_get shows pendingForgets { count, oldest }. Can't be undone; the audit keeps the address or commenter only as a hash. Returns { erased, photosDeleted, kept }, and messagesDeleted (the inbox comments) for a commenter; an entry whose photo couldn't be deleted is kept, and erasing again takes it. Without confirm: true it's a dry run that changes nothing.",
+    description: "A person's erasure request (owner/admin), by exactly one of email or author. email: every entry that address sent to this workspace's competitions, photos included. author: a commenter's (comment to enter, who has no address), by the key shown on their entry (authorKey, e.g. FACEBOOK:123) or their @handle (any case): every entry of theirs, and their comments in UiiQ's socials inbox too, whether or not any became an entry; then IQEX is asked to forget its own copy of everything they wrote on the workspace's Pages and Instagram accounts. While IQEX hasn't confirmed, the answer is a 503 with pendingForgets (never \"erased\"): UiiQ's copy is gone and IQEX is asked again by the cron, less often as time goes on, for up to 7 days. Where UiiQ has stopped asking (an answer that can never succeed, too many tries, or a comment UiiQ can't name to IQEX), the answer is a 502 with failedForgets: IQEX's support must finish it by hand. uiiq_competition_get shows pendingForgets { count, oldest, failed }. Can't be undone; the audit keeps the address or commenter only as a hash. Returns { erased, photosDeleted, kept }, and messagesDeleted (the inbox comments) for a commenter; an entry whose photo couldn't be deleted is kept, and erasing again takes it. Without confirm: true it's a dry run that changes nothing.",
     inputSchema: {
       type: "object",
       properties: {
         email: { type: "string", description: "An entrant's address. Not with author" },
-        author: { type: "string", description: "A commenter: the key on their entry (FACEBOOK:123 or INSTAGRAM:123) or their @handle (letters, numbers, . and _, up to 60). Not with email" },
+        author: { type: "string", description: "A commenter: the key on their entry (FACEBOOK:123 or INSTAGRAM:123) or their Instagram @handle (letters, numbers, . and _, up to 30: anything else is refused before anything is erased). Not with email" },
         confirm: CONFIRM_PROP,
         tenant: TENANT_PROP,
       },
