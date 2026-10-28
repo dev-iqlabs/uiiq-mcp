@@ -226,7 +226,7 @@ export const competitionTools = [
   },
   {
     name: "uiiq_competition_round_decide",
-    description: "Decide a round after it closes: the winner and any runners-up (up to 10), from its confirmed entries that aren't rejected or withdrawn. Judges only (or owner/admin when none are named). Locks the round for good; the audit keeps who chose, when, and the scores. Decide also issues the prizes: when the competition's prizeAction is COUPON, it makes a real single-use coupon on the competition's shop for the winner and each runner-up, and emails each code to that entry's nominator. The answer's prizes list has a row per entry ({ entryId, ok, error }); a row that isn't ok (e.g. \"Not issued yet\", when there wasn't time) is issued with uiiq_competition_prize_issue. Without confirm: true it's a dry run that changes, makes and sends nothing. Not for a DRAW: its winner is drawn at random, not chosen, so UiiQ refuses (409). The winner must be the entry the scores put first (uiiq_competition_round_ranking): the panel's weighted score out of 100, combined with any public share. A tie for first goes to the independent judge's casting vote: their own scores of the tied entries, or, when those don't settle it, castingVoteEntryId (theirs, or entered for them by an owner or admin; recorded). A round with no independent judge is refused until one is named.",
+    description: "Decide a round after it closes: the winner and any runners-up (up to 10), from its confirmed entries that aren't rejected or withdrawn. Judges only (or owner/admin when none are named). Locks the round for good; the audit keeps who chose, when, and the scores. Decide also issues the prizes: when the competition's prizeAction is COUPON, it makes a real single-use coupon on the competition's shop for the winner and each runner-up, and emails each code to that entry's nominator. The answer's prizes list has a row per entry ({ entryId, ok, error }); a row that isn't ok (e.g. \"Not issued yet\", when there wasn't time) is issued with uiiq_competition_prize_issue. Without confirm: true it's a dry run that changes, makes and sends nothing. Not for a DRAW: its winner is drawn at random, not chosen, so UiiQ refuses (409). The winner must be the entry the scores put first (uiiq_competition_round_ranking): the panel's weighted score out of 100, combined with any public share. Every confirmed entry must be scored first, each judge giving every criterion. A tie for first goes to the independent judge's casting vote: their own scores of the tied entries, or, only when those tie too, castingVoteEntryId (theirs, or for an outside judge entered by an owner or admin; recorded). If they haven't scored every tied entry, or stepped aside on one, Decide is refused until they do or another is named. A round with no independent judge is refused until one is named. The audit keeps the criteria, every entry's status and scores, and any step-asides.",
     inputSchema: {
       type: "object",
       required: ["id", "roundId", "winnerEntryId"],
@@ -235,7 +235,7 @@ export const competitionTools = [
         roundId: { type: "string" },
         winnerEntryId: { type: "string" },
         runnerUpEntryIds: { type: "array", items: { type: "string" } },
-        castingVoteEntryId: { type: "string", description: "On a tie for first that the independent judge's own scores don't settle: their casting vote, one of the tied entries (the same as winnerEntryId)" },
+        castingVoteEntryId: { type: "string", description: "On a tie for first where the independent judge's own scores tie too: their casting vote, one of the tied entries (the same as winnerEntryId). Given by them, or for an outside judge entered by an owner or admin. If they haven't scored every tied entry, they must first (see uiiq_competition_round_ranking's problem)" },
         confirm: CONFIRM_PROP,
         tenant: TENANT_PROP,
       },
@@ -376,7 +376,7 @@ export const competitionTools = [
   },
   {
     name: "uiiq_competition_entry_update",
-    description: "An entry's status (NEW, SHORTLISTED, REJECTED, WITHDRAWN: only a confirmed entry can be New or Shortlisted; a DRAW has no shortlist, so SHORTLISTED is refused there), staff notes, or your own judge's scores ({ criterionKey: 0-10 }); with onBehalfOf: independent, an owner or admin enters the round's independent judge's scores for them (recorded as entered by them, for the judge). Locked once its round is decided. Audited. Answers with the entry's id, status, weightedScore and publishable, and any postWarnings (what changed on the round's posts); the full entry is on uiiq_competition_entry_get.",
+    description: "An entry's status (NEW, SHORTLISTED, REJECTED, WITHDRAWN: only a confirmed entry can be New or Shortlisted; a DRAW has no shortlist, so SHORTLISTED is refused there), staff notes, or your own judge's scores ({ criterionKey: 0-10 }, every criterion: a partial set is refused); with onBehalfOf: independent, an owner or admin enters an OUTSIDE independent judge's scores for them (recorded as entered by them, for the judge; one with a login enters their own). After the round closes, a scored entry goes to REJECTED or WITHDRAWN only by an owner or admin, with statusReason. stepAside records a judge stepping aside on this entry (owner/admin): their scores on it go and they can't score it; { judge, undo: true } steps them back. Locked once its round is decided. Audited. Answers with the entry's id, status, weightedScore and publishable, and any postWarnings (what changed on the round's posts); the full entry is on uiiq_competition_entry_get.",
     inputSchema: {
       type: "object",
       required: ["entryId"],
@@ -384,8 +384,19 @@ export const competitionTools = [
         entryId: { type: "string" },
         status: { type: "string", enum: ["NEW", "SHORTLISTED", "REJECTED", "WITHDRAWN"] },
         notes: { type: "string" },
-        scores: { type: "object", description: "{ criterionKey: 0-10 } for the criteria on the competition" },
-        onBehalfOf: { type: "string", enum: ["independent"], description: "With scores: the round's independent judge's scores, entered for them by an owner or admin (an outside judge has no login). Recorded as entered by you, for that judge" },
+        scores: { type: "object", description: "{ criterionKey: 0-10 } for every criterion on the competition" },
+        onBehalfOf: { type: "string", enum: ["independent"], description: "With scores: an outside independent judge's scores, entered for them by an owner or admin (they have no login). Recorded as entered by you, for that judge. Refused for a judge with their own login" },
+        statusReason: { type: "string", description: "Why a scored entry leaves the running after the round closed (REJECTED or WITHDRAWN): 3-300 characters, owner/admin, on the record" },
+        stepAside: {
+          type: "object",
+          properties: {
+            judge: { type: "string", description: "\"independent\" (the round's independent judge) or a panel judge's user id" },
+            reason: { type: "string", description: "Why they step aside, 3-300 characters (e.g. a relative)" },
+            undo: { type: "boolean", description: "true: step them back" },
+          },
+          required: ["judge"],
+          description: "A judge stepping aside on this entry (Kim, terms 6b.4), owner/admin, on its own (not with scores or status)",
+        },
         tenant: TENANT_PROP,
       },
     },

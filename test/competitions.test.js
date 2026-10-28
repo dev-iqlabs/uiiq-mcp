@@ -595,3 +595,12 @@ test("an act's confirmation goes through as given", async () => {
   const { requests } = await call("uiiq_competition_nominee_confirm", { entryId: "e1", ...body }, [200, { id: "e1" }]);
   assert.deepEqual(requests[0], { method: "POST", path: "/competitions/entries/e1/nominee-confirmation", body });
 });
+
+// Lucas's #1269 follow-ups: the reason and the step-aside go through as given.
+test("a status reason and a step-aside go through to the entry route", async () => {
+  let r = await call("uiiq_competition_entry_update", { entryId: "e1", status: "REJECTED", statusReason: "Nominated twice" }, [200, { id: "e1" }]);
+  assert.deepEqual(r.requests[0], { method: "PATCH", path: "/competitions/entries/e1", body: { status: "REJECTED", statusReason: "Nominated twice" } });
+  r = await call("uiiq_competition_entry_update", { entryId: "e1", stepAside: { judge: "independent", reason: "Her nephew" } }, [200, { id: "e1" }]);
+  assert.deepEqual(r.requests[0].body, { stepAside: { judge: "independent", reason: "Her nephew" } });
+  assert.deepEqual(tools.uiiq_competition_entry_update.inputSchema.properties.stepAside.required, ["judge"]);
+});
