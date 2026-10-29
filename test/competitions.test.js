@@ -56,7 +56,7 @@ test("every tool is named uiiq_competition_* and describes itself", () => {
     assert.ok(t.description.length > 20, name);
     assert.equal(t.inputSchema.type, "object", name);
   }
-  assert.equal(Object.keys(tools).length, 24);
+  assert.equal(Object.keys(tools).length, 29);
 });
 
 test("each tool calls its own route, with its own method and body", async () => {
@@ -82,6 +82,13 @@ test("each tool calls its own route, with its own method and body", async () => 
     ["uiiq_competition_prize_issue", { entryId: "e1", confirm: true }, "POST", "/competitions/entries/e1/prize", undefined],
     ["uiiq_competition_round_lock", { id: "c1", roundId: "r1", confirm: true }, "POST", "/competitions/c1/rounds/r1/lock", undefined],
     ["uiiq_competition_round_draw", { id: "c1", roundId: "r1", confirm: true }, "POST", "/competitions/c1/rounds/r1/draw", undefined],
+    // The public vote (UiiQ-platform competitions v2, phase 4).
+    ["uiiq_competition_round_vote_get", { id: "c1", roundId: "r1" }, "GET", "/competitions/c1/rounds/r1/vote", undefined],
+    ["uiiq_competition_round_vote_set", { id: "c1", roundId: "r1", voteOpensAt: "2026-11-08T10:00:00Z", voteClosesAt: "2026-11-09T20:00:00Z", finalists: ["e1", "e2"], confirm: true }, "PUT", "/competitions/c1/rounds/r1/vote", { voteOpensAt: "2026-11-08T10:00:00Z", voteClosesAt: "2026-11-09T20:00:00Z", finalists: ["e1", "e2"] }],
+    ["uiiq_competition_round_votes", { id: "c1", roundId: "r1" }, "GET", "/competitions/c1/rounds/r1/vote/votes", undefined],
+    ["uiiq_competition_vote_discount", { id: "c1", roundId: "r1", voteId: "v1", evidence: "Bought votes", confirm: true }, "PATCH", "/competitions/c1/rounds/r1/vote/votes/v1", { evidence: "Bought votes" }],
+    ["uiiq_competition_round_vote_sign_off", { id: "c1", roundId: "r1", name: "A. Checker", note: "accountant", confirm: true }, "POST", "/competitions/c1/rounds/r1/vote/sign-off", { name: "A. Checker", note: "accountant" }],
+    ["uiiq_competition_post_draft", { id: "c1", roundId: "r1", stage: "vote" }, "POST", "/competitions/c1/rounds/r1/posts/vote", undefined],
     ["uiiq_competition_update", { id: "c1", prizeAction: "COUPON", prizeSiteId: "site_uc", prizeWinner: { percent: 100, categoryIds: [31], productIds: [], expiryDays: 30 } }, "PATCH", "/competitions/c1", { prizeAction: "COUPON", prizeSiteId: "site_uc", prizeWinner: { percent: 100, categoryIds: [31], productIds: [], expiryDays: 30 } }],
   ];
   for (const [name, args, method, path, body] of cases) {
@@ -613,4 +620,31 @@ test("a status reason and a step-aside go through to the entry route", async () 
   r = await call("uiiq_competition_round_update", { id: "c", roundId: "r1", independentJudge: { name: "Jo Bloggs" }, judgeChangeReason: "Marion stepped aside on a tied entry" }, [200, {}]);
   assert.deepEqual(r.requests[0].body, { independentJudge: { name: "Jo Bloggs" }, judgeChangeReason: "Marion stepped aside on a tied entry" });
   assert.deepEqual(tools.uiiq_competition_entry_update.inputSchema.properties.stepAside.required, ["judge"]);
+});
+
+test("the public vote: setting it, discounting a vote and the count's sign-off are dry runs until confirm: true, and send nothing", async () => {
+  for (const [name, args] of [
+    ["uiiq_competition_round_vote_set", { id: "c1", roundId: "r1", voteOpensAt: "2026-11-08T10:00:00Z", voteClosesAt: "2026-11-09T20:00:00Z", finalists: ["e1", "e2"] }],
+    ["uiiq_competition_vote_discount", { id: "c1", roundId: "r1", voteId: "v1", evidence: "Bought votes" }],
+    ["uiiq_competition_round_vote_sign_off", { id: "c1", roundId: "r1", name: "A. Checker" }],
+  ]) {
+    const { result, requests } = await call(name, args);
+    assert.equal(requests.length, 0, name);
+    assert.equal(result.dryRun, true, name);
+  }
+});
+
+test("the public vote: finalists must be a list of ids, a discount needs its evidence; nothing else reaches the route", async () => {
+  await assert.rejects(call("uiiq_competition_round_vote_set", { id: "c1", roundId: "r1", voteOpensAt: "x", voteClosesAt: "y", finalists: "e1", confirm: true }), /list/);
+  await assert.rejects(call("uiiq_competition_round_vote_set", { id: "c1", roundId: "r1", voteOpensAt: "x", voteClosesAt: "y", finalists: ["e1", "../e2"], confirm: true }));
+  await assert.rejects(call("uiiq_competition_vote_discount", { id: "c1", roundId: "r1", voteId: "v1", evidence: "  ", confirm: true }), /evidence/);
+  await assert.rejects(call("uiiq_competition_vote_discount", { id: "c1", roundId: "r1", voteId: "v/1", evidence: "x", confirm: true }));
+});
+
+test("the vote tools say the count is private until confirmations close, and never show who voted", () => {
+  assert.match(tools.uiiq_competition_round_vote_get.description, /private until then, to staff too/);
+  assert.match(tools.uiiq_competition_round_votes.description, /Never who voted/);
+  assert.match(tools.uiiq_competition_round_vote_set.description, /never its entry token/);
+  assert.match(tools.uiiq_competition_update.inputSchema.properties.publicPct.description, /100 for a vote only/);
+  assert.ok(tools.uiiq_competition_create.inputSchema.properties.voteFormUrl);
 });
