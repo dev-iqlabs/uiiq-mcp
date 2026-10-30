@@ -56,7 +56,7 @@ test("every tool is named uiiq_competition_* and describes itself", () => {
     assert.ok(t.description.length > 20, name);
     assert.equal(t.inputSchema.type, "object", name);
   }
-  assert.equal(Object.keys(tools).length, 32);
+  assert.equal(Object.keys(tools).length, 36);
 });
 
 test("each tool calls its own route, with its own method and body", async () => {
@@ -87,6 +87,13 @@ test("each tool calls its own route, with its own method and body", async () => 
     ["uiiq_competition_round_vote_set", { id: "c1", roundId: "r1", voteOpensAt: "2026-11-08T10:00:00Z", voteClosesAt: "2026-11-09T20:00:00Z", finalists: ["e1", "e2"], confirm: true }, "PUT", "/competitions/c1/rounds/r1/vote", { voteOpensAt: "2026-11-08T10:00:00Z", voteClosesAt: "2026-11-09T20:00:00Z", finalists: ["e1", "e2"] }],
     ["uiiq_competition_round_votes", { id: "c1", roundId: "r1" }, "GET", "/competitions/c1/rounds/r1/vote/votes", undefined],
     ["uiiq_competition_vote_discount", { id: "c1", roundId: "r1", voteId: "v1", evidence: "Bought votes", confirm: true }, "PATCH", "/competitions/c1/rounds/r1/vote/votes/v1", { evidence: "Bought votes" }],
+    ["uiiq_competition_vote_discount", { id: "c1", roundId: "r1", voteId: "v1", evidence: "Sam voted both ways", reason: "DUPLICATE", confirm: true }, "PATCH", "/competitions/c1/rounds/r1/vote/votes/v1", { evidence: "Sam voted both ways", reason: "DUPLICATE" }],
+    ["uiiq_competition_round_vote_voter", { id: "c1", roundId: "r1", email: "sam@example.com", author: "INSTAGRAM:61" }, "POST", "/competitions/c1/rounds/r1/vote/voter", { email: "sam@example.com", author: "INSTAGRAM:61" }],
+    ["uiiq_competition_round_vote_voter", { id: "c1", roundId: "r1", author: "@sam" }, "POST", "/competitions/c1/rounds/r1/vote/voter", { author: "@sam" }],
+    ["uiiq_competition_round_vote_tie_lock", { id: "c1", roundId: "r1", confirm: true }, "POST", "/competitions/c1/rounds/r1/vote/tie/lock", undefined],
+    ["uiiq_competition_round_vote_notice_done", { id: "c1", roundId: "r1", n: 2, confirm: true }, "POST", "/competitions/c1/rounds/r1/vote/notice", { n: 2 }],
+    ["uiiq_competition_round_vote_tie_draw", { id: "c1", roundId: "r1", confirm: true }, "POST", "/competitions/c1/rounds/r1/vote/tie/draw", undefined],
+    ["uiiq_competition_update", { id: "c1", voteAgeConfirmed: true }, "PATCH", "/competitions/c1", { voteAgeConfirmed: true }],
     ["uiiq_competition_round_vote_sign_off", { id: "c1", roundId: "r1", name: "A. Checker", note: "accountant", confirm: true }, "POST", "/competitions/c1/rounds/r1/vote/sign-off", { name: "A. Checker", note: "accountant" }],
     ["uiiq_competition_post_draft", { id: "c1", roundId: "r1", stage: "vote" }, "POST", "/competitions/c1/rounds/r1/posts/vote", undefined],
     ["uiiq_competition_update", { id: "c1", prizeAction: "COUPON", prizeSiteId: "site_uc", prizeWinner: { percent: 100, categoryIds: [31], productIds: [], expiryDays: 30 } }, "PATCH", "/competitions/c1", { prizeAction: "COUPON", prizeSiteId: "site_uc", prizeWinner: { percent: 100, categoryIds: [31], productIds: [], expiryDays: 30 } }],
@@ -634,6 +641,9 @@ test("the public vote: setting it, discounting a vote and the count's sign-off a
     ["uiiq_competition_round_vote_set", { id: "c1", roundId: "r1", voteOpensAt: "2026-11-08T10:00:00Z", voteClosesAt: "2026-11-09T20:00:00Z", finalists: ["e1", "e2"] }],
     ["uiiq_competition_vote_discount", { id: "c1", roundId: "r1", voteId: "v1", evidence: "Bought votes" }],
     ["uiiq_competition_round_vote_sign_off", { id: "c1", roundId: "r1", name: "A. Checker" }],
+    ["uiiq_competition_round_vote_tie_lock", { id: "c1", roundId: "r1" }],
+    ["uiiq_competition_round_vote_tie_draw", { id: "c1", roundId: "r1" }],
+    ["uiiq_competition_round_vote_notice_done", { id: "c1", roundId: "r1", n: 2 }],
   ]) {
     const { result, requests } = await call(name, args);
     assert.equal(requests.length, 0, name);
@@ -646,6 +656,13 @@ test("the public vote: finalists must be a list of ids, a discount needs its evi
   await assert.rejects(call("uiiq_competition_round_vote_set", { id: "c1", roundId: "r1", voteOpensAt: "x", voteClosesAt: "y", finalists: ["e1", "../e2"], confirm: true }));
   await assert.rejects(call("uiiq_competition_vote_discount", { id: "c1", roundId: "r1", voteId: "v1", evidence: "  ", confirm: true }), /evidence/);
   await assert.rejects(call("uiiq_competition_vote_discount", { id: "c1", roundId: "r1", voteId: "v/1", evidence: "x", confirm: true }));
+  await assert.rejects(call("uiiq_competition_vote_discount", { id: "c1", roundId: "r1", voteId: "v1", evidence: "x", reason: "TWICE", confirm: true }), /IMPROPER or DUPLICATE/);
+  await assert.rejects(call("uiiq_competition_round_vote_voter", { id: "c1", roundId: "r1" }), /email/);
+  await assert.rejects(call("uiiq_competition_round_vote_voter", { id: "c1", roundId: "../r1", email: "a@b.com" }));
+  await assert.rejects(call("uiiq_competition_round_vote_tie_lock", { id: "c1", roundId: "r/1", confirm: true }));
+  await assert.rejects(call("uiiq_competition_round_vote_notice_done", { id: "c1", roundId: "r1", n: "2", confirm: true }), /finalist's number/);
+  await assert.rejects(call("uiiq_competition_round_vote_notice_done", { id: "c1", roundId: "r1", n: 0, confirm: true }), /finalist's number/);
+  await assert.rejects(call("uiiq_competition_round_vote_notice_done", { id: "c1", roundId: "../r1", n: 2, confirm: true }));
 });
 
 test("the vote tools say the count is private until confirmations close, and never show who voted", () => {
@@ -654,6 +671,17 @@ test("the vote tools say the count is private until confirmations close, and nev
   assert.match(tools.uiiq_competition_round_vote_set.description, /never its entry token/);
   assert.match(tools.uiiq_competition_update.inputSchema.properties.publicPct.description, /100 for a vote only/);
   assert.ok(tools.uiiq_competition_create.inputSchema.properties.voteFormUrl);
+  // The follow-up: the age tick, a finalist who left, the domain signal, and the look-up's record.
+  assert.match(tools.uiiq_competition_update.inputSchema.properties.voteAgeConfirmed.description, /Everyone who can enter this competition is 16 or over/);
+  assert.match(tools.uiiq_competition_round_vote_get.description, /never say why/);
+  assert.match(tools.uiiq_competition_round_votes.description, /domain/);
+  assert.match(tools.uiiq_competition_round_vote_voter.description, /audited as rule-checking, without the address or the account/);
+  // Kim's Addendum 9: the rule 9 reasons in her words, the numbers' publication, and the notice's task.
+  assert.match(tools.uiiq_competition_round_vote_get.description, /DISPOSABLE_ADDRESS \(from a temporary or disposable email address\)/);
+  assert.match(tools.uiiq_competition_round_vote_get.description, /FINALIST_LEFT \(for a finalist who has left the vote\)/);
+  assert.match(tools.uiiq_competition_round_vote_get.description, /numbersPublishedAt/);
+  assert.match(tools.uiiq_competition_round_vote_set.description, /only the times can change/);
+  assert.match(tools.uiiq_competition_round_vote_notice_done.description, /Nothing is posted from here/);
 });
 
 test("the generated terms (5b): read; publish is a dry run until confirm: true, then sends the hash given or the one just read; settings send only what's given", async () => {
