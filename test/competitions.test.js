@@ -706,3 +706,70 @@ test("the generated terms (5b): read; publish is a dry run until confirm: true, 
   await assert.rejects(() => call("uiiq_competition_terms_settings", { id: "c1" }), /generatedTerms, termsFields, or both/);
   await assert.rejects(() => call("uiiq_competition_terms_get", { id: ".." }), /must be an id/);
 });
+
+test("published terms (UiiQ-platform #1303): publishTerms on every tool whose route takes it, prizeWordingOnly on update, sent only when true", async () => {
+  const say = /save and publish a new terms version in the same step, when the published terms allow the change/;
+  for (const name of ["uiiq_competition_update", "uiiq_competition_round_update", "uiiq_competition_terms_settings", "uiiq_competition_rounds_add", "uiiq_competition_round_vote_set"]) {
+    const p = tools[name].inputSchema.properties.publishTerms;
+    assert.equal(p?.type, "boolean", name);
+    assert.match(p.description, say, name);
+    assert.match(tools[name].description, /publishTerms: true/, name);
+  }
+  assert.equal(tools.uiiq_competition_update.inputSchema.properties.prizeWordingOnly?.type, "boolean");
+  assert.deepEqual(Object.values(tools).filter((t) => t.inputSchema.properties?.prizeWordingOnly).map((t) => t.name), ["uiiq_competition_update"]);
+  // Creating one has nothing published yet.
+  assert.equal(tools.uiiq_competition_create.inputSchema.properties.publishTerms, undefined);
+
+  const round = { opensAt: "2026-11-02T00:00:00Z", closesAt: "2026-11-06T18:00:00Z" };
+  const vote = { voteOpensAt: "2026-11-08T10:00:00Z", voteClosesAt: "2026-11-09T20:00:00Z", finalists: ["e1", "e2"] };
+  const cases = [
+    ["uiiq_competition_update", { id: "c1", prizeDescription: "A silver coin", publishTerms: true, prizeWordingOnly: true }, "PATCH", "/competitions/c1", { prizeDescription: "A silver coin", publishTerms: true, prizeWordingOnly: true }],
+    ["uiiq_competition_round_update", { id: "c1", roundId: "r1", theme: "Bonfire", publishTerms: true }, "PATCH", "/competitions/c1/rounds/r1", { theme: "Bonfire", publishTerms: true }],
+    ["uiiq_competition_terms_settings", { id: "c1", termsFields: { announceDays: 14 }, publishTerms: true }, "PATCH", "/competitions/c1/terms", { termsFields: { announceDays: 14 }, publishTerms: true }],
+    ["uiiq_competition_terms_settings", { id: "c1", termsFields: { announceDays: 14 }, publishTerms: false }, "PATCH", "/competitions/c1/terms", { termsFields: { announceDays: 14 } }],
+    ["uiiq_competition_rounds_add", { id: "c1", ...round, publishTerms: true }, "POST", "/competitions/c1/rounds", { round, publishTerms: true }],
+    ["uiiq_competition_rounds_add", { id: "c1", ...round, weeks: 2, publishTerms: true }, "POST", "/competitions/c1/rounds", { weekly: { first: round, count: 2 }, publishTerms: true }],
+    ["uiiq_competition_rounds_add", { id: "c1", ...round }, "POST", "/competitions/c1/rounds", { round }],
+    ["uiiq_competition_round_vote_set", { id: "c1", roundId: "r1", ...vote, publishTerms: true, confirm: true }, "PUT", "/competitions/c1/rounds/r1/vote", { ...vote, publishTerms: true }],
+    ["uiiq_competition_round_vote_set", { id: "c1", roundId: "r1", ...vote, confirm: true }, "PUT", "/competitions/c1/rounds/r1/vote", vote],
+  ];
+  for (const [name, args, method, path, body] of cases) {
+    const { requests } = await call(name, args);
+    assert.deepEqual(requests, [{ method, path, body }], name);
+  }
+  // publishTerms alone is nothing to change; the vote's dry run sends nothing and shows it.
+  await assert.rejects(() => call("uiiq_competition_terms_settings", { id: "c1", publishTerms: true }), /generatedTerms, termsFields, or both/);
+  const { result, requests } = await call("uiiq_competition_round_vote_set", { id: "c1", roundId: "r1", ...vote, publishTerms: true });
+  assert.equal(requests.length, 0);
+  assert.equal(result.dryRun, true);
+  assert.equal(result.publishTerms, true);
+});
+
+test("published terms: a 409 that needs a new version, or a prize-wording tick, says which flag answers it", async () => {
+  const needsPublish = [409, { error: "This changes what your published terms say: round 3's dates. Saving publishes a new version (terms-draw-v2). People who've already entered keep the version they entered under.", termsChange: { needsPublish: true, changes: ["round 3's dates"], label: "terms-draw-v2", button: "Save and publish new terms" } }];
+  await assert.rejects(() => call("uiiq_competition_round_update", { id: "c1", roundId: "r3", closesAt: "2026-11-20T18:00:00Z" }, needsPublish), (e) => /Saving publishes a new version \(terms-draw-v2\)/.test(e.message) && /To save it with terms-draw-v2, send it again with publishTerms: true\./.test(e.message));
+  const wordingFix = [409, { error: "Entries have opened, and the published terms promise everyone who has entered this prize, so the prize itself can't change now.", termsChange: { refused: true, wordingFix: true } }];
+  await assert.rejects(() => call("uiiq_competition_update", { id: "c1", prizeDescription: "A silver coin" }, wordingFix), /send it again with prizeWordingOnly: true and publishTerms: true/);
+  // A plain refusal is Kim's words alone.
+  const refused = [409, { error: "Round 1 has opened, so its dates and times can't change: the published terms promise they won't move (clause 4).", termsChange: { refused: true } }];
+  await assert.rejects(() => call("uiiq_competition_round_update", { id: "c1", roundId: "r1", closesAt: "2026-11-20T18:00:00Z" }, refused), (e) => e.message === refused[1].error);
+});
+
+test("the tie lock's void (UiiQ-platform #1304): owner/admin, a dry run until confirm: true, then { void: true } to the same route", async () => {
+  const p = tools.uiiq_competition_round_vote_tie_lock.inputSchema.properties.void;
+  assert.equal(p?.type, "boolean");
+  assert.match(p.description, /Owner\/admin only/);
+  assert.match(p.description, /ranking has made wrong/);
+  assert.match(tools.uiiq_competition_round_vote_tie_lock.description, /never a draw that still settles the tie/);
+  let { result, requests } = await call("uiiq_competition_round_vote_tie_lock", { id: "c1", roundId: "r1", void: true });
+  assert.equal(requests.length, 0);
+  assert.equal(result.dryRun, true);
+  assert.equal(result.wouldDo, "void_vote_tie");
+  ({ result, requests } = await call("uiiq_competition_round_vote_tie_lock", { id: "c1", roundId: "r1", void: true, confirm: true }, [200, { drawId: "d1", voidedAt: "2026-11-10T12:00:00Z" }]));
+  assert.deepEqual(requests, [{ method: "POST", path: "/competitions/c1/rounds/r1/vote/tie/lock", body: { void: true } }]);
+  assert.equal(result.drawId, "d1");
+  // Anything but true locks, as before, with no body.
+  ({ requests } = await call("uiiq_competition_round_vote_tie_lock", { id: "c1", roundId: "r1", void: false, confirm: true }));
+  assert.deepEqual(requests, [{ method: "POST", path: "/competitions/c1/rounds/r1/vote/tie/lock" }]);
+  await assert.rejects(call("uiiq_competition_round_vote_tie_lock", { id: "c1", roundId: "r/1", void: true, confirm: true }));
+});

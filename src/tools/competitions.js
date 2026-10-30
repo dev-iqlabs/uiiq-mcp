@@ -33,6 +33,10 @@ async function fail(res) {
     const j = JSON.parse(text);
     // An erasure that kept entries says which, besides why (their photos couldn't be deleted yet).
     if (j?.error && j.kept) return new Error(`${j.error} Erased ${j.erased ?? 0}; kept ${Array.isArray(j.kept) ? j.kept.join(", ") : j.kept}.`);
+    // Published terms (UiiQ-platform #1303): Kim's words are for the dashboard's buttons, so say which flag answers them.
+    const tc = j?.termsChange;
+    if (j?.error && tc?.needsPublish) return new Error(`${j.error} To save it with ${tc.label ?? "the new version"}, send it again with publishTerms: true.`);
+    if (j?.error && tc?.wordingFix) return new Error(`${j.error} If only the wording changed and the prize itself is the same, send it again with prizeWordingOnly: true and publishTerms: true.`);
     if (j?.error) return new Error(j.error);
   } catch { /* not JSON */ }
   return new Error(text || `HTTP ${res.status}`);
@@ -105,6 +109,13 @@ const JUDGE_PROP = {
 
 // Replacing an independent judge who stepped aside on one of a round's entries (UiiQ-platform #1269 N1).
 const JUDGE_CHANGE_REASON_PROP = { type: "string", description: "With independentJudge: why the independent judge is replaced, 3-300 characters. Needed when the judge being replaced stepped aside on one of the round's entries (e.g. a tie on it needs another judge); their scores on the other entries stay. Audited" };
+
+// Published terms can't change underneath entrants (UiiQ-platform #1303; Kim,
+// Addendum 15, B-L2): once a competition's generated terms are published (it's
+// live, or has entries), an edit to what they state is refused (409), or saved
+// only together with a new terms version when publishTerms is true.
+const PUBLISH_TERMS_PROP = { type: "boolean", description: "true: save and publish a new terms version in the same step, when the published terms allow the change. Once the competition's generated terms are published (live, or with entries), a change to what they state is refused (409) without it, naming what it changes and the new version's label; people who've already entered keep the version they entered under. Some changes are refused even with it (a promise to entrants once entries have opened, an opened round's dates or theme). Audited as a terms publish" };
+const PRIZE_WORDING_ONLY_PROP = { type: "boolean", description: "With publishTerms: true, once entries have opened: the change to prizeDescription only corrects how the prize is worded (a spelling mistake, a clearer description of the same thing), and the prize itself is the same. Without it, a change to the prize is refused (409) once entries have opened" };
 
 const COMPETITION_PROPS = {
   name: { type: "string" },
@@ -191,11 +202,11 @@ export const competitionTools = [
   },
   {
     name: "uiiq_competition_update",
-    description: "Change a competition (owner/admin): any field of uiiq_competition_create, including status (DRAFT, ACTIVE, ARCHIVED). Photos stay off (acceptPhotos: true is refused) until the photo terms are signed off. Changing type to DRAW, or making a DRAW ACTIVE, needs the workspace's competition_social feature. A competition with entries can't change to or from DRAW, and one can't become a DRAW while an undecided round is open more than 6 days.",
+    description: "Change a competition (owner/admin): any field of uiiq_competition_create, including status (DRAFT, ACTIVE, ARCHIVED). Photos stay off (acceptPhotos: true is refused) until the photo terms are signed off. Changing type to DRAW, or making a DRAW ACTIVE, needs the workspace's competition_social feature. A competition with entries can't change to or from DRAW, and one can't become a DRAW while an undecided round is open more than 6 days. Once its generated terms are published, a change to what they state is refused (409), or saved with a new terms version when sent with publishTerms: true (where the terms allow it); a fix to the prize's wording alone, once entries have opened, also needs prizeWordingOnly: true. Its web address (slug) can't change then.",
     inputSchema: {
       type: "object",
       required: ["id"],
-      properties: { id: { type: "string" }, ...COMPETITION_PROPS, tenant: TENANT_PROP },
+      properties: { id: { type: "string" }, ...COMPETITION_PROPS, publishTerms: PUBLISH_TERMS_PROP, prizeWordingOnly: PRIZE_WORDING_ONLY_PROP, tenant: TENANT_PROP },
     },
     async handler({ id, tenant, ...body }) {
       return call(tenant, `/competitions/${seg(id)}`, send("PATCH", body));
@@ -237,7 +248,7 @@ export const competitionTools = [
   },
   {
     name: "uiiq_competition_terms_settings",
-    description: "A competition's terms settings (owner/admin), only what is sent changes: `generatedTerms` true makes its rules the generated terms (its rulesUrl becomes their page; a live competition switches only onto terms in force, i.e. published and not stale), false leaves its rules link as it is until you set its own (uiiq_competition_update rulesUrl). While on the generated terms, going live and each round's call post need a version in force that matches the competition, and its rulesUrl can't be set to anything else. `termsFields`: the details only the terms hold, staff's words shown as written (null or \"\" clears one): judgeList (the panel by role), independentJudgeLine (who the independent judge is, when they're one of your people), finalistCount and finalistMethod (a vote), countSignOffLine (who checks a vote's count; needed for a vote with a prize over £250), spotlightDescription and spotlightWhen, runnerUpPrize, nominatorPrize, announceDays (default 7), actReplyDays (default 7), deliveryCostPence (empty or 0: delivery is free). Audited.",
+    description: "A competition's terms settings (owner/admin), only what is sent changes: `generatedTerms` true makes its rules the generated terms (its rulesUrl becomes their page; a live competition switches only onto terms in force, i.e. published and not stale), false leaves its rules link as it is until you set its own (uiiq_competition_update rulesUrl). While on the generated terms, going live and each round's call post need a version in force that matches the competition, and its rulesUrl can't be set to anything else. `termsFields`: the details only the terms hold, staff's words shown as written (null or \"\" clears one): judgeList (the panel by role), independentJudgeLine (who the independent judge is, when they're one of your people), finalistCount and finalistMethod (a vote), countSignOffLine (who checks a vote's count; needed for a vote with a prize over £250), spotlightDescription and spotlightWhen, runnerUpPrize, nominatorPrize, announceDays (default 7), actReplyDays (default 7), deliveryCostPence (empty or 0: delivery is free). Audited. Once the terms are published, switching them off is refused, and a detail they state is refused (409) or saved with a new terms version when sent with publishTerms: true.",
     inputSchema: {
       type: "object",
       required: ["id"],
@@ -261,18 +272,20 @@ export const competitionTools = [
             deliveryCostPence: { type: ["number", "null"], description: "0-10000" },
           },
         },
+        publishTerms: PUBLISH_TERMS_PROP,
         tenant: TENANT_PROP,
       },
     },
-    async handler({ id, tenant, generatedTerms, termsFields }) {
+    async handler({ id, tenant, generatedTerms, termsFields, publishTerms }) {
       const body = { ...(generatedTerms !== undefined ? { generatedTerms } : {}), ...(termsFields !== undefined ? { termsFields } : {}) };
       if (!Object.keys(body).length) throw new Error("Send generatedTerms, termsFields, or both");
+      if (publishTerms === true) body.publishTerms = true;
       return call(tenant, `/competitions/${seg(id)}/terms`, send("PATCH", body));
     },
   },
   {
     name: "uiiq_competition_rounds_add",
-    description: "Add rounds, numbered on from the last (owner/admin). Either one round, or weekly: the same times repeated a week apart for `weeks` rounds (1-26), with optional themes in order. A DRAW's round may be open at most 6 days (refused if longer).",
+    description: "Add rounds, numbered on from the last (owner/admin). Either one round, or weekly: the same times repeated a week apart for `weeks` rounds (1-26), with optional themes in order. A DRAW's round may be open at most 6 days (refused if longer). Once the competition's generated terms are published, new rounds are refused (409) unless sent with publishTerms: true, which saves them with a new terms version.",
     inputSchema: {
       type: "object",
       required: ["id", "opensAt", "closesAt"],
@@ -281,21 +294,23 @@ export const competitionTools = [
         ...ROUND_PROPS,
         weeks: { type: "number", description: "More than 1 = weekly rounds" },
         themes: { type: "array", items: { type: "string" }, description: "With weeks: a theme per week, in order" },
+        publishTerms: PUBLISH_TERMS_PROP,
         tenant: TENANT_PROP,
       },
     },
-    async handler({ id, tenant, weeks, themes, ...round }) {
+    async handler({ id, tenant, weeks, themes, publishTerms, ...round }) {
       const body = weeks && weeks > 1 ? { weekly: { first: round, count: weeks, ...(themes ? { themes } : {}) } } : { round };
+      if (publishTerms === true) body.publishTerms = true;
       return call(tenant, `/competitions/${seg(id)}/rounds`, send("POST", body));
     },
   },
   {
     name: "uiiq_competition_round_update",
-    description: "A round's theme and times, until it's decided (owner/admin). A DRAW's round may be open at most 6 days (refused if longer). independentJudge sets this round's own independent judge in place of the competition's (e.g. last week's winner, from round 2), or null to use the competition's; not once the judge it has now has scored the round, unless they stepped aside on one of its entries (then with judgeChangeReason), and never on a DRAW. Audited with both judges.",
+    description: "A round's theme and times, until it's decided (owner/admin). A DRAW's round may be open at most 6 days (refused if longer). independentJudge sets this round's own independent judge in place of the competition's (e.g. last week's winner, from round 2), or null to use the competition's; not once the judge it has now has scored the round, unless they stepped aside on one of its entries (then with judgeChangeReason), and never on a DRAW. Audited with both judges. Once the competition's generated terms are published, a round that has opened keeps its dates and theme (409), and a change they state is refused (409) or saved with a new terms version when sent with publishTerms: true.",
     inputSchema: {
       type: "object",
       required: ["id", "roundId"],
-      properties: { id: { type: "string" }, roundId: { type: "string" }, ...ROUND_PROPS, independentJudge: JUDGE_PROP, judgeChangeReason: JUDGE_CHANGE_REASON_PROP, tenant: TENANT_PROP },
+      properties: { id: { type: "string" }, roundId: { type: "string" }, ...ROUND_PROPS, independentJudge: JUDGE_PROP, judgeChangeReason: JUDGE_CHANGE_REASON_PROP, publishTerms: PUBLISH_TERMS_PROP, tenant: TENANT_PROP },
     },
     async handler({ id, roundId, tenant, ...body }) {
       return call(tenant, `/competitions/${seg(id)}/rounds/${seg(roundId)}`, send("PATCH", body));
@@ -350,7 +365,7 @@ export const competitionTools = [
   },
   {
     name: "uiiq_competition_round_vote_set",
-    description: "Set a round's public vote (owner/admin), before it opens: voteOpensAt and voteClosesAt (ISO; it opens once the round's entries have closed, not in the past, and runs at most 31 days), and finalists, 2-20 entry ids in number order (finalist 1 first): shortlisted, confirmed entries that agreed to be named. The round gets its own vote token (never its entry token). Needs the workspace's competition_vote feature, a public share (publicPct), the competition's voteAgeConfirmed tick, its voteFormUrl (checked with IQEX as the workspace's own competition-vote copy), rules page, promoter and the workspace's privacy notice link. Once voting opens its times and finalists are fixed for good, and once the numbers have been published (the vote page shown, or a vote post sent: numbersPublishedAt) only the times can change, with the finalists sent as they stand; so this is a dry run until confirm: true. A vote post already drafted is written again from the finalists.",
+    description: "Set a round's public vote (owner/admin), before it opens: voteOpensAt and voteClosesAt (ISO; it opens once the round's entries have closed, not in the past, and runs at most 31 days), and finalists, 2-20 entry ids in number order (finalist 1 first): shortlisted, confirmed entries that agreed to be named. The round gets its own vote token (never its entry token). Needs the workspace's competition_vote feature, a public share (publicPct), the competition's voteAgeConfirmed tick, its voteFormUrl (checked with IQEX as the workspace's own competition-vote copy), rules page, promoter and the workspace's privacy notice link. Once voting opens its times and finalists are fixed for good, and once the numbers have been published (the vote page shown, or a vote post sent: numbersPublishedAt) only the times can change, with the finalists sent as they stand; so this is a dry run until confirm: true. A vote post already drafted is written again from the finalists. Once the competition's generated terms are published they state the vote's times: a round that has opened keeps them (409), and a change is refused (409) or saved with a new terms version when sent with publishTerms: true.",
     inputSchema: {
       type: "object",
       required: ["id", "roundId", "voteOpensAt", "voteClosesAt", "finalists"],
@@ -360,15 +375,16 @@ export const competitionTools = [
         voteOpensAt: { type: "string", description: "ISO date-time" },
         voteClosesAt: { type: "string", description: "ISO date-time" },
         finalists: { type: "array", items: { type: "string" }, description: "Entry ids, finalist 1 first" },
+        publishTerms: PUBLISH_TERMS_PROP,
         confirm: CONFIRM_PROP,
         tenant: TENANT_PROP,
       },
     },
-    async handler({ id, roundId, voteOpensAt, voteClosesAt, finalists, confirm, tenant }) {
+    async handler({ id, roundId, voteOpensAt, voteClosesAt, finalists, publishTerms, confirm, tenant }) {
       const path = `/competitions/${seg(id)}/rounds/${seg(roundId)}/vote`;
       if (!Array.isArray(finalists)) throw new Error("finalists must be a list of entry ids, finalist 1 first");
       for (const f of finalists) seg(f, "finalists");
-      const body = { voteOpensAt, voteClosesAt, finalists };
+      const body = { voteOpensAt, voteClosesAt, finalists, ...(publishTerms === true ? { publishTerms: true } : {}) };
       if (confirm !== true) return dryRun("set_round_vote", tenant, { competitionId: id, roundId, ...body }, "Once voting opens, its times and its numbered finalists can't change. Check them, and that every finalist agreed to be named.");
       return call(tenant, path, send("PUT", body));
     },
@@ -461,10 +477,24 @@ export const competitionTools = [
   // commits to a secret seed and the draw spends it: dry runs until confirm.
   {
     name: "uiiq_competition_round_vote_tie_lock",
-    description: "Lock a vote only's tie for first for its draw (a judge's, or with none named an owner's or admin's): only once the count is final (confirmations closed, the sign-off in when it's needed) and the tie is all that stands in the way of Decide (uiiq_competition_round_ranking says so). The tied finalists are frozen as a list, a secret seed is made, and the list's fingerprint and the seed's commitment go on the vote page at once. After this the count can't change (no vote is discounted). One draw per round, can't be undone: a dry run until confirm: true.",
-    inputSchema: { type: "object", required: ["id", "roundId"], properties: { id: { type: "string" }, roundId: { type: "string" }, confirm: CONFIRM_PROP, tenant: TENANT_PROP } },
-    async handler({ id, roundId, confirm, tenant }) {
+    description: "Lock a vote only's tie for first for its draw (a judge's, or with none named an owner's or admin's): only once the count is final (confirmations closed, the sign-off in when it's needed) and the tie is all that stands in the way of Decide (uiiq_competition_round_ranking says so). The tied finalists are frozen as a list, a secret seed is made, and the list's fingerprint and the seed's commitment go on the vote page at once. After this the count can't change (no vote is discounted). One draw per round, can't be undone: a dry run until confirm: true. void: true (owner/admin only) voids a draw the ranking has made wrong instead: votes erased since the lock changed the tie (uiiq_competition_round_ranking says so), so that draw can't settle it; never a draw that still settles the tie. Audited, and the tie can then be locked afresh.",
+    inputSchema: {
+      type: "object",
+      required: ["id", "roundId"],
+      properties: {
+        id: { type: "string" },
+        roundId: { type: "string" },
+        void: { type: "boolean", description: "Owner/admin only: void the round's draw, which the ranking has made wrong (votes erased since the lock changed the tie, so the draw can't settle it), so the tie can be locked afresh. Refused for a draw that still settles the tie, and once the round is decided. Audited with the voided draw" },
+        confirm: CONFIRM_PROP,
+        tenant: TENANT_PROP,
+      },
+    },
+    async handler({ id, roundId, void: voidDraw, confirm, tenant }) {
       const path = `/competitions/${seg(id)}/rounds/${seg(roundId)}/vote/tie/lock`;
+      if (voidDraw === true) {
+        if (confirm !== true) return dryRun("void_vote_tie", tenant, { competitionId: id, roundId, void: true },"This voids the round's tie draw for good (the audit keeps its list, commitment and any order): only a draw the tie has changed since, by votes erased after the lock. Check uiiq_competition_round_ranking first.");
+        return call(tenant, path, send("POST", { void: true }));
+      }
       if (confirm !== true) return dryRun("lock_vote_tie", tenant, { competitionId: id, roundId }, "This freezes the count and commits to the tie's draw: there's one per round, and it can't be undone.");
       return call(tenant, path, { method: "POST" });
     },
