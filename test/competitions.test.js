@@ -56,7 +56,7 @@ test("every tool is named uiiq_competition_* and describes itself", () => {
     assert.ok(t.description.length > 20, name);
     assert.equal(t.inputSchema.type, "object", name);
   }
-  assert.equal(Object.keys(tools).length, 29);
+  assert.equal(Object.keys(tools).length, 32);
 });
 
 test("each tool calls its own route, with its own method and body", async () => {
@@ -647,4 +647,27 @@ test("the vote tools say the count is private until confirmations close, and nev
   assert.match(tools.uiiq_competition_round_vote_set.description, /never its entry token/);
   assert.match(tools.uiiq_competition_update.inputSchema.properties.publicPct.description, /100 for a vote only/);
   assert.ok(tools.uiiq_competition_create.inputSchema.properties.voteFormUrl);
+});
+
+test("the generated terms (5b): read; publish is a dry run until confirm: true, then sends the hash given or the one just read; settings send only what's given", async () => {
+  const state = [200, { preview: { mechanic: "DRAW", label: "terms-draw-v1", contentHash: "h1", problems: ["Add the company number"] }, current: null }];
+  let { result, requests } = await call("uiiq_competition_terms_get", { id: "c1" }, state);
+  assert.deepEqual(requests, [{ method: "GET", path: "/competitions/c1/terms" }]);
+  ({ result, requests } = await call("uiiq_competition_terms_version_add", { id: "c1" }, state));
+  assert.equal(result.dryRun, true);
+  assert.equal(result.changed, false);
+  assert.equal(result.label, "terms-draw-v1");
+  assert.equal(result.contentHash, "h1");
+  assert.deepEqual(result.problems, ["Add the company number"]);
+  assert.deepEqual(requests, [{ method: "GET", path: "/competitions/c1/terms" }]);
+  ({ result, requests } = await call("uiiq_competition_terms_version_add", { id: "c1", confirm: true }, state));
+  assert.deepEqual(requests, [{ method: "GET", path: "/competitions/c1/terms" }, { method: "POST", path: "/competitions/c1/terms", body: { contentHash: "h1" } }]);
+  ({ result, requests } = await call("uiiq_competition_terms_version_add", { id: "c1", contentHash: "h9", confirm: true }, state));
+  assert.deepEqual(requests[1], { method: "POST", path: "/competitions/c1/terms", body: { contentHash: "h9" } });
+  ({ result, requests } = await call("uiiq_competition_terms_settings", { id: "c1", generatedTerms: true }));
+  assert.deepEqual(requests, [{ method: "PATCH", path: "/competitions/c1/terms", body: { generatedTerms: true } }]);
+  ({ result, requests } = await call("uiiq_competition_terms_settings", { id: "c1", termsFields: { judgeList: "a panel", announceDays: null } }));
+  assert.deepEqual(requests, [{ method: "PATCH", path: "/competitions/c1/terms", body: { termsFields: { judgeList: "a panel", announceDays: null } } }]);
+  await assert.rejects(() => call("uiiq_competition_terms_settings", { id: "c1" }), /generatedTerms, termsFields, or both/);
+  await assert.rejects(() => call("uiiq_competition_terms_get", { id: ".." }), /must be an id/);
 });

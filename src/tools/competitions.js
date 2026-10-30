@@ -115,6 +115,7 @@ const COMPETITION_PROPS = {
   prizeDescription: { type: "string" },
   prizeValuePence: { type: ["number", "null"] },
   eligibility: { type: "string", description: "Who may enter, e.g. \"UK residents aged 18 or over\"" },
+  minAge: { type: "number", description: "The youngest who may enter, in whole years, 16 to 99 (default 18): the generated terms give it (and their children's clause under 18). A draw's terms need 18 (its prize claim takes 18 or over); a vote never goes under 16" },
   rulesUrl: { type: ["string", "null"], description: "https" },
   // The forms' numbers are read from their links by UiiQ (UiiQ-platform #954): no separate number is sent.
   entryFormUrl: { type: ["string", "null"], description: "The entry IQForm's page, exactly https://www.iqex.co.uk/data?form-id=<number> (nothing else after the number); UiiQ reads the form's number from it and checks it's one of the workspace's own Public forms" },
@@ -196,6 +197,75 @@ export const competitionTools = [
     },
     async handler({ id, tenant, ...body }) {
       return call(tenant, `/competitions/${seg(id)}`, send("PATCH", body));
+    },
+  },
+  // The generated terms (UiiQ-platform competitions v2, 5b): Kim's terms and
+  // conditions, filled from the workspace's company record and the competition.
+  // Publishing freezes a version for good, so it's a dry run until confirm: true.
+  {
+    name: "uiiq_competition_terms_get",
+    description: "A competition's generated terms and conditions (reads only): `preview` (the mechanic: DRAW, NOMINATION, VOTE or SPOTLIGHT; the label the next version would have, e.g. terms-draw-v2; the document as it would be published, Kim's words filled from the workspace's company record and the competition; its contentHash; and `problems`, what stops it being published: Kim's go-live checks and every placeholder a required sentence is missing), every published `version` (newest first, each with its public page), `current` (the version in force, and `stale` when the competition has changed since it was published), `generatedTerms` (whether the competition's rules are these terms, its rulesUrl then being `termsUrl`) and `termsFields` (the details only the terms hold). A vote's and the Spotlight's terms can be previewed but not published until the public vote is built.",
+    inputSchema: { type: "object", required: ["id"], properties: { id: { type: "string" }, tenant: TENANT_PROP } },
+    async handler({ id, tenant }) {
+      return call(tenant, `/competitions/${seg(id)}/terms`);
+    },
+  },
+  {
+    name: "uiiq_competition_terms_version_add",
+    description: "Publish a competition's generated terms as they stand (owner/admin): a new version (terms-{mechanic}-v{n}) frozen for good at /competition/{workspace}/{slug}/terms/v/{n}; earlier versions stay online. Refused while `problems` remain (each is listed), when nothing has changed since the version in force, or when the terms changed since `contentHash` (from uiiq_competition_terms_get) was read. Audited. Without confirm: true it's a dry run: it shows the label, the problems and the hash it would publish, and changes nothing.",
+    inputSchema: {
+      type: "object",
+      required: ["id"],
+      properties: {
+        id: { type: "string" },
+        contentHash: { type: "string", description: "The preview's contentHash you checked (uiiq_competition_terms_get): only those words are published. Omitted: the preview as it stands when this runs" },
+        confirm: CONFIRM_PROP,
+        tenant: TENANT_PROP,
+      },
+    },
+    async handler({ id, contentHash, confirm, tenant }) {
+      const path = `/competitions/${seg(id)}/terms`;
+      const state = await call(tenant, path);
+      const p = state?.preview ?? {};
+      if (confirm !== true) {
+        return dryRun("publish_terms", tenant, { competitionId: id, label: p.label ?? null, mechanic: p.mechanic ?? null, contentHash: contentHash ?? p.contentHash ?? null, problems: p.problems ?? [], current: state?.current ?? null }, "Publishing freezes these words as a new version for good: it can't be changed or taken back, only followed by another. Read the preview (uiiq_competition_terms_get) and put right any problems first.");
+      }
+      return call(tenant, path, send("POST", { contentHash: contentHash ?? p.contentHash }));
+    },
+  },
+  {
+    name: "uiiq_competition_terms_settings",
+    description: "A competition's terms settings (owner/admin), only what is sent changes: `generatedTerms` true makes its rules the generated terms (its rulesUrl becomes their page; a live competition switches only onto terms in force, i.e. published and not stale), false leaves its rules link as it is until you set its own (uiiq_competition_update rulesUrl). While on the generated terms, going live and each round's call post need a version in force that matches the competition, and its rulesUrl can't be set to anything else. `termsFields`: the details only the terms hold, staff's words shown as written (null or \"\" clears one): judgeList (the panel by role), independentJudgeLine (who the independent judge is, when they're one of your people), finalistCount and finalistMethod (a vote), countSignOffLine (who checks a vote's count; needed for a vote with a prize over £250), spotlightDescription and spotlightWhen, runnerUpPrize, nominatorPrize, announceDays (default 7), actReplyDays (default 7), deliveryCostPence (empty or 0: delivery is free). Audited.",
+    inputSchema: {
+      type: "object",
+      required: ["id"],
+      properties: {
+        id: { type: "string" },
+        generatedTerms: { type: "boolean" },
+        termsFields: {
+          type: "object",
+          properties: {
+            judgeList: { type: ["string", "null"], description: "Up to 200 characters, e.g. \"two of our staff and one independent judge\"" },
+            independentJudgeLine: { type: ["string", "null"], description: "Up to 200 characters, e.g. \"a local community figure\"" },
+            finalistCount: { type: ["number", "null"], description: "2-50" },
+            finalistMethod: { type: ["string", "null"], description: "Up to 200 characters, e.g. \"the five nominations our team shortlisted\"" },
+            countSignOffLine: { type: ["string", "null"], description: "Up to 200 characters" },
+            spotlightDescription: { type: ["string", "null"], description: "Up to 400 characters: where it runs, how long, what's included" },
+            spotlightWhen: { type: ["string", "null"], description: "Up to 200 characters" },
+            runnerUpPrize: { type: ["string", "null"] },
+            nominatorPrize: { type: ["string", "null"] },
+            announceDays: { type: ["number", "null"], description: "1-60" },
+            actReplyDays: { type: ["number", "null"], description: "1-60" },
+            deliveryCostPence: { type: ["number", "null"], description: "0-10000" },
+          },
+        },
+        tenant: TENANT_PROP,
+      },
+    },
+    async handler({ id, tenant, generatedTerms, termsFields }) {
+      const body = { ...(generatedTerms !== undefined ? { generatedTerms } : {}), ...(termsFields !== undefined ? { termsFields } : {}) };
+      if (!Object.keys(body).length) throw new Error("Send generatedTerms, termsFields, or both");
+      return call(tenant, `/competitions/${seg(id)}/terms`, send("PATCH", body));
     },
   },
   {
