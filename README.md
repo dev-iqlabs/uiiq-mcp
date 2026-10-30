@@ -1722,4 +1722,4 @@ Children's records aren't available from the CLI/MCP (Steve, 22 Oct 2026: no AI 
 | `uiiq_workflow_order_assign` | Assign a workflow order to a user in the tenant (assignedUserId null unassigns). |
 | `uiiq_workflow_order_request_approval` | Ask the customer to approve a stage of their order: creates an approval link, moves the order to AWAITING_APPROVAL and EMAILS the customer. |
 
-1181 tools.
+1186 tools.
