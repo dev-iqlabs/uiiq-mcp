@@ -378,7 +378,14 @@ test("erasing a commenter: author instead of email (exactly one), a dry run unti
   assert.match(description, /by exactly one of email or author/);
   assert.match(description, /the key shown on their entry \(authorKey, e\.g\. FACEBOOK:123\) or their @handle/);
   assert.match(description, /their comments in UiiQ's socials inbox too/);
-  assert.match(description, /IQEX keeps its own copy of the comments for up to 90 days/);
+  // UiiQ-platform ask E: IQEX is asked to forget its copy; a 503 with pendingForgets until it confirms.
+  assert.match(description, /IQEX is asked to forget its own copy/);
+  assert.match(description, /503 with pendingForgets \(never "erased"\)/);
+  // Lucas, #1276 M2: UiiQ stops at some point, and says so; a handle is at most 30.
+  assert.match(description, /502 with failedForgets: IQEX's support must finish it by hand/);
+  await assert.rejects(tools[name].handler({ author: "@" + "a".repeat(31), confirm: true }), /up to 30 letters/);
+  assert.equal(seen.length, 0);
+  assert.match(tools.uiiq_competition_entry_erase.description, /A COMMENT entry \(comment to enter\) erases its commenter instead/);
   assert.match(description, /messagesDeleted/);
 });
 
@@ -391,7 +398,7 @@ test("entry_get says where the commenter's key is, and what it's for (UiiQ-platf
 test("a commenter is checked by UiiQ's own rule, and trimmed, before anything is sent; a handle of only dots and underscores is refused (Lucas, uiiq-mcp #100 L1)", async () => {
   const name = "uiiq_competition_erase_address";
   const bad = [
-    "jo bloggs", "jo-bloggs", "jo/../x", "jo\u0000", "@", "@@jo", "x".repeat(61), "@" + "x".repeat(61),
+    "jo bloggs", "jo-bloggs", "jo/../x", "jo\u0000", "@", "@@jo", "x".repeat(31), "@" + "x".repeat(31),
     "._", "@._.", "____", "...", "@_",
     "FACEBOOK:", "FACEBOOK:12a", "facebook:123", "TIKTOK:123", "FACEBOOK:" + "1".repeat(41), "FACEBOOK: 123",
   ];
@@ -404,7 +411,7 @@ test("a commenter is checked by UiiQ's own rule, and trimmed, before anything is
   }
   const good = [
     [" FACEBOOK:1234567890 ", "FACEBOOK:1234567890"], ["INSTAGRAM:1", "INSTAGRAM:1"], ["FACEBOOK:" + "1".repeat(40), "FACEBOOK:" + "1".repeat(40)],
-    ["  @Jo.Bloggs_1 ", "@Jo.Bloggs_1"], ["jo_bloggs", "jo_bloggs"], ["_jo.", "_jo."], ["x".repeat(60), "x".repeat(60)], ["@" + "x".repeat(60), "@" + "x".repeat(60)],
+    ["  @Jo.Bloggs_1 ", "@Jo.Bloggs_1"], ["jo_bloggs", "jo_bloggs"], ["_jo.", "_jo."], ["x".repeat(30), "x".repeat(30)], ["@" + "x".repeat(30), "@" + "x".repeat(30)],
   ];
   for (const [author, sent] of good) {
     const r = await call(name, { author, confirm: true }, [200, { erased: 0, photosDeleted: 0, kept: 0, messagesDeleted: 0 }]);
