@@ -56,7 +56,7 @@ test("every tool is named uiiq_competition_* and describes itself", () => {
     assert.ok(t.description.length > 20, name);
     assert.equal(t.inputSchema.type, "object", name);
   }
-  assert.equal(Object.keys(tools).length, 33);
+  assert.equal(Object.keys(tools).length, 36);
 });
 
 test("each tool calls its own route, with its own method and body", async () => {
