@@ -194,10 +194,23 @@ export const competitionTools = [
     inputSchema: {
       type: "object",
       required: ["name", "slug"],
-      properties: { ...COMPETITION_PROPS, tenant: TENANT_PROP },
+      properties: {
+        ...COMPETITION_PROPS,
+        // The type picker (UiiQ-platform competitions 5c): the kind sets the type and its defaults.
+        mechanic: { type: "string", enum: ["DRAW", "NOMINATION", "VOTE", "SPOTLIGHT"], description: "What kind of competition, instead of type: DRAW (comment to enter: type DRAW, claimDays 7, pastWinnerRounds 0, retentionDays 90, UK 18+; needs competition_social) or NOMINATION (judged nominations: type NOMINATION, entriesPerEmail 1, retentionDays 90, UK 18+). Anything else sent goes over the defaults; a type that contradicts the kind is refused. VOTE and SPOTLIGHT are refused (\"coming soon\") until the public vote and judging acts are built" },
+        tenant: TENANT_PROP,
+      },
     },
     async handler({ tenant, ...body }) {
       return call(tenant, "/competitions", send("POST", body));
+    },
+  },
+  {
+    name: "uiiq_competition_report",
+    description: "A competition's report, per round and in total (reads only; any staff login). Counts only, never anything the public wrote: entries by source, confirmed and unconfirmed, and removed (erased or past retention: counted from the erasure audit, never looked up again); the confirm rate; for a DRAW, the comments read from each call post and how many became entries, and the claim rate (positions told, claimed); prizes issued (winners, runners-up) and the winners' cost at the competition's prizeValuePence; and marketing opt-ins (only where they took effect: a confirmed entry or a confirmed claim). Purchases after entering aren't counted yet: `conversion` is left out of the report until that's signed off.",
+    inputSchema: { type: "object", required: ["id"], properties: { id: { type: "string" }, tenant: TENANT_PROP } },
+    async handler({ id, tenant }) {
+      return call(tenant, `/competitions/${seg(id)}/report`);
     },
   },
   {
