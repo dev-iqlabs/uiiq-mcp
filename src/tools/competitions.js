@@ -675,14 +675,14 @@ export const competitionTools = [
   },
   {
     name: "uiiq_competition_nominee_confirm",
-    description: "Record what was agreed directly with the nominee, or with their parent or guardian if under 18, e.g. at the prize handover (owner/admin): the only thing that lets their name, the quote or a photo be published. All four items must be given; a later record replaces this one, a withdrawal included. For an ACT competition (act-consent-v1) it's what was confirmed directly with the act: answeredBy solo or member (a member or the manager, 18 or over, whom the act let answer for it), the five act items (publishAct, publishPhotos, publishClip, publishReason, publishAds: nothing but publishAct may be yes unless publishAct is), rightsConfirmed (needed for photos or a clip: the act's own, original music only) and minorMembers (none, or guardian_agreed). Audited. Answers with the entry's id, status, weightedScore and publishable, and any postWarnings (what changed on the round's posts); the full entry is on uiiq_competition_entry_get.",
+    description: "Record what was agreed directly with the nominee, or with their parent or guardian if under 18, e.g. at the prize handover (owner/admin): the only thing that lets their name, the quote or a photo be published. All four items must be given; a later record replaces this one, a withdrawal included. For an ACT competition (act-consent-v1) it's what was confirmed directly with the act: answeredBy solo or member (a member or the manager, 18 or over, whom the act let answer for it), the five act items (publishAct, publishPhotos, publishClip, publishReason, publishAds: nothing but publishAct may be yes unless publishAct is), rightsConfirmed (needed for photos or a clip: the act's own, original music only), minorMembers (none, or guardian_agreed) and termsSeen: true (Kim, Addendum 20: refused without it), and it may be confirmed by direct-message. Audited. Answers with the entry's id, status, weightedScore and publishable, and any postWarnings (what changed on the round's posts); the full entry is on uiiq_competition_entry_get.",
     inputSchema: {
       type: "object",
       required: ["entryId", "answeredBy", "how", "items"],
       properties: {
         entryId: { type: "string" },
         answeredBy: { type: "string", enum: ["nominee", "guardian", "solo", "member"], description: "A person: nominee or guardian. An act: solo or member" },
-        how: { type: "string", enum: ["in-person", "phone", "email", "letter"] },
+        how: { type: "string", enum: ["in-person", "phone", "email", "letter", "direct-message"], description: "direct-message: an act only (as staff send an act its link)" },
         items: {
           type: "object",
           description: "A person: all of publishFirstName, publishReason, publishPhoto, publishDelivery. An act: all of publishAct, publishPhotos, publishClip, publishReason, publishAds",
@@ -699,11 +699,16 @@ export const competitionTools = [
         },
         rightsConfirmed: { type: "boolean", description: "An act: it owns the photos and recording, or may let us use them" },
         minorMembers: { type: "string", enum: ["none", "guardian_agreed"], description: "An act: no member under 18, or each has a parent or guardian's agreement" },
+        termsSeen: { type: "boolean", description: "An act: true only once you've made sure the act has seen the terms of the permission (act-consent-v1): on its page, or because you've sent them (the act's entry has Copy the terms) or read them out. Required for an act (answeredBy solo or member), never assumed: refused before sending without it, and UiiQ refuses an act's record unless it's true." },
         note: { type: "string", description: "Up to 500 characters" },
         tenant: TENANT_PROP,
       },
     },
     async handler({ entryId, tenant, ...body }) {
+      // An act's termsSeen is the person's own answer, never filled in here (Lucas I3 on UiiQ-platform #1310).
+      if ((body.answeredBy === "solo" || body.answeredBy === "member") && typeof body.termsSeen !== "boolean") {
+        throw new Error("termsSeen is required for an act: make sure the act has seen the terms of the permission before you record its answers (use Copy the terms to send them, or read them out), then send termsSeen: true");
+      }
       return entrySummary(await call(tenant, `/competitions/entries/${seg(entryId)}/nominee-confirmation`, send("POST", body)));
     },
   },
