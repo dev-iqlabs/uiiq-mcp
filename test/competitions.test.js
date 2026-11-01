@@ -611,10 +611,34 @@ test("the independent judge's scores, entered for them, and a round's own judge"
   assert.deepEqual(comp.requests[0].body, { nomineeKind: "ACT", panelPct: 100, publicPct: 0, independentJudge: null });
 });
 
-test("an act's confirmation goes through as given", async () => {
-  const body = { answeredBy: "member", how: "email", items: { publishAct: true, publishPhotos: false, publishClip: false, publishReason: true, publishAds: false }, rightsConfirmed: false, minorMembers: "none" };
+test("an act's confirmation goes through as given, termsSeen false included (UiiQ refuses it)", async () => {
+  const body = { answeredBy: "member", how: "email", items: { publishAct: true, publishPhotos: false, publishClip: false, publishReason: true, publishAds: false }, rightsConfirmed: false, minorMembers: "none", termsSeen: false };
   const { requests } = await call("uiiq_competition_nominee_confirm", { entryId: "e1", ...body }, [200, { id: "e1" }]);
   assert.deepEqual(requests[0], { method: "POST", path: "/competitions/entries/e1/nominee-confirmation", body });
+});
+
+test("an act's confirmation without termsSeen is refused before sending, never filled in (Lucas I3 on UiiQ-platform #1310)", async () => {
+  const items = { publishAct: true, publishPhotos: false, publishClip: false, publishReason: true, publishAds: false };
+  for (const answeredBy of ["solo", "member"]) {
+    for (const termsSeen of [undefined, "true", 1]) {
+      seen = [];
+      await assert.rejects(call("uiiq_competition_nominee_confirm", { entryId: "e1", answeredBy, how: "email", items, rightsConfirmed: false, minorMembers: "none", ...(termsSeen === undefined ? {} : { termsSeen }) }, [200, { id: "e1" }]), /termsSeen is required for an act/, `${answeredBy} ${termsSeen}`);
+      assert.equal(seen.length, 0, `${answeredBy} ${termsSeen}`);
+    }
+  }
+  // A person's confirmation never asks it.
+  const person = await call("uiiq_competition_nominee_confirm", { entryId: "e1", answeredBy: "nominee", how: "phone", items: {} }, [200, { id: "e1" }]);
+  assert.equal(person.requests.length, 1);
+});
+
+test("an act confirmed by direct message, with the terms seen (Kim, Addendum 20), goes through as given", async () => {
+  const body = { answeredBy: "solo", how: "direct-message", items: { publishAct: true, publishPhotos: false, publishClip: false, publishReason: false, publishAds: false }, rightsConfirmed: false, minorMembers: "none", termsSeen: true };
+  const { requests } = await call("uiiq_competition_nominee_confirm", { entryId: "e1", ...body }, [200, { id: "e1" }]);
+  assert.deepEqual(requests[0], { method: "POST", path: "/competitions/entries/e1/nominee-confirmation", body });
+  const p = tools.uiiq_competition_nominee_confirm.inputSchema.properties;
+  assert.deepEqual(p.how.enum, ["in-person", "phone", "email", "letter", "direct-message"]);
+  assert.match(p.termsSeen.description, /seen the terms of the permission \(act-consent-v1\)/);
+  assert.match(tools.uiiq_competition_nominee_confirm.description, /termsSeen: true/);
 });
 
 // Lucas's #1269 follow-ups: the reason and the step-aside go through as given.
