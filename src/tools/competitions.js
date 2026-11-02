@@ -140,6 +140,8 @@ const COMPETITION_PROPS = {
   postTemplates: { type: "object", description: "{ call, shortlist, winner, delivery }: the wording of each of the round's posts. Placeholders: {competition} {round} {closes} {prize} {promoter} {eligibility} {link} {rules}. A DRAW's call says how to enter with {enter} (\"comment below\", with the entry word when there is one) and must have {enter} and {closes}; a DRAW has no shortlist post. A NOMINATION's call may place {nominate}, the \"Comment NOMINATE and we'll message you the form\" line: while the comment word is answered the line is always in the call (at the end when {nominate} isn't used), otherwise it's left out" },
   entriesPerEmail: { type: "number", description: "1-20, per round" },
   retentionDays: { type: "number", description: "7-90" },
+  // Who went on to buy or book (UiiQ-platform, Kim's Addenda 20 and 21).
+  conversionReport: { type: "boolean", description: "NOMINATION only (never a DRAW: its entries are comments): count how many entrants went on to buy or book. Puts clause 13.1a into the generated terms, so once they're published, switching it on or off is saved with a new terms version (send publishTerms: true); only entries made under a version with 13.1a are counted. Just before each round's entries are deleted, UiiQ counts its confirmed form entrants with a shop order or booking with the workspace after entering, and keeps only the two totals (uiiq_competition_report). Only when the promoter is the company that takes the orders and bookings. Audited" },
   // Prize codes (UiiQ-platform #966): a workspace given the competition_prizes feature only.
   prizeAction: { type: "string", enum: ["NONE", "COUPON"], description: "COUPON: Decide makes the winner's and runners-up' single-use codes on prizeSiteId through UiiQ Connect (4.51.0 or newer) and emails each to the nominator. Needs the workspace's competition_prizes feature" },
   prizeSiteId: { type: ["string", "null"], description: "The shop the codes are made on: an active site this workspace owns, with UiiQ Connect's Prize codes module" },
@@ -207,7 +209,7 @@ export const competitionTools = [
   },
   {
     name: "uiiq_competition_report",
-    description: "A competition's report, per round and in total (reads only; any staff login). Counts only, never anything the public wrote: entries by source, confirmed and unconfirmed, and removed (erased or past retention: counted from the erasure audit, never looked up again); the confirm rate; for a DRAW, the comments read from each call post and how many became entries, and the claim rate (positions told, claimed); prizes issued (winners, runners-up) and the winners' cost at the competition's prizeValuePence; and marketing opt-ins (only where they took effect: a confirmed entry or a confirmed claim). Purchases after entering aren't counted yet: `conversion` is left out of the report until that's signed off.",
+    description: "A competition's report, per round and in total (reads only; any staff login). Counts only, never anything the public wrote: entries by source, confirmed and unconfirmed, and removed (erased or past retention: counted from the erasure audit, never looked up again); the confirm rate; for a DRAW, the comments read from each call post and how many became entries, and the claim rate (positions told, claimed); prizes issued (winners, runners-up) and the winners' cost at the competition's prizeValuePence; and marketing opt-ins (only where they took effect: a confirmed entry or a confirmed claim). `conversion`, who went on to buy or book (where the competition counts, competition.conversionReport): each round's is counted once, just before its entries are deleted, and only its totals kept. A round's `state` is pending (not counted yet), not_counted, fewer_than_10, total_only (in the total only, because a round has fewer than 10 entrants) or counted ({ entrants, boughtOrBooked, rate }); the totals' is off, pending, fewer_than_10 or counted, with roundsCounted of rounds. A figure shows only once it covers at least 10 entrants; nobody is ever listed.",
     inputSchema: { type: "object", required: ["id"], properties: { id: { type: "string" }, tenant: TENANT_PROP } },
     async handler({ id, tenant }) {
       return call(tenant, `/competitions/${seg(id)}/report`);
@@ -812,6 +814,14 @@ export const competitionTools = [
       const widens = (naming !== undefined && naming !== "none") || townApproved === true;
       if (widens && confirm !== true) return dryRun("claim_naming", tenant, { entryId, ...body }, "This names them in public (or shows their town) on the draw's posts and pages. Only on their own word: give basis, how they asked.");
       return call(tenant, `/competitions/entries/${seg(entryId)}/claim-naming`, send("POST", body));
+    },
+  },
+  {
+    name: "uiiq_competition_entry_leave_out",
+    description: "Leave an entrant out of their competition's count of entrants who went on to buy or book, because they objected (clause 13.1a: \"You can object by emailing us, and we'll leave you out\"). Any staff login. UiiQ keeps only a keyed hash of their address, for that competition: none of their entries in it is counted, later ones included. A round already counted keeps its totals, which name nobody. Audited by the entry. Refused for a COMMENT entry (never counted) and for one whose address retention has already deleted. Doing it again changes nothing ({ leftOutOfCount: true, already: true }). uiiq_competition_entries shows leftOutOfCount on each form entry where the competition counts.",
+    inputSchema: { type: "object", required: ["entryId"], properties: { entryId: { type: "string" }, tenant: TENANT_PROP } },
+    async handler({ entryId, tenant }) {
+      return call(tenant, `/competitions/entries/${seg(entryId)}/leave-out`, { method: "POST" });
     },
   },
   {
