@@ -839,5 +839,8 @@ test("post designs (UiiQ-platform competitions 5a): the designs listing reads on
   assert.match(tools.uiiq_competition_update.inputSchema.properties.postDesigns.description, /never a person, not even on the product/);
   assert.match(tools.uiiq_competition_post_draft.description, /a DRAW's last chance is a Story, never a feed post/);
   assert.match(tools.uiiq_competition_post_draft.description, /posted from a phone and never by UiiQ/);
+  // 5a-2: the vote's and the winner's cards on a frame, names never sent.
+  assert.match(tools.uiiq_competition_post_draft.description, /IQEX never receives a name/);
+  assert.match(tools.uiiq_competition_post_draft.description, /every finalist's number, the vote's card is plain/);
   assert.deepEqual(tools.uiiq_competition_post_draft.inputSchema.properties.stage.enum, ["call", "shortlist", "winner", "vote", "last_chance", "story"]);
 });
