@@ -70,6 +70,7 @@ const TICKET_TYPE_PROPS = {
   earlyBirdUntil: { type: ["string", "null"], description: `When the early bird ENDS: the early bird price is charged before this moment. ${TICKET_DATE}. An early bird whose last day is 17 Jan 2027 ends 2027-01-18` },
   availableFrom: { type: ["string", "null"], description: `On sale from: ${TICKET_DATE}` },
   availableUntil: { type: ["string", "null"], description: `On sale until, after availableFrom: ${TICKET_DATE}` },
+  isExtra: { type: "boolean", description: "An extra, such as a lesson before the event: never sold on its own. Once someone has paid for a ticket to this event, the booking widget offers it, up to one per person on their booking, as a booking of its own. Give it its own performance (sessionId), and put the place in its name if it isn't at the event venue" },
 };
 
 export const adminOpsTools = [
@@ -275,7 +276,7 @@ export const adminOpsTools = [
   // ── Ticket types ──
   {
     name: "uiiq_ticket_type_create",
-    description: "Add a ticket type to an experience (an event's tickets are on its experience), placed last. name and priceInPence are required. Optional: description, isActive, an age range (minAge, maxAge), how many one order may take (minQuantity, maxQuantity, up to 500), how many are on sale (totalAllocation), the one performance it is for (sessionId), an early bird price with the moment it ends (earlyBirdPricePence with earlyBirdUntil, both or neither, below the normal price), and when it is on sale (availableFrom, availableUntil). Dates are YYYY-MM-DD (midnight UTC at the start of that day) or a date and time with its timezone. The checkout charges the early bird before earlyBirdUntil and sells the type only inside its on-sale window. Returns { ticketType }.",
+    description: "Add a ticket type to an experience (an event's tickets are on its experience), placed last. name and priceInPence are required. Optional: description, isActive, an age range (minAge, maxAge), how many one order may take (minQuantity, maxQuantity, up to 500), how many are on sale (totalAllocation), the one performance it is for (sessionId), an early bird price with the moment it ends (earlyBirdPricePence with earlyBirdUntil, both or neither, below the normal price), when it is on sale (availableFrom, availableUntil), and whether it is an extra (isExtra: sold only after a ticket, up to one per person on that booking). Dates are YYYY-MM-DD (midnight UTC at the start of that day) or a date and time with its timezone. The checkout charges the early bird before earlyBirdUntil and sells the type only inside its on-sale window. Returns { ticketType }.",
     inputSchema: { type: "object", required: ["experienceId", "name", "priceInPence"], properties: { experienceId: { type: "string" }, name: { type: "string" }, priceInPence: { type: "number" }, ...TICKET_TYPE_PROPS, tenant: TENANT_PROP } },
     async handler({ tenant, ...body }) { return req(tenant, "/admin/ticket-types", "POST", body); },
   },
