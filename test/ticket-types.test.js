@@ -52,7 +52,7 @@ async function call(name, args, answer = [500, { error: "nothing should have bee
   return { result, requests: seen };
 }
 
-const FIELDS = ["description", "isActive", "minAge", "maxAge", "minQuantity", "maxQuantity", "totalAllocation", "sessionId", "earlyBirdPricePence", "earlyBirdUntil", "availableFrom", "availableUntil"];
+const FIELDS = ["description", "isActive", "minAge", "maxAge", "minQuantity", "maxQuantity", "totalAllocation", "sessionId", "earlyBirdPricePence", "earlyBirdUntil", "availableFrom", "availableUntil", "isExtra"];
 const CLEARABLE = ["description", "minAge", "maxAge", "totalAllocation", "sessionId", "earlyBirdPricePence", "earlyBirdUntil", "availableFrom", "availableUntil"];
 const TYPE = {
   id: "tt_adult", experienceId: "exp_show", name: "Adult", priceInPence: 1000,
@@ -71,7 +71,7 @@ test("both tools take every field the routes take, null where the route clears",
   assert.equal("experienceId" in update.properties, false, "update can't move a type to another experience");
   for (const k of ["soldCount", "position"]) assert.equal(k in create.properties || k in update.properties, false, `${k} is never sent`);
   for (const k of CLEARABLE) assert.ok([update.properties[k].type].flat().includes("null"), `${k} can't be cleared`);
-  for (const k of ["name", "priceInPence", "isActive", "minQuantity", "maxQuantity"]) assert.equal([update.properties[k].type].flat().includes("null"), false, `${k} isn't clearable on the route`);
+  for (const k of ["name", "priceInPence", "isActive", "minQuantity", "maxQuantity", "isExtra"]) assert.equal([update.properties[k].type].flat().includes("null"), false, `${k} isn't clearable on the route`);
   for (const k of ["earlyBirdUntil", "availableFrom", "availableUntil"]) {
     assert.match(update.properties[k].description, /YYYY-MM-DD/, k);
     assert.match(update.properties[k].description, /timezone/, k);
@@ -111,6 +111,16 @@ test("update: the fields the route already took (ages, per order, allocation, pe
   const body = { minAge: 4, maxAge: 15, minQuantity: 1, maxQuantity: 6, totalAllocation: 40, sessionId: "ses_fri", isActive: false, priceInPence: 900, name: "Child" };
   const { requests } = await call("uiiq_ticket_type_update", { id: "tt_child", ...body }, [200, TYPE]);
   assert.deepEqual(requests, [{ method: "PATCH", path: "/admin/ticket-types/tt_child", body }]);
+});
+
+// Extras (UiiQ-platform, 2 Nov 2026): a type sold only after a ticket, such as a lesson before the event.
+test("create and update send isExtra as given, true or false", async () => {
+  const lesson = { experienceId: "exp_show", name: "Lesson", priceInPence: 600, sessionId: "ses_lesson", isExtra: true };
+  const created = await call("uiiq_ticket_type_create", lesson, [201, { ticketType: TYPE }]);
+  assert.deepEqual(created.requests, [{ method: "POST", path: "/admin/ticket-types", body: lesson }]);
+  const updated = await call("uiiq_ticket_type_update", { id: "tt_lesson", isExtra: false }, [200, TYPE]);
+  assert.deepEqual(updated.requests, [{ method: "PATCH", path: "/admin/ticket-types/tt_lesson", body: { isExtra: false } }]);
+  assert.match(tools.uiiq_ticket_type_create.inputSchema.properties.isExtra.description, /never sold on its own/);
 });
 
 test("update: the route's refusal is the error", async () => {
