@@ -56,7 +56,7 @@ test("every tool is named uiiq_competition_* and describes itself", () => {
     assert.ok(t.description.length > 20, name);
     assert.equal(t.inputSchema.type, "object", name);
   }
-  assert.equal(Object.keys(tools).length, 37);
+  assert.equal(Object.keys(tools).length, 38);
 });
 
 test("each tool calls its own route, with its own method and body", async () => {
@@ -74,6 +74,8 @@ test("each tool calls its own route, with its own method and body", async () => 
     ["uiiq_competition_entry_update", { entryId: "e1", scores: { story: 8 } }, "PATCH", "/competitions/entries/e1", { scores: { story: 8 } }],
     ["uiiq_competition_nominee_confirm", { entryId: "e1", answeredBy: "nominee", how: "phone", items: {} }, "POST", "/competitions/entries/e1/nominee-confirmation", { answeredBy: "nominee", how: "phone", items: {} }],
     ["uiiq_competition_entry_erase", { entryId: "e1", confirm: true }, "DELETE", "/competitions/entries/e1", undefined],
+    ["uiiq_competition_entry_leave_out", { entryId: "e1" }, "POST", "/competitions/entries/e1/leave-out", undefined],
+    ["uiiq_competition_update", { id: "c1", conversionReport: true, publishTerms: true }, "PATCH", "/competitions/c1", { conversionReport: true, publishTerms: true }],
     ["uiiq_competition_erase_address", { email: "jo@example.com", confirm: true }, "POST", "/competitions/erase", { email: "jo@example.com" }],
     ["uiiq_competition_post_draft", { id: "c1", roundId: "r1", stage: "shortlist" }, "POST", "/competitions/c1/rounds/r1/posts/shortlist", undefined],
     ["uiiq_competition_round_posts", { id: "c1", roundId: "r1" }, "GET", "/competitions/c1/rounds/r1/posts", undefined],
@@ -806,4 +808,15 @@ test("the type picker and the report (5c): create sends the kind as given; the r
   ({ requests } = await call("uiiq_competition_report", { id: "c1" }, [200, { totals: {}, rounds: [] }]));
   assert.deepEqual(requests, [{ method: "GET", path: "/competitions/c1/report" }]);
   await assert.rejects(() => call("uiiq_competition_report", { id: "../x" }), /must be an id/);
+});
+
+test("who went on to buy or book (Kim, Addenda 20 and 21): the report says what it shows, the switch is a nomination's, and leaving someone out goes to its own route", async () => {
+  assert.match(tools.uiiq_competition_report.description, /conversion/);
+  assert.match(tools.uiiq_competition_report.description, /at least 10 entrants/);
+  assert.doesNotMatch(tools.uiiq_competition_report.description, /aren't counted yet/);
+  for (const t of ["uiiq_competition_create", "uiiq_competition_update"]) assert.equal(tools[t].inputSchema.properties.conversionReport.type, "boolean");
+  assert.match(tools.uiiq_competition_update.inputSchema.properties.conversionReport.description, /never a DRAW/);
+  const { requests } = await call("uiiq_competition_entry_leave_out", { entryId: "e1" }, [200, { leftOutOfCount: true, already: false }]);
+  assert.deepEqual(requests.map((r) => [r.method, r.path]), [["POST", "/competitions/entries/e1/leave-out"]]);
+  await assert.rejects(() => call("uiiq_competition_entry_leave_out", { entryId: ".." }), /must be an id/);
 });
