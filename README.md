@@ -388,7 +388,7 @@ Needs the workspace's `sister_organisations` feature (404 when off). Changes are
 | --- | --- |
 | `uiiq_campaign_get` | Get an email campaign by ID. |
 | `uiiq_campaign_create` | Create a new email campaign. |
-| `uiiq_campaign_update` | Edit a DRAFT or SCHEDULED campaign's `name`, `subject`, `bodyHtml` or `previewText` (the inbox preview line); only the fields given change, at least one. Editing the body here replaces any blocks made in the editor, which then opens the new HTML. A SENT or SENDING campaign is refused (409) in UiiQ's words. |
+| `uiiq_campaign_update` | Edit a DRAFT or SCHEDULED campaign's `name`, `subject`, `bodyHtml` or `previewText` (the inbox preview line); only the fields given change, at least one; `name` and `subject` can't be empty or blank (refused before sending). Editing the body here replaces any blocks made in the editor, which then opens the new HTML. A SENT or SENDING campaign is refused (409) in UiiQ's words. |
 | `uiiq_campaign_prospect_audience` | Preview who a campaign to prospects would go to — nothing is sent or created. |
 | `uiiq_campaign_responses` | Who pressed which reply button on a campaign that carried them: counts for Tell me more / Interested / Not interested (each recipient's latest press), one row per recipient with their contact and matched prospect (null when they are not in the pipeline — nothing is invented), and how many presses looked like a corporate link scanner and were ignored. |
 | `uiiq_campaign_duplicate` | Duplicate an existing campaign. |

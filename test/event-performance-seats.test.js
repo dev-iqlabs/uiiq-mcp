@@ -112,7 +112,7 @@ test("the ends of the range are allowed", async () => {
 });
 
 test("below what's booked: UiiQ's 409 is the error, in its words", async () => {
-  const words = "That's fewer seats than are already booked (12). A performance can never have fewer seats than the seats already booked.";
+  const words = "That's fewer seats than have already been booked (12 booked).";
   await assert.rejects(
     () => call({ id: "ev_hoedown", performanceId: "ses_1", capacity: 5, confirm: true }, [409, { error: words }]),
     (e) => { assert.equal(e.message, words); return true; },

@@ -99,7 +99,8 @@ export const campaignTools = [
     name: "uiiq_campaign_update",
     description:
       "Edit a DRAFT or SCHEDULED email campaign: name, subject, bodyHtml and previewText (the inbox preview line). " +
-      "Only the fields given are sent and changed; give at least one. Editing the body here replaces any blocks made in " +
+      "Only the fields given are sent and changed; give at least one. name and subject can't be empty or blank (refused " +
+      "before anything is sent). Editing the body here replaces any blocks made in " +
       "the editor: the editor then opens this HTML. A SENT or SENDING campaign is refused (409), in UiiQ's words. " +
       "Returns the updated campaign.",
     inputSchema: {
@@ -107,8 +108,8 @@ export const campaignTools = [
       required: ["id"],
       properties: {
         id: { type: "string" },
-        name: { type: "string", description: "Internal label; can't be empty" },
-        subject: { type: "string", description: "Email subject line" },
+        name: { type: "string", minLength: 1, description: "Internal label; can't be empty" },
+        subject: { type: "string", minLength: 1, description: "Email subject line; can't be empty" },
         bodyHtml: { type: "string", description: "The whole email body as HTML. Editing the body here replaces any blocks made in the editor" },
         previewText: { type: "string", description: "The inbox preview line shown after the subject; an empty string clears it" },
         tenant: TENANT_PROP,
@@ -117,6 +118,10 @@ export const campaignTools = [
     async handler({ id, tenant, name, subject, bodyHtml, previewText }) {
       const body = Object.fromEntries(Object.entries({ name, subject, bodyHtml, previewText }).filter(([, v]) => v !== undefined));
       if (Object.keys(body).length === 0) throw new Error("Give at least one of name, subject, bodyHtml or previewText.");
+      // The route stores a blank subject as none, which would blank the draft's subject line.
+      const blank = (v) => typeof v !== "string" || !v.trim();
+      if ("name" in body && blank(body.name)) throw new Error("Name can't be empty");
+      if ("subject" in body && blank(body.subject)) throw new Error("Subject can't be empty");
       const res = await api(tenant)(`/campaigns/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify(body) });
       if (!res.ok) throw await fail(res);
       return res.json();

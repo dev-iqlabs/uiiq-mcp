@@ -124,7 +124,7 @@ test("create and update send isExtra as given, true or false", async () => {
 });
 
 // The price note (UiiQ-platform feat/ticket-price-note, 3 Nov 2026): a short line next to the price.
-test("priceNote: a string of at most 60, described as the note next to the price; an empty string is the clear, not null", () => {
+test("priceNote: a string of at most 60, described as the note next to the price; an empty string clears it", () => {
   for (const name of ["uiiq_ticket_type_create", "uiiq_ticket_type_update"]) {
     const p = tools[name].inputSchema.properties.priceNote;
     assert.equal(p.type, "string", name);
@@ -146,7 +146,7 @@ test("create and update send priceNote as given, and an empty string as an empty
 });
 
 test("a price note the route refuses comes back in its words", async () => {
-  reply = [400, { error: "The price note can be at most 60 characters." }];
+  reply = [400, { error: "priceNote must be at most 60 characters, or nothing" }];
   seen = [];
   await assert.rejects(() => tools.uiiq_ticket_type_update.handler({ id: "tt_adult", priceNote: "x".repeat(61) }), /at most 60 characters/);
   assert.deepEqual(seen, [{ method: "PATCH", path: "/admin/ticket-types/tt_adult", body: { priceNote: "x".repeat(61) } }]);

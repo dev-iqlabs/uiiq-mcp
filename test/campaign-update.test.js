@@ -88,6 +88,19 @@ test("the tenant is not sent in the body", async () => {
   assert.deepEqual(requests[0].body, { subject: "x" });
 });
 
+test("an empty or blank name or subject is refused before anything is called (Lucas I7)", async () => {
+  for (const [field, said] of [["name", /Name can't be empty/], ["subject", /Subject can't be empty/]]) {
+    for (const v of ["", "   ", "\t\n", null]) {
+      await assert.rejects(() => call({ id: "c_1", [field]: v }), said, `${field}=${JSON.stringify(v)}`);
+      assert.deepEqual(seen, [], `${field}=${JSON.stringify(v)} reached UiiQ`);
+    }
+    assert.equal(tools.uiiq_campaign_update.inputSchema.properties[field].minLength, 1, field);
+  }
+  // Refused even alongside a good field, so a blank subject can't ride in with a new body.
+  await assert.rejects(() => call({ id: "c_1", bodyHtml: "<p>New</p>", subject: " " }), /Subject can't be empty/);
+  assert.deepEqual(seen, []);
+});
+
 test("nothing to change is refused before anything is called", async () => {
   await assert.rejects(() => call({ id: "c_1" }), /Give at least one of name, subject, bodyHtml or previewText/);
   assert.deepEqual(seen, []);
