@@ -189,6 +189,35 @@ export const campaignTools = [
     },
   },
   {
+    name: "uiiq_campaign_review",
+    description:
+      "Ask the IQEX email reviewer about a DRAFT or SCHEDULED campaign (free): the subject's verdict and its spam words, the tone " +
+      "against the workspace's Organisation profile, the facts against the Object or Service profile an AI draft was written " +
+      "from, readability, the call to action and a hero image brief. The answer is kept on the campaign (aiReview) and returned " +
+      "as { review }; it is advice and changes nothing in the email. Checks the saved campaign unless subject, preheader or " +
+      "bodyHtml are given. Needs the workspace's email_ai_drafting switch (403); 503 \"The reviewer isn't available yet\" " +
+      "until IQEX's endpoint is configured; 30 checks an hour per workspace (429).",
+    inputSchema: {
+      type: "object",
+      required: ["id"],
+      properties: {
+        id: { type: "string" },
+        subject: { type: "string", description: "Check this subject instead of the saved one" },
+        preheader: { type: "string", description: "Check this preview text instead of the saved one" },
+        bodyHtml: { type: "string", description: "Check this body instead of the saved one" },
+        tenant: TENANT_PROP,
+      },
+    },
+    async handler({ id, subject, preheader, bodyHtml, tenant }) {
+      const res = await api(tenant)(`/campaigns/${encodeURIComponent(id)}/review`, {
+        method: "POST",
+        body: JSON.stringify({ subject, preheader, bodyHtml }),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    },
+  },
+  {
     name: "uiiq_segment_list",
     description: "List contact segments.",
     inputSchema: { type: "object", properties: { tenant: TENANT_PROP } },
