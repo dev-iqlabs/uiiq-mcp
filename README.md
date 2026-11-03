@@ -36,7 +36,7 @@ UIIQ is one subscription whose modules are grouped as **Sell**, **Grow** and **R
 | CRM pipeline | `uiiq_prospect_list/get/create/update`, `uiiq_interaction_*`, `uiiq_followups_due` | Move prospects, suppliers and partners along the pipeline, log and edit interactions, see what follow-ups are due |
 | Find Prospects | `uiiq_prospect_search_*`, `uiiq_prospect_preset_*`, `uiiq_prospect_sweep_start`, `uiiq_prospect_source_*` | Start a search in businesses, acts, tenders or funding mode, save briefs as presets, sweep town by town, review candidates, read the funnel, manage the source registry |
 | Bids and outreach | `uiiq_prospect_job_*`, `uiiq_prospect_video_invite_*`, `uiiq_prospect_ingest` | Adopt tenders and funding calls as bids, send a personalised video hello, bulk-ingest enquiries |
-| Email and SMS campaigns | `uiiq_campaign_*`, `uiiq_sms_*` | Create, duplicate and test-send campaigns, read SMS history |
+| Email and SMS campaigns | `uiiq_campaign_*`, `uiiq_sms_*` | Create, duplicate, test-send and review campaigns, read SMS history |
 | Social and press | `uiiq_social_*`, `uiiq_press_release_*`, `uiiq_journalist_contact_*` | Schedule posts from templates, draft, redraft, approve and distribute press releases |
 | Briefs | `uiiq_grow_brief_morning*`, `uiiq_grow_campaign_brief_generate` | Read or generate the morning brief, turn one campaign brief into channel copy |
 | Ads & Search | `uiiq_ads_*` | The overview, keyword research and rank tracking, the keyword gap against a competitor, local search (map pack, local keywords, nearby competitors), YouTube research, advert videos (generate on an engine, approve, publish, SEO copy, thumbnails), Google campaign controls, Pinterest alerts, Google review reply drafts. Needs `ads_search`; research spends credits |
@@ -392,6 +392,7 @@ Needs the workspace's `sister_organisations` feature (404 when off). Changes are
 | `uiiq_campaign_responses` | Who pressed which reply button on a campaign that carried them: counts for Tell me more / Interested / Not interested (each recipient's latest press), one row per recipient with their contact and matched prospect (null when they are not in the pipeline — nothing is invented), and how many presses looked like a corporate link scanner and were ignored. |
 | `uiiq_campaign_duplicate` | Duplicate an existing campaign. |
 | `uiiq_campaign_test_send` | Send a test email for a campaign. The address must be your own, someone on the workspace team, or on its test list (403 otherwise); 20 an hour per user (429). |
+| `uiiq_campaign_review` | Ask the IQEX email reviewer about a DRAFT or SCHEDULED campaign (free): subject verdict and spam words, tone against the Organisation profile, facts against the Object or Service profile, readability, call to action, a hero image brief. Kept on the campaign and returned as `{ review }`; advice only. The saved campaign unless `subject`, `preheader` or `bodyHtml` are given. Needs `email_ai_drafting` (403); 503 "The reviewer isn't available yet" until IQEX's endpoint is configured; 30 an hour per workspace (429). |
 | `uiiq_segment_list` | List contact segments. |
 | `uiiq_segment_preview` | Preview which contacts match a segment. |
 | `uiiq_campaign_send` | SEND an email campaign to its audience now (subscribed contacts, or the CRM pipeline for a prospects campaign — gated on `prospect_campaigns`). |
@@ -1730,4 +1731,4 @@ Children's records aren't available from the CLI/MCP (Steve, 22 Oct 2026: no AI 
 | `uiiq_workflow_order_assign` | Assign a workflow order to a user in the tenant (assignedUserId null unassigns). |
 | `uiiq_workflow_order_request_approval` | Ask the customer to approve a stage of their order: creates an approval link, moves the order to AWAITING_APPROVAL and EMAILS the customer. |
 
-1191 tools.
+1193 tools.
