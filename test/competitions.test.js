@@ -56,7 +56,8 @@ test("every tool is named uiiq_competition_* and describes itself", () => {
     assert.ok(t.description.length > 20, name);
     assert.equal(t.inputSchema.type, "object", name);
   }
-  assert.equal(Object.keys(tools).length, 38);
+  // 39 with uiiq_competition_designs (UiiQ-platform competitions 5a).
+  assert.equal(Object.keys(tools).length, 39);
 });
 
 test("each tool calls its own route, with its own method and body", async () => {
@@ -832,4 +833,27 @@ test("who went on to buy or book (Kim, Addenda 20 and 21): the report says what 
   const { requests } = await call("uiiq_competition_entry_leave_out", { entryId: "e1" }, [200, { leftOutOfCount: true, already: false }]);
   assert.deepEqual(requests.map((r) => [r.method, r.path]), [["POST", "/competitions/entries/e1/leave-out"]]);
   await assert.rejects(() => call("uiiq_competition_entry_leave_out", { entryId: ".." }), /must be an id/);
+});
+
+test("post designs (UiiQ-platform competitions 5a): the designs listing reads one route; the last chance and the Story are drafted like any stage; postDesigns goes with an update", async () => {
+  let { requests } = await call("uiiq_competition_designs", { id: "c1" }, [200, { enabled: false, designs: [] }]);
+  assert.deepEqual(requests, [{ method: "GET", path: "/competitions/c1/designs" }]);
+  ({ requests } = await call("uiiq_competition_designs", { id: "c1", stage: "story" }, [200, { enabled: true, designs: [] }]));
+  assert.deepEqual(requests, [{ method: "GET", path: "/competitions/c1/designs?stage=story" }]);
+  await assert.rejects(() => call("uiiq_competition_designs", { id: "../x" }), /must be an id/);
+  for (const stage of ["last_chance", "story"]) {
+    ({ requests } = await call("uiiq_competition_post_draft", { id: "c1", roundId: "r1", stage }, [201, { postId: "p1", created: true, warnings: [] }]));
+    assert.deepEqual(requests, [{ method: "POST", path: `/competitions/c1/rounds/r1/posts/${stage}` }]);
+  }
+  const designs = { call: "compcall", story: "compstory", photo: { assetId: 812, fit: "whole", confirmed: true } };
+  ({ requests } = await call("uiiq_competition_update", { id: "c1", postDesigns: designs }, [200, {}]));
+  assert.deepEqual(requests, [{ method: "PATCH", path: "/competitions/c1", body: { postDesigns: designs } }]);
+  for (const t of ["uiiq_competition_create", "uiiq_competition_update"]) assert.equal(tools[t].inputSchema.properties.postDesigns.type, "object");
+  assert.match(tools.uiiq_competition_update.inputSchema.properties.postDesigns.description, /never a person, not even on the product/);
+  // Lucas, L6 on #1328: the tick is the person's own statement, never an agent's.
+  assert.match(tools.uiiq_competition_update.inputSchema.properties.postDesigns.description, /ONLY when the person you are working for has looked at the photo themselves/);
+  assert.match(tools.uiiq_competition_update.inputSchema.properties.postDesigns.description, /never on your own judgement/);
+  assert.match(tools.uiiq_competition_post_draft.description, /a DRAW's last chance is a Story, never a feed post/);
+  assert.match(tools.uiiq_competition_post_draft.description, /posted from a phone and never by UiiQ/);
+  assert.deepEqual(tools.uiiq_competition_post_draft.inputSchema.properties.stage.enum, ["call", "shortlist", "winner", "vote", "last_chance", "story"]);
 });

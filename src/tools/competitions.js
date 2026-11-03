@@ -84,8 +84,9 @@ function entrySummary(e) {
   return { id: e.id, status: e.status, weightedScore: e.weightedScore, publishable: e.publishable, ...(Array.isArray(e.postWarnings) ? { postWarnings: e.postWarnings } : {}) };
 }
 
-// A round's posts (UiiQ-platform #953): the call, the shortlist and the winner; only the last two name anyone.
-const POST_STAGES = ["call", "shortlist", "winner", "vote"];
+// A round's posts (UiiQ-platform #953): the call, the shortlist, the vote and the winner; only the last three name anyone.
+// The last chance and the Story (competitions 5a) name nobody.
+const POST_STAGES = ["call", "shortlist", "winner", "vote", "last_chance", "story"];
 const NAMING_STAGES = ["shortlist", "winner", "vote"];
 
 const ROUND_PROPS = {
@@ -140,7 +141,12 @@ const COMPETITION_PROPS = {
   criteria: { type: "array", items: { type: "object", properties: { key: { type: "string" }, label: { type: "string" }, weight: { type: "number" } } }, description: "Up to 10 judging criteria, each with a weight 1-100 (relative)" },
   judgeUserIds: { type: "array", items: { type: "string" }, description: "This workspace's people (uiiq_task_members); none = owners/admins judge" },
   socialAccountIds: { type: "array", items: { type: "string" }, description: "This workspace's social accounts the round's posts are for (uiiq_social_accounts). A DRAW is entered by commenting on them, so it needs at least one to go live, and its call goes only to the Facebook and Instagram ones" },
-  postTemplates: { type: "object", description: "{ call, shortlist, winner, delivery }: the wording of each of the round's posts. Placeholders: {competition} {round} {closes} {prize} {promoter} {eligibility} {link} {rules}. A DRAW's call says how to enter with {enter} (\"comment below\", with the entry word when there is one) and must have {enter} and {closes}; a DRAW has no shortlist post. A NOMINATION's call may place {nominate}, the \"Comment NOMINATE and we'll message you the form\" line: while the comment word is answered the line is always in the call (at the end when {nominate} isn't used), otherwise it's left out" },
+  postTemplates: { type: "object", description: "{ call, last_chance, shortlist, winner, vote, delivery }: the wording of each of the round's posts (a Story has none: its note is Kim's). The last chance (a NOMINATION's or ENTRY's) never asks for comments; {how_many} is \"One nomination per person.\" or the cap. {delivery} places \"Delivery of the prize costs £3.95.\" in the call and the last chance when the prize code's delivery is charged (added at the end when left out). Placeholders: {competition} {round} {closes} {prize} {promoter} {eligibility} {link} {rules}. A DRAW's call says how to enter with {enter} (\"comment below\", with the entry word when there is one) and must have {enter} and {closes}; a DRAW has no shortlist post. A NOMINATION's call may place {nominate}, the \"Comment NOMINATE and we'll message you the form\" line: while the comment word is answered the line is always in the call (at the end when {nominate} isn't used), otherwise it's left out" },
+  // Branded images per stage (UiiQ-platform competitions 5a): IQEX's competition designs, only with COMPETITION_DESIGNS on.
+  postDesigns: {
+    type: "object",
+    description: "The image each stage's post is made with (uiiq_competition_designs lists them): { call, last_chance, story, vote, winner } each an IQEX competition layout (compcall, complast, compstory…) or null for plain; colours { bg_colour: \"#0B1F3A\", … } (IQEX refuses a pair that can't be read); photo { assetId } or { url } (https), fit \"fill\" or \"whole\", for the call and the last chance only: the prize itself, never a person, not even on the product, so it needs confirmed: true (\"This photo shows the prize itself, and there's no person in it, not even on the product.\"). Send confirmed: true ONLY when the person you are working for has looked at the photo themselves and confirmed it shows the prize and no person: never on your own judgement, and never for a photo nobody has looked at. The tick is recorded as theirs. The same photo kept keeps its tick. The shape is checked at save; whether a design exists, when a post is drafted. Not in the terms, so saved even on a live competition. Each image is charged to the workspace's IQEX credits, once. Posts already drafted change when drafted again",
+  },
   entriesPerEmail: { type: "number", description: "1-20, per round" },
   retentionDays: { type: "number", description: "7-90" },
   // Who went on to buy or book (UiiQ-platform, Kim's Addenda 20 and 21).
@@ -216,6 +222,23 @@ export const competitionTools = [
     inputSchema: { type: "object", required: ["id"], properties: { id: { type: "string" }, tenant: TENANT_PROP } },
     async handler({ id, tenant }) {
       return call(tenant, `/competitions/${seg(id)}/report`);
+    },
+  },
+  {
+    name: "uiiq_competition_designs",
+    description: "The IQEX designs this workspace can use for each stage's image (reads only; any staff login): IQEX's competition family only, never a promo layout. Each with its stage, layout, name, size (4x5 for feed posts, 9x16 for the Story), photo slots and preview; the colours they take, with defaults; the competition's short address once it has one (app.uiiq.co.uk/c/{code}: its page, or a round's vote while one is open); and the prize photo's tick. With competition designs switched off (COMPETITION_DESIGNS), { enabled: false, designs: [] } and every post stays plain. Choose with uiiq_competition_update postDesigns.",
+    inputSchema: {
+      type: "object",
+      required: ["id"],
+      properties: {
+        id: { type: "string" },
+        stage: { type: "string", enum: ["call", "last_chance", "story", "vote", "winner"], description: "Only this stage's designs" },
+        tenant: TENANT_PROP,
+      },
+    },
+    async handler({ id, stage, tenant }) {
+      const qs = stage ? `?stage=${encodeURIComponent(stage)}` : "";
+      return call(tenant, `/competitions/${seg(id)}/designs${qs}`);
     },
   },
   {
@@ -559,7 +582,7 @@ export const competitionTools = [
   },
   {
     name: "uiiq_competition_post_draft",
-    description: "A round's post as a DRAFT social post, or the one already drafted: never scheduled or published here. stage: call (the call to enter), shortlist (before Decide: only shortlisted nominees who agreed, by first name, never a photo, with the round's card for Instagram), vote (once the round's vote is set: every finalist numbered, named only as far as they agree now, otherwise \"Finalist {n}\", how to vote by comment or on the vote page, and who decides; with the vote's card; never to TikTok), winner (after Decide: named only as far as they agreed). Goes to the competition's social accounts. A DRAW has no shortlist post (refused, 409), and its call goes only to the Facebook and Instagram accounts, since entries are comments on it: any others are left out with a warning. Returns { postId, created, warnings }; check it and schedule it in Social.",
+    description: "A round's post as a DRAFT social post, or the one already drafted: never scheduled or published here. stage: call (the call to enter), shortlist (before Decide: only shortlisted nominees who agreed, by first name, never a photo, with the round's card for Instagram), vote (once the round's vote is set: every finalist numbered, named only as far as they agree now, otherwise \"Finalist {n}\", how to vote by comment or on the vote page, and who decides; with the vote's card; never to TikTok), winner (after Decide: named only as far as they agreed), last_chance (in the round's final 48 hours while it's open: Kim's reminder, which never asks for comments; a DRAW's last chance is a Story, never a feed post), story (while the round is open: how to enter as a 9:16 Story, all picture, posted from a phone and never by UiiQ; refused without a Story design chosen, or before its generated terms are in force; its text is a note for staff). Goes to the competition's social accounts (a Story to the Instagram and Facebook ones). With a design chosen for the stage (postDesigns) and COMPETITION_DESIGNS on, the post carries IQEX's image, made from the competition's own details; if IQEX refuses (too long, low contrast, no credits, unavailable), the post is plain and the warning says why; drafting again remakes an image that's missing or out of date (a retry isn't charged twice). A post whose image's details have changed is refused at send, and a Story's Save image once its round has closed. A DRAW has no shortlist post (refused, 409), and its call goes only to the Facebook and Instagram accounts, since entries are comments on it: any others are left out with a warning. Returns { postId, created, warnings }; check it and schedule it in Social.",
     inputSchema: {
       type: "object",
       required: ["id", "roundId", "stage"],
@@ -577,7 +600,7 @@ export const competitionTools = [
   },
   {
     name: "uiiq_competition_round_posts",
-    description: "A round's posts in Social, by stage: each one's post id, status, when it's scheduled or went out, and any mark on it (to take down, or to check after an erasure). A marked post won't be sent.",
+    description: "A round's posts in Social, by stage (call, last_chance, story, shortlist, winner, vote): each one's post id, status, when it's scheduled or went out, any mark on it (to take down, or to check after an erasure), whether it's finished on a phone (a Story), and its image: { made, error } (made by IQEX, or plain and why). A marked post won't be sent.",
     inputSchema: {
       type: "object",
       required: ["id", "roundId"],
