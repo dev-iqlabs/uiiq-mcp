@@ -56,8 +56,8 @@ test("every tool is named uiiq_competition_* and describes itself", () => {
     assert.ok(t.description.length > 20, name);
     assert.equal(t.inputSchema.type, "object", name);
   }
-  // 39 with uiiq_competition_designs (UiiQ-platform competitions 5a).
-  assert.equal(Object.keys(tools).length, 39);
+  // 40 with uiiq_competition_designs (UiiQ-platform competitions 5a) and uiiq_competition_leave_out_by_email.
+  assert.equal(Object.keys(tools).length, 40);
 });
 
 test("each tool calls its own route, with its own method and body", async () => {
@@ -76,6 +76,7 @@ test("each tool calls its own route, with its own method and body", async () => 
     ["uiiq_competition_nominee_confirm", { entryId: "e1", answeredBy: "nominee", how: "phone", items: {} }, "POST", "/competitions/entries/e1/nominee-confirmation", { answeredBy: "nominee", how: "phone", items: {} }],
     ["uiiq_competition_entry_erase", { entryId: "e1", confirm: true }, "DELETE", "/competitions/entries/e1", undefined],
     ["uiiq_competition_entry_leave_out", { entryId: "e1" }, "POST", "/competitions/entries/e1/leave-out", undefined],
+    ["uiiq_competition_leave_out_by_email", { id: "c1", email: " gone@example.com " }, "POST", "/competitions/c1/leave-out", { email: "gone@example.com" }],
     ["uiiq_competition_update", { id: "c1", conversionReport: true, publishTerms: true }, "PATCH", "/competitions/c1", { conversionReport: true, publishTerms: true }],
     ["uiiq_competition_erase_address", { email: "jo@example.com", confirm: true }, "POST", "/competitions/erase", { email: "jo@example.com" }],
     ["uiiq_competition_post_draft", { id: "c1", roundId: "r1", stage: "shortlist" }, "POST", "/competitions/c1/rounds/r1/posts/shortlist", undefined],
@@ -817,6 +818,18 @@ test("the type picker and the report (5c): create sends the kind as given; the r
   ({ requests } = await call("uiiq_competition_report", { id: "c1" }, [200, { totals: {}, rounds: [] }]));
   assert.deepEqual(requests, [{ method: "GET", path: "/competitions/c1/report" }]);
   await assert.rejects(() => call("uiiq_competition_report", { id: "../x" }), /must be an id/);
+});
+
+test("leave out by email (Kim, Addendum 23 W4): the owner's, by address, its id checked and an address required before anything is sent", async () => {
+  assert.match(tools.uiiq_competition_leave_out_by_email.description, /owner only/);
+  assert.match(tools.uiiq_competition_leave_out_by_email.description, /keyed hash/);
+  // UiiQ-platform #1331, Lucas L1: never whether it was already there; a limit an hour.
+  assert.doesNotMatch(tools.uiiq_competition_leave_out_by_email.description, /already \}/);
+  assert.match(tools.uiiq_competition_leave_out_by_email.description, /never whether the address was already recorded/);
+  assert.match(tools.uiiq_competition_leave_out_by_email.description, /429 past 50/);
+  assert.deepEqual(tools.uiiq_competition_leave_out_by_email.inputSchema.required, ["id", "email"]);
+  await assert.rejects(() => call("uiiq_competition_leave_out_by_email", { id: "../x", email: "a@example.com" }), /must be an id/);
+  await assert.rejects(() => call("uiiq_competition_leave_out_by_email", { id: "c1", email: "  " }), /email address/);
 });
 
 test("who went on to buy or book (Kim, Addenda 20 and 21): the report says what it shows, the switch is a nomination's, and leaving someone out goes to its own route", async () => {
