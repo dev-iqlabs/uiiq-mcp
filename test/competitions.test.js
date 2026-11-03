@@ -837,6 +837,9 @@ test("post designs (UiiQ-platform competitions 5a): the designs listing reads on
   assert.deepEqual(requests, [{ method: "PATCH", path: "/competitions/c1", body: { postDesigns: designs } }]);
   for (const t of ["uiiq_competition_create", "uiiq_competition_update"]) assert.equal(tools[t].inputSchema.properties.postDesigns.type, "object");
   assert.match(tools.uiiq_competition_update.inputSchema.properties.postDesigns.description, /never a person, not even on the product/);
+  // Lucas, L6 on #1328: the tick is the person's own statement, never an agent's.
+  assert.match(tools.uiiq_competition_update.inputSchema.properties.postDesigns.description, /ONLY when the person you are working for has looked at the photo themselves/);
+  assert.match(tools.uiiq_competition_update.inputSchema.properties.postDesigns.description, /never on your own judgement/);
   assert.match(tools.uiiq_competition_post_draft.description, /a DRAW's last chance is a Story, never a feed post/);
   assert.match(tools.uiiq_competition_post_draft.description, /posted from a phone and never by UiiQ/);
   assert.deepEqual(tools.uiiq_competition_post_draft.inputSchema.properties.stage.enum, ["call", "shortlist", "winner", "vote", "last_chance", "story"]);
