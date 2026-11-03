@@ -87,10 +87,12 @@ test("each tool calls its own route, with its own method and body", async () => 
     ["uiiq_competition_round_draw", { id: "c1", roundId: "r1", confirm: true }, "POST", "/competitions/c1/rounds/r1/draw", undefined],
     // The public vote (UiiQ-platform competitions v2, phase 4).
     ["uiiq_competition_round_vote_get", { id: "c1", roundId: "r1" }, "GET", "/competitions/c1/rounds/r1/vote", undefined],
-    ["uiiq_competition_round_vote_set", { id: "c1", roundId: "r1", voteOpensAt: "2026-11-08T10:00:00Z", voteClosesAt: "2026-11-09T20:00:00Z", finalists: ["e1", "e2"], confirm: true }, "PUT", "/competitions/c1/rounds/r1/vote", { voteOpensAt: "2026-11-08T10:00:00Z", voteClosesAt: "2026-11-09T20:00:00Z", finalists: ["e1", "e2"] }],
+    // The window is the round's now (UiiQ-platform, Kim's Addendum 21): the finalists alone.
+    ["uiiq_competition_round_vote_set", { id: "c1", roundId: "r1", finalists: ["e1", "e2"], confirm: true }, "PUT", "/competitions/c1/rounds/r1/vote", { finalists: ["e1", "e2"] }],
+    ["uiiq_competition_round_update", { id: "c1", roundId: "r1", voteOpensAt: "2026-11-08T10:00:00Z", voteClosesAt: "2026-11-09T20:00:00Z" }, "PATCH", "/competitions/c1/rounds/r1", { voteOpensAt: "2026-11-08T10:00:00Z", voteClosesAt: "2026-11-09T20:00:00Z" }],
     ["uiiq_competition_round_votes", { id: "c1", roundId: "r1" }, "GET", "/competitions/c1/rounds/r1/vote/votes", undefined],
     ["uiiq_competition_vote_discount", { id: "c1", roundId: "r1", voteId: "v1", evidence: "Bought votes", confirm: true }, "PATCH", "/competitions/c1/rounds/r1/vote/votes/v1", { evidence: "Bought votes" }],
-    ["uiiq_competition_vote_discount", { id: "c1", roundId: "r1", voteId: "v1", evidence: "Sam voted both ways", reason: "DUPLICATE", confirm: true }, "PATCH", "/competitions/c1/rounds/r1/vote/votes/v1", { evidence: "Sam voted both ways", reason: "DUPLICATE" }],
+    ["uiiq_competition_vote_discount", { id: "c1", roundId: "r1", voteId: "v1", evidence: "Sam voted both ways", reason: "DUPLICATE", earlierVoteId: "v0", confirm: true }, "PATCH", "/competitions/c1/rounds/r1/vote/votes/v1", { evidence: "Sam voted both ways", reason: "DUPLICATE", earlierVoteId: "v0" }],
     ["uiiq_competition_round_vote_voter", { id: "c1", roundId: "r1", email: "sam@example.com", author: "INSTAGRAM:61" }, "POST", "/competitions/c1/rounds/r1/vote/voter", { email: "sam@example.com", author: "INSTAGRAM:61" }],
     ["uiiq_competition_round_vote_voter", { id: "c1", roundId: "r1", author: "@sam" }, "POST", "/competitions/c1/rounds/r1/vote/voter", { author: "@sam" }],
     ["uiiq_competition_round_vote_tie_lock", { id: "c1", roundId: "r1", confirm: true }, "POST", "/competitions/c1/rounds/r1/vote/tie/lock", undefined],
@@ -222,6 +224,11 @@ test("rounds: one round, or weekly with themes", async () => {
   assert.deepEqual(r.requests[0], { method: "POST", path: "/competitions/c1/rounds", body: { round: { theme: "Remembrance", opensAt: "2026-11-02T00:00:00Z", closesAt: "2026-11-06T18:00:00Z" } } });
   r = await call("uiiq_competition_rounds_add", { id: "c1", opensAt: "2026-11-02T00:00:00Z", closesAt: "2026-11-06T18:00:00Z", weeks: 4, themes: ["A", "B"] });
   assert.deepEqual(r.requests[0].body, { weekly: { first: { opensAt: "2026-11-02T00:00:00Z", closesAt: "2026-11-06T18:00:00Z" }, count: 4, themes: ["A", "B"] } });
+  // A public vote's window goes with the round (UiiQ-platform, Kim's Addendum 21), weekly rounds included.
+  const vote = { voteOpensAt: "2026-11-08T10:00:00Z", voteClosesAt: "2026-11-10T20:00:00Z" };
+  r = await call("uiiq_competition_rounds_add", { id: "c1", opensAt: "2026-11-02T00:00:00Z", closesAt: "2026-11-06T18:00:00Z", ...vote, weeks: 2 });
+  assert.deepEqual(r.requests[0].body, { weekly: { first: { opensAt: "2026-11-02T00:00:00Z", closesAt: "2026-11-06T18:00:00Z", ...vote }, count: 2 } });
+  assert.ok(tools.uiiq_competition_round_vote_set.inputSchema.required.every((k) => k !== "voteOpensAt" && k !== "voteClosesAt"));
 });
 
 test("the nominee confirmation sends exactly what was agreed, all four items", async () => {
@@ -707,7 +714,7 @@ test("the vote tools say the count is private until confirmations close, and nev
   assert.match(tools.uiiq_competition_round_vote_get.description, /DISPOSABLE_ADDRESS \(from a temporary or disposable email address\)/);
   assert.match(tools.uiiq_competition_round_vote_get.description, /FINALIST_LEFT \(for a finalist who has left the vote\)/);
   assert.match(tools.uiiq_competition_round_vote_get.description, /numbersPublishedAt/);
-  assert.match(tools.uiiq_competition_round_vote_set.description, /only the times can change/);
+  assert.match(tools.uiiq_competition_round_vote_set.description, /they stay as published/);
   assert.match(tools.uiiq_competition_round_vote_notice_done.description, /Nothing is posted from here/);
 });
 
@@ -736,7 +743,7 @@ test("the generated terms (5b): read; publish is a dry run until confirm: true, 
 
 test("published terms (UiiQ-platform #1303): publishTerms on every tool whose route takes it, prizeWordingOnly on update, sent only when true", async () => {
   const say = /save and publish a new terms version in the same step, when the published terms allow the change/;
-  for (const name of ["uiiq_competition_update", "uiiq_competition_round_update", "uiiq_competition_terms_settings", "uiiq_competition_rounds_add", "uiiq_competition_round_vote_set"]) {
+  for (const name of ["uiiq_competition_update", "uiiq_competition_round_update", "uiiq_competition_terms_settings", "uiiq_competition_rounds_add"]) {
     const p = tools[name].inputSchema.properties.publishTerms;
     assert.equal(p?.type, "boolean", name);
     assert.match(p.description, say, name);
@@ -744,11 +751,13 @@ test("published terms (UiiQ-platform #1303): publishTerms on every tool whose ro
   }
   assert.equal(tools.uiiq_competition_update.inputSchema.properties.prizeWordingOnly?.type, "boolean");
   assert.deepEqual(Object.values(tools).filter((t) => t.inputSchema.properties?.prizeWordingOnly).map((t) => t.name), ["uiiq_competition_update"]);
+  // The finalists aren't in the terms (UiiQ-platform, Kim's Addendum 21): setting them never publishes a version.
+  assert.equal(tools.uiiq_competition_round_vote_set.inputSchema.properties.publishTerms, undefined);
   // Creating one has nothing published yet.
   assert.equal(tools.uiiq_competition_create.inputSchema.properties.publishTerms, undefined);
 
   const round = { opensAt: "2026-11-02T00:00:00Z", closesAt: "2026-11-06T18:00:00Z" };
-  const vote = { voteOpensAt: "2026-11-08T10:00:00Z", voteClosesAt: "2026-11-09T20:00:00Z", finalists: ["e1", "e2"] };
+  const vote = { finalists: ["e1", "e2"] };
   const cases = [
     ["uiiq_competition_update", { id: "c1", prizeDescription: "A silver coin", publishTerms: true, prizeWordingOnly: true }, "PATCH", "/competitions/c1", { prizeDescription: "A silver coin", publishTerms: true, prizeWordingOnly: true }],
     ["uiiq_competition_round_update", { id: "c1", roundId: "r1", theme: "Bonfire", publishTerms: true }, "PATCH", "/competitions/c1/rounds/r1", { theme: "Bonfire", publishTerms: true }],
@@ -757,19 +766,18 @@ test("published terms (UiiQ-platform #1303): publishTerms on every tool whose ro
     ["uiiq_competition_rounds_add", { id: "c1", ...round, publishTerms: true }, "POST", "/competitions/c1/rounds", { round, publishTerms: true }],
     ["uiiq_competition_rounds_add", { id: "c1", ...round, weeks: 2, publishTerms: true }, "POST", "/competitions/c1/rounds", { weekly: { first: round, count: 2 }, publishTerms: true }],
     ["uiiq_competition_rounds_add", { id: "c1", ...round }, "POST", "/competitions/c1/rounds", { round }],
-    ["uiiq_competition_round_vote_set", { id: "c1", roundId: "r1", ...vote, publishTerms: true, confirm: true }, "PUT", "/competitions/c1/rounds/r1/vote", { ...vote, publishTerms: true }],
     ["uiiq_competition_round_vote_set", { id: "c1", roundId: "r1", ...vote, confirm: true }, "PUT", "/competitions/c1/rounds/r1/vote", vote],
   ];
   for (const [name, args, method, path, body] of cases) {
     const { requests } = await call(name, args);
     assert.deepEqual(requests, [{ method, path, body }], name);
   }
-  // publishTerms alone is nothing to change; the vote's dry run sends nothing and shows it.
+  // publishTerms alone is nothing to change; the vote's dry run sends nothing, and never a publishTerms its route doesn't read.
   await assert.rejects(() => call("uiiq_competition_terms_settings", { id: "c1", publishTerms: true }), /generatedTerms, termsFields, or both/);
   const { result, requests } = await call("uiiq_competition_round_vote_set", { id: "c1", roundId: "r1", ...vote, publishTerms: true });
   assert.equal(requests.length, 0);
   assert.equal(result.dryRun, true);
-  assert.equal(result.publishTerms, true);
+  assert.equal(result.publishTerms, undefined);
 });
 
 test("published terms: a 409 that needs a new version, or a prize-wording tick, says which flag answers it", async () => {
@@ -815,6 +823,11 @@ test("who went on to buy or book (Kim, Addenda 20 and 21): the report says what 
   assert.match(tools.uiiq_competition_report.description, /conversion/);
   assert.match(tools.uiiq_competition_report.description, /at least 10 entrants/);
   assert.doesNotMatch(tools.uiiq_competition_report.description, /aren't counted yet/);
+  // The shape after UiiQ-platform #1321's review (Lucas M1, M3): no total_only; smallRounds; the key.
+  assert.doesNotMatch(tools.uiiq_competition_report.description, /total_only/);
+  assert.match(tools.uiiq_competition_report.description, /smallRounds/);
+  assert.match(tools.uiiq_competition_report.description, /fewer than 10 entrants/);
+  assert.match(tools.uiiq_competition_entry_leave_out.description, /503 while UiiQ's COMPETITION_CONVERSION_KEY isn't set/);
   for (const t of ["uiiq_competition_create", "uiiq_competition_update"]) assert.equal(tools[t].inputSchema.properties.conversionReport.type, "boolean");
   assert.match(tools.uiiq_competition_update.inputSchema.properties.conversionReport.description, /never a DRAW/);
   const { requests } = await call("uiiq_competition_entry_leave_out", { entryId: "e1" }, [200, { leftOutOfCount: true, already: false }]);
@@ -837,6 +850,9 @@ test("post designs (UiiQ-platform competitions 5a): the designs listing reads on
   assert.deepEqual(requests, [{ method: "PATCH", path: "/competitions/c1", body: { postDesigns: designs } }]);
   for (const t of ["uiiq_competition_create", "uiiq_competition_update"]) assert.equal(tools[t].inputSchema.properties.postDesigns.type, "object");
   assert.match(tools.uiiq_competition_update.inputSchema.properties.postDesigns.description, /never a person, not even on the product/);
+  // Lucas, L6 on #1328: the tick is the person's own statement, never an agent's.
+  assert.match(tools.uiiq_competition_update.inputSchema.properties.postDesigns.description, /ONLY when the person you are working for has looked at the photo themselves/);
+  assert.match(tools.uiiq_competition_update.inputSchema.properties.postDesigns.description, /never on your own judgement/);
   assert.match(tools.uiiq_competition_post_draft.description, /a DRAW's last chance is a Story, never a feed post/);
   assert.match(tools.uiiq_competition_post_draft.description, /posted from a phone and never by UiiQ/);
   // 5a-2: the vote's and the winner's cards on a frame, names never sent.
