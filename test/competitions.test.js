@@ -814,6 +814,10 @@ test("the type picker and the report (5c): create sends the kind as given; the r
 test("leave out by email (Kim, Addendum 23 W4): the owner's, by address, its id checked and an address required before anything is sent", async () => {
   assert.match(tools.uiiq_competition_leave_out_by_email.description, /owner only/);
   assert.match(tools.uiiq_competition_leave_out_by_email.description, /keyed hash/);
+  // UiiQ-platform #1331, Lucas L1: never whether it was already there; a limit an hour.
+  assert.doesNotMatch(tools.uiiq_competition_leave_out_by_email.description, /already \}/);
+  assert.match(tools.uiiq_competition_leave_out_by_email.description, /never whether the address was already recorded/);
+  assert.match(tools.uiiq_competition_leave_out_by_email.description, /429 past 50/);
   assert.deepEqual(tools.uiiq_competition_leave_out_by_email.inputSchema.required, ["id", "email"]);
   await assert.rejects(() => call("uiiq_competition_leave_out_by_email", { id: "../x", email: "a@example.com" }), /must be an id/);
   await assert.rejects(() => call("uiiq_competition_leave_out_by_email", { id: "c1", email: "  " }), /email address/);
