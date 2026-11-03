@@ -860,4 +860,18 @@ export const competitionTools = [
       return keptWarning(await call(tenant, "/competitions/erase", send("POST", who)));
     },
   },
+  // Kim's Addendum 23 W4 (UiiQ-platform, after #1321): an objection recorded by address.
+  {
+    name: "uiiq_competition_leave_out_by_email",
+    description: "Leave someone out of a competition's count of entrants who went on to buy or book, by their email address (the workspace's owner only; audited without the address). For someone who asked to be left out after their entries were deleted, or to record an objection or an act again after a key change. UiiQ keeps only a keyed hash of the address, for this competition: none of their entries in it is counted, later ones included. A round already counted keeps its totals, which name nobody. Answers { leftOutOfCount: true, already }; again changes nothing. 403 for anyone but the owner, 404 for another workspace's competition, 400 for anything that isn't an address, 503 while UiiQ's COMPETITION_CONVERSION_KEY isn't set. For someone with a live entry, uiiq_competition_entry_leave_out does the same from the entry.",
+    inputSchema: {
+      type: "object",
+      required: ["id", "email"],
+      properties: { id: { type: "string", description: "The competition" }, email: { type: "string", description: "The address they entered with (or the act's)" }, tenant: TENANT_PROP },
+    },
+    async handler({ id, email, tenant }) {
+      if (typeof email !== "string" || !email.trim()) throw new Error("Give the email address they entered with");
+      return call(tenant, `/competitions/${seg(id)}/leave-out`, send("POST", { email: email.trim() }));
+    },
+  },
 ];
