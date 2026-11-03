@@ -822,6 +822,11 @@ test("who went on to buy or book (Kim, Addenda 20 and 21): the report says what 
   assert.match(tools.uiiq_competition_report.description, /conversion/);
   assert.match(tools.uiiq_competition_report.description, /at least 10 entrants/);
   assert.doesNotMatch(tools.uiiq_competition_report.description, /aren't counted yet/);
+  // The shape after UiiQ-platform #1321's review (Lucas M1, M3): no total_only; smallRounds; the key.
+  assert.doesNotMatch(tools.uiiq_competition_report.description, /total_only/);
+  assert.match(tools.uiiq_competition_report.description, /smallRounds/);
+  assert.match(tools.uiiq_competition_report.description, /fewer than 10 entrants/);
+  assert.match(tools.uiiq_competition_entry_leave_out.description, /503 while UiiQ's COMPETITION_CONVERSION_KEY isn't set/);
   for (const t of ["uiiq_competition_create", "uiiq_competition_update"]) assert.equal(tools[t].inputSchema.properties.conversionReport.type, "boolean");
   assert.match(tools.uiiq_competition_update.inputSchema.properties.conversionReport.description, /never a DRAW/);
   const { requests } = await call("uiiq_competition_entry_leave_out", { entryId: "e1" }, [200, { leftOutOfCount: true, already: false }]);
