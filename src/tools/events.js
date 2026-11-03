@@ -245,6 +245,45 @@ export const eventsTools = [
     },
   },
   {
+    name: "uiiq_event_performance_seats",
+    description: "Change how many seats ONE of an event's performances has: capacity, a whole number from 1 to 100000, checked here before anything is sent. UiiQ never sets it below the seats already booked: that is REFUSED (409), and UiiQ's refusals come back as the error in its own words. Without confirm: true it is ALWAYS a dry run that changes nothing. Owner or admin; needs the `events` feature.",
+    inputSchema: {
+      type: "object",
+      required: ["id", "performanceId", "capacity"],
+      properties: {
+        id: { type: "string", description: "The event's id" },
+        performanceId: { type: "string", description: "The performance (session) id, from uiiq_event_tickets" },
+        capacity: { type: "integer", minimum: 1, maximum: 100000, description: "How many seats the performance has in all, sold ones included" },
+        confirm: { type: "boolean", description: "true = do it; omit for the dry run" },
+        tenant: TENANT_PROP,
+      },
+    },
+    async handler({ id, performanceId, capacity, tenant, confirm }) {
+      if (!Number.isInteger(capacity) || capacity < 1 || capacity > 100000) {
+        throw new Error("capacity must be a whole number from 1 to 100000");
+      }
+      // It changes how many the public can buy, so it takes the same dry run as
+      // closing a performance does.
+      if (confirm !== true) {
+        return {
+          dryRun: true,
+          changed: false,
+          wouldDo: "set_performance_seats",
+          id,
+          performanceId,
+          capacity,
+          note: `Nothing was changed. This gives THIS performance ${capacity} seats in all; UiiQ refuses a number below the seats already booked. Call again with confirm: true.`,
+        };
+      }
+      const res = await api(tenant)(`/events/${encodeURIComponent(id)}/tickets/performances`, {
+        method: "PATCH",
+        body: JSON.stringify({ performanceId, action: "seats", capacity }),
+      });
+      if (!res.ok) throw await fail(res);
+      return res.json();
+    },
+  },
+  {
     name: "uiiq_event_tickets_link_set",
     description: "Sell this event's tickets on ANOTHER site instead of through UiiQ \u2014 a button label and an https link, the way a class links to EEQU. Give ticketsLabel AND ticketsUrl together, or clear: true to put it back on UiiQ's own checkout; omitting the fields is NOT a clear, because that would quietly move ticket money back to UiiQ. Set, they win over UiiQ's checkout wherever a Buy tickets button is drawn (the event page, the Members App, the website). Without confirm: true it is ALWAYS a dry run that changes nothing. Owner or admin.",
     inputSchema: {

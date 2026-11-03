@@ -10,6 +10,13 @@ const TENANT_PROP = {
 };
 const api = (tenant) => apiClient(tenant ? { tenant } : {});
 
+// UiiQ answers a refusal as { error }; that sentence is the error, in its words.
+async function fail(res) {
+  const text = await res.text();
+  try { const j = JSON.parse(text); if (j?.error) return new Error(j.error); } catch { /* not JSON */ }
+  return new Error(text || `HTTP ${res.status}`);
+}
+
 /**
  * Campaign + segment tools. NB: uiiq_campaign_list already lives in
  * automation.js — these add the rest of the CLI `campaign` group.
@@ -85,6 +92,33 @@ export const campaignTools = [
         }),
       });
       if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    },
+  },
+  {
+    name: "uiiq_campaign_update",
+    description:
+      "Edit a DRAFT or SCHEDULED email campaign: name, subject, bodyHtml and previewText (the inbox preview line). " +
+      "Only the fields given are sent and changed; give at least one. Editing the body here replaces any blocks made in " +
+      "the editor: the editor then opens this HTML. A SENT or SENDING campaign is refused (409), in UiiQ's words. " +
+      "Returns the updated campaign.",
+    inputSchema: {
+      type: "object",
+      required: ["id"],
+      properties: {
+        id: { type: "string" },
+        name: { type: "string", description: "Internal label; can't be empty" },
+        subject: { type: "string", description: "Email subject line" },
+        bodyHtml: { type: "string", description: "The whole email body as HTML. Editing the body here replaces any blocks made in the editor" },
+        previewText: { type: "string", description: "The inbox preview line shown after the subject; an empty string clears it" },
+        tenant: TENANT_PROP,
+      },
+    },
+    async handler({ id, tenant, name, subject, bodyHtml, previewText }) {
+      const body = Object.fromEntries(Object.entries({ name, subject, bodyHtml, previewText }).filter(([, v]) => v !== undefined));
+      if (Object.keys(body).length === 0) throw new Error("Give at least one of name, subject, bodyHtml or previewText.");
+      const res = await api(tenant)(`/campaigns/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify(body) });
+      if (!res.ok) throw await fail(res);
       return res.json();
     },
   },
