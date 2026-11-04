@@ -52,7 +52,7 @@ async function call(name, args, answer = [500, { error: "nothing should have bee
   return { result, requests: seen };
 }
 
-const FIELDS = ["description", "isActive", "minAge", "maxAge", "minQuantity", "maxQuantity", "totalAllocation", "sessionId", "earlyBirdPricePence", "earlyBirdUntil", "availableFrom", "availableUntil", "isExtra"];
+const FIELDS = ["description", "isActive", "minAge", "maxAge", "minQuantity", "maxQuantity", "totalAllocation", "sessionId", "earlyBirdPricePence", "earlyBirdUntil", "availableFrom", "availableUntil", "isExtra", "priceNote"];
 const CLEARABLE = ["description", "minAge", "maxAge", "totalAllocation", "sessionId", "earlyBirdPricePence", "earlyBirdUntil", "availableFrom", "availableUntil"];
 const TYPE = {
   id: "tt_adult", experienceId: "exp_show", name: "Adult", priceInPence: 1000,
@@ -71,7 +71,7 @@ test("both tools take every field the routes take, null where the route clears",
   assert.equal("experienceId" in update.properties, false, "update can't move a type to another experience");
   for (const k of ["soldCount", "position"]) assert.equal(k in create.properties || k in update.properties, false, `${k} is never sent`);
   for (const k of CLEARABLE) assert.ok([update.properties[k].type].flat().includes("null"), `${k} can't be cleared`);
-  for (const k of ["name", "priceInPence", "isActive", "minQuantity", "maxQuantity", "isExtra"]) assert.equal([update.properties[k].type].flat().includes("null"), false, `${k} isn't clearable on the route`);
+  for (const k of ["name", "priceInPence", "isActive", "minQuantity", "maxQuantity", "isExtra", "priceNote"]) assert.equal([update.properties[k].type].flat().includes("null"), false, `${k} isn't clearable on the route`);
   for (const k of ["earlyBirdUntil", "availableFrom", "availableUntil"]) {
     assert.match(update.properties[k].description, /YYYY-MM-DD/, k);
     assert.match(update.properties[k].description, /timezone/, k);
@@ -121,6 +121,35 @@ test("create and update send isExtra as given, true or false", async () => {
   const updated = await call("uiiq_ticket_type_update", { id: "tt_lesson", isExtra: false }, [200, TYPE]);
   assert.deepEqual(updated.requests, [{ method: "PATCH", path: "/admin/ticket-types/tt_lesson", body: { isExtra: false } }]);
   assert.match(tools.uiiq_ticket_type_create.inputSchema.properties.isExtra.description, /never sold on its own/);
+});
+
+// The price note (UiiQ-platform feat/ticket-price-note, 3 Nov 2026): a short line next to the price.
+test("priceNote: a string of at most 60, described as the note next to the price; an empty string clears it", () => {
+  for (const name of ["uiiq_ticket_type_create", "uiiq_ticket_type_update"]) {
+    const p = tools[name].inputSchema.properties.priceNote;
+    assert.equal(p.type, "string", name);
+    assert.equal(p.maxLength, 60, name);
+    assert.match(p.description, /shown next to the price wherever it's listed, e.g. 'Includes a platform fee.'/, name);
+    assert.match(p.description, /an empty string clears it/, name);
+    assert.match(tools[name].description, /priceNote/, name);
+  }
+});
+
+test("create and update send priceNote as given, and an empty string as an empty string", async () => {
+  const fee = { experienceId: "exp_show", name: "Adult", priceInPence: 1250, priceNote: "Includes a platform fee." };
+  const created = await call("uiiq_ticket_type_create", fee, [201, { ticketType: TYPE }]);
+  assert.deepEqual(created.requests, [{ method: "POST", path: "/admin/ticket-types", body: fee }]);
+  const changed = await call("uiiq_ticket_type_update", { id: "tt_adult", priceNote: "Booking fee included" }, [200, TYPE]);
+  assert.deepEqual(changed.requests, [{ method: "PATCH", path: "/admin/ticket-types/tt_adult", body: { priceNote: "Booking fee included" } }]);
+  const cleared = await call("uiiq_ticket_type_update", { id: "tt_adult", priceNote: "" }, [200, TYPE]);
+  assert.deepEqual(cleared.requests, [{ method: "PATCH", path: "/admin/ticket-types/tt_adult", body: { priceNote: "" } }]);
+});
+
+test("a price note the route refuses comes back in its words", async () => {
+  reply = [400, { error: "priceNote must be at most 60 characters, or nothing" }];
+  seen = [];
+  await assert.rejects(() => tools.uiiq_ticket_type_update.handler({ id: "tt_adult", priceNote: "x".repeat(61) }), /at most 60 characters/);
+  assert.deepEqual(seen, [{ method: "PATCH", path: "/admin/ticket-types/tt_adult", body: { priceNote: "x".repeat(61) } }]);
 });
 
 test("update: the route's refusal is the error", async () => {
