@@ -91,7 +91,7 @@ UIIQ is one subscription whose modules are grouped as **Sell**, **Grow** and **R
 | Health | `uiiq_status`, `uiiq_system_health` | API health and latency, infrastructure, alarms and AWS cost against budget |
 | Platform admin | `uiiq_admin_*` | Tenant control plane (IQEX link and keys, members, users, products, settings, Stripe fee), API keys, features, VAT, audit log, staff, groups, sites, locations, venues, booking emails, briefing, credit costs, ads tiers and gates, add-ons; secrets are shown once |
 | Shop admin, print, designs, suppliers | `uiiq_shop_*`, `uiiq_print_*`, `uiiq_design_*`, `uiiq_supplier_*` | The shop catalogue and its pushes to WooCommerce, connected shops, shop orders, print products, techniques and tiers, the print queue, designs and proofs, suppliers and their syncs |
-| Presets, pricing, registries | `uiiq_preset_*`, `uiiq_pricing_*`, `uiiq_iqex_form_*`, `uiiq_launcher_card_*`, `uiiq_workshop_card_*`, `uiiq_task_recipe_*`, `uiiq_journalist_admin_*`, `uiiq_design_brief_*`, `uiiq_acts_direct_*`, `uiiq_press_distribution_*` | Feature presets applied to tenants, platform pricing config and quotes, the IQEX forms registry and spec, launcher and workshop cards, task recipes, journalist contacts, design briefs, Acts Direct sites, press distribution |
+| Presets, pricing, registries | `uiiq_preset_*`, `uiiq_role_template_*`, `uiiq_pricing_*`, `uiiq_iqex_form_*`, `uiiq_launcher_card_*`, `uiiq_workshop_card_*`, `uiiq_task_recipe_*`, `uiiq_journalist_admin_*`, `uiiq_design_brief_*`, `uiiq_acts_direct_*`, `uiiq_press_distribution_*` | Feature presets applied to tenants, ready-made role templates a workspace owner copies in, platform pricing config and quotes, the IQEX forms registry and spec, launcher and workshop cards, task recipes, journalist contacts, design briefs, Acts Direct sites, press distribution |
 | API | `uiiq_api_*` | Ping, the OpenAPI document, a Sentry self-test (SUPER_ADMIN) |
 
 ### Asking the server directly
@@ -1228,7 +1228,7 @@ Needs the `competitions` feature. Setting up, rounds, the nominee confirmation a
 | `uiiq_locality_delete` | Delete a local area. |
 | `uiiq_locality_check` | Is a postcode local? Checks it against every active local area (or one, with localityId). |
 
-### Admin: blockouts, check-in, fields, waivers, cards, recipes, ticket types, pricing, presets, IQEX forms, press, journalists, design briefs, Acts Direct — `src/tools/admin-ops.js`
+### Admin: blockouts, check-in, fields, waivers, cards, recipes, ticket types, pricing, presets, role templates, IQEX forms, press, journalists, design briefs, Acts Direct — `src/tools/admin-ops.js`
 
 | Tool | What it does |
 |---|---|
@@ -1303,6 +1303,12 @@ Needs the `competitions` feature. Setting up, rounds, the nominee confirmation a
 | `uiiq_preset_delete` | Delete a preset; tenants on it are detached and keep their copied flags. |
 | `uiiq_preset_apply` | Apply a preset to one tenant: copies its features and terminology onto the tenant, overwriting that tenant's feature tweaks. |
 | `uiiq_preset_reapply` | Re-apply an edited preset to EVERY tenant on it, overwriting their per-tenant feature tweaks. |
+| `uiiq_role_template_list` | Every role template with its levels, sectors and copy count, plus the features a template can set and the sector presets. |
+| `uiiq_role_template_create` | Create a role template; perm.student.*, perm.parents.* and perm.exports can never be above hide. |
+| `uiiq_role_template_update` | Edit a role template (levels and sectors replace whole). Copies already in workspaces don't change. |
+| `uiiq_role_template_delete` | Delete a role template. Roles already copied from it stay as they are. |
+| `uiiq_role_template_offered` | The role templates tied to this workspace's sector. Owner only, where workspace_roles is ticked. |
+| `uiiq_role_template_copy` | Copy a role template in as a new role (a snapshot). Refuses a taken name, never overwrites. Owner only, where workspace_roles is ticked. |
 
 ### Platform admin (the operator's control plane) — `src/tools/admin-platform.js`
 

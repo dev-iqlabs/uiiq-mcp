@@ -22,6 +22,12 @@ async function req(tenant, path, method = "GET", body) {
 // Operator control plane: SUPER_ADMIN routes that read across tenants. Never
 // impersonated (impersonation maps the role to OWNER, which these refuse).
 const op = (path, method, body) => req(null, path, method, body);
+const ROLE_TEMPLATE_PROPS = {
+  name: { type: "string", description: "1 to 40 letters, numbers, spaces and & - ' ( ) /" },
+  description: { type: "string", description: "Up to 200 characters" },
+  levels: { type: "object", description: "Feature key to hide, read or write. A feature left out is hide.", additionalProperties: { type: "string", enum: ["hide", "read", "write"] } },
+  sectorPresetIds: { type: "array", items: { type: "string" }, description: "The sector presets it's offered to" },
+};
 const defined = (o) => Object.fromEntries(Object.entries(o).filter(([, v]) => v !== undefined));
 async function save(outPath, data) {
   await mkdir(dirname(outPath), { recursive: true });
@@ -600,5 +606,42 @@ export const adminOpsTools = [
     description: "Re-apply an edited preset to EVERY tenant on it, overwriting their per-tenant feature tweaks. SUPER_ADMIN only.",
     inputSchema: { type: "object", required: ["id"], properties: { id: { type: "string" } } },
     async handler({ id }) { return op(`/admin/presets/${encodeURIComponent(id)}/reapply`, "POST", {}); },
+  },
+  // ── Role templates (SUPER_ADMIN; offered and copy are the workspace owner's) ──
+  {
+    name: "uiiq_role_template_list",
+    description: "Every role template (a ready-made role, tied to sector presets) with its levels, sectors and how many roles were copied from it, plus the features a template can set and the sector presets. SUPER_ADMIN only.",
+    inputSchema: { type: "object", properties: {} },
+    async handler() { return op("/admin/role-templates"); },
+  },
+  {
+    name: "uiiq_role_template_create",
+    description: "Create a role template. A key a template can't hold is refused, never dropped; perm.student.*, perm.parents.* and perm.exports can never be above hide. A template with no sectors is offered to nobody. SUPER_ADMIN only.",
+    inputSchema: { type: "object", required: ["name"], properties: ROLE_TEMPLATE_PROPS },
+    async handler(body) { return op("/admin/role-templates", "POST", body); },
+  },
+  {
+    name: "uiiq_role_template_update",
+    description: "Edit a role template (levels and sectorPresetIds replace what it holds whole). Copies are snapshots: nothing already in a workspace changes. Same refusals as create. SUPER_ADMIN only.",
+    inputSchema: { type: "object", required: ["id"], properties: { id: { type: "string" }, ...ROLE_TEMPLATE_PROPS } },
+    async handler({ id, ...body }) { return op(`/admin/role-templates/${encodeURIComponent(id)}`, "PATCH", defined(body)); },
+  },
+  {
+    name: "uiiq_role_template_delete",
+    description: "Delete a role template. Roles already copied from it stay as they are. SUPER_ADMIN only.",
+    inputSchema: { type: "object", required: ["id"], properties: { id: { type: "string" } } },
+    async handler({ id }) { return op(`/admin/role-templates/${encodeURIComponent(id)}`, "DELETE"); },
+  },
+  {
+    name: "uiiq_role_template_offered",
+    description: "The role templates tied to this workspace's sector, each with the levels it would give (only what this workspace has on) and how many tools it would leave out. Owner only, and only where workspace_roles is ticked.",
+    inputSchema: { type: "object", properties: { tenant: TENANT_PROP } },
+    async handler({ tenant }) { return req(tenant, "/roles/templates"); },
+  },
+  {
+    name: "uiiq_role_template_copy",
+    description: "Copy a role template in as a new role of this workspace (a snapshot; later edits to the template change nothing here). Only features the workspace has ticked are copied; leftOut names the rest. Refused with code role_name_taken if a role already has that name, which is never overwritten or merged: send a different name. Owner only, and only where workspace_roles is ticked.",
+    inputSchema: { type: "object", required: ["id"], properties: { id: { type: "string" }, name: { type: "string", description: "Name for the copy. Defaults to the template's name." }, tenant: TENANT_PROP } },
+    async handler({ id, name, tenant }) { return req(tenant, `/roles/templates/${encodeURIComponent(id)}/copy`, "POST", defined({ name })); },
   },
 ];
