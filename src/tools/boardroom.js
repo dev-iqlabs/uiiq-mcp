@@ -144,7 +144,7 @@ export const boardroomTools = [
   },
   {
     name: "uiiq_boardroom_tts",
-    description: "Speak text in a boardroom agent's voice (agentSlug default quinn). ElevenLabs answers with audio straight away — saved to outPath (default ./tts-<agentSlug>.mp3) and the characters are LOGGED TO IQEX FOR CREDIT DEDUCTION. Without an ElevenLabs voice it falls back to a Chatterbox job and returns { assetId } to poll with uiiq_boardroom_tts_poll.",
+    description: "Speak text in a boardroom agent's voice (agentSlug default quinn). ElevenLabs answers with audio straight away — saved to outPath (default ./tts-<agentSlug>.mp3) and the characters are LOGGED TO IQEX FOR CREDIT DEDUCTION. Without an ElevenLabs voice it falls back to a Chatterbox job and returns { pollToken } to poll with uiiq_boardroom_tts_poll.",
     inputSchema: { type: "object", required: ["text"], properties: { text: { type: "string" }, agentSlug: { type: "string" }, outPath: { type: "string" }, tenant: TENANT_PROP } },
     async handler({ text, agentSlug, outPath, tenant }) {
       const res = await api(tenant)("/boardroom/tts", { method: "POST", body: JSON.stringify({ text, agentSlug }) });
@@ -155,14 +155,14 @@ export const boardroomTools = [
   },
   {
     name: "uiiq_boardroom_tts_poll",
-    description: "Poll a Chatterbox TTS job by assetId. Returns { ready:false } until the audio exists, then saves it to outPath (default ./tts-<assetId>.wav) and returns { path, bytes, provider }.",
-    inputSchema: { type: "object", required: ["assetId"], properties: { assetId: { type: "string" }, outPath: { type: "string" }, tenant: TENANT_PROP } },
-    async handler({ assetId, outPath, tenant }) {
-      const qs = `?assetId=${encodeURIComponent(assetId)}`;
+    description: "Poll a Chatterbox TTS job with the pollToken from uiiq_boardroom_tts (valid 15 minutes). Returns { ready:false } until the audio exists, then saves it to outPath (default ./tts-<timestamp>.wav) and returns { path, bytes, provider }.",
+    inputSchema: { type: "object", required: ["pollToken"], properties: { pollToken: { type: "string" }, outPath: { type: "string" }, tenant: TENANT_PROP } },
+    async handler({ pollToken, outPath, tenant }) {
+      const qs = `?pollToken=${encodeURIComponent(pollToken)}`;
       const res = await api(tenant)(`/boardroom/tts${qs}`);
       if (!res.ok) throw new Error(await res.text());
       if (!(res.headers.get("content-type") ?? "").startsWith("audio/")) return res.json();
-      return saveAudio(res, outPath || `tts-${assetId}.wav`);
+      return saveAudio(res, outPath || `tts-${Date.now()}.wav`);
     },
   },
 ];

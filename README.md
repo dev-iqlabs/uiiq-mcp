@@ -560,7 +560,7 @@ Dashboard → Ads → Competitors. Needs the `ads_search` feature and the ads ti
 | `uiiq_boardroom_agent_voice_set` | Set (or clear with null) the ElevenLabs voice id a boardroom agent speaks with in this workspace. |
 | `uiiq_boardroom_meeting_turn` | One agent's turn in a multi-agent meeting thread: pass the whole thread as messages [{ role:'user'\|'assistant', content, agentSlug?, agentName? }] and the agent answers in 2–4 sentences seeing every other member's contribution. |
 | `uiiq_boardroom_tts` | Speak text in a boardroom agent's voice (agentSlug default quinn). |
-| `uiiq_boardroom_tts_poll` | Poll a Chatterbox TTS job by assetId. |
+| `uiiq_boardroom_tts_poll` | Poll a Chatterbox TTS job with the pollToken from uiiq_boardroom_tts (valid 15 minutes). |
 
 ### Agents — `src/tools/agents.js`
 
