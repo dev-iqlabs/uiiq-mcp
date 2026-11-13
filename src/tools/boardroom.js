@@ -17,7 +17,7 @@ async function saveAudio(res, outPath) {
   const target = path.resolve(outPath);
   fs.mkdirSync(path.dirname(target), { recursive: true });
   fs.writeFileSync(target, bytes);
-  return { path: target, bytes: bytes.length, provider: res.headers.get("x-tts-provider") ?? "chatterbox" };
+  return { path: target, bytes: bytes.length, provider: res.headers.get("x-tts-provider") ?? "elevenlabs" };
 }
 
 
@@ -144,25 +144,13 @@ export const boardroomTools = [
   },
   {
     name: "uiiq_boardroom_tts",
-    description: "Speak text in a boardroom agent's voice (agentSlug default quinn). ElevenLabs answers with audio straight away — saved to outPath (default ./tts-<agentSlug>.mp3) and the characters are LOGGED TO IQEX FOR CREDIT DEDUCTION. Without an ElevenLabs voice it falls back to a Chatterbox job and returns { pollToken } to poll with uiiq_boardroom_tts_poll.",
+    description: "Speak text in a boardroom agent's voice (agentSlug default quinn), ElevenLabs only. With a voice, the audio is saved to outPath (default ./tts-<agentSlug>.mp3), { path, bytes, provider } is returned, and the characters are LOGGED TO IQEX FOR CREDIT DEDUCTION. With no ElevenLabs key or voice for the agent, or ElevenLabs failing, nothing is spoken or charged and the route's { audio: false, reason } comes back (reason: no-key, no-voice or unavailable).",
     inputSchema: { type: "object", required: ["text"], properties: { text: { type: "string" }, agentSlug: { type: "string" }, outPath: { type: "string" }, tenant: TENANT_PROP } },
     async handler({ text, agentSlug, outPath, tenant }) {
       const res = await api(tenant)("/boardroom/tts", { method: "POST", body: JSON.stringify({ text, agentSlug }) });
       if (!res.ok) throw new Error(await res.text());
       if (!(res.headers.get("content-type") ?? "").startsWith("audio/")) return res.json();
       return saveAudio(res, outPath || `tts-${agentSlug || "quinn"}.mp3`);
-    },
-  },
-  {
-    name: "uiiq_boardroom_tts_poll",
-    description: "Poll a Chatterbox TTS job with the pollToken from uiiq_boardroom_tts (valid 15 minutes). Returns { ready:false } until the audio exists, then saves it to outPath (default ./tts-<timestamp>.wav) and returns { path, bytes, provider }.",
-    inputSchema: { type: "object", required: ["pollToken"], properties: { pollToken: { type: "string" }, outPath: { type: "string" }, tenant: TENANT_PROP } },
-    async handler({ pollToken, outPath, tenant }) {
-      const qs = `?pollToken=${encodeURIComponent(pollToken)}`;
-      const res = await api(tenant)(`/boardroom/tts${qs}`);
-      if (!res.ok) throw new Error(await res.text());
-      if (!(res.headers.get("content-type") ?? "").startsWith("audio/")) return res.json();
-      return saveAudio(res, outPath || `tts-${Date.now()}.wav`);
     },
   },
 ];

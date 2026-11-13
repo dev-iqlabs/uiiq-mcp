@@ -1,6 +1,7 @@
-// node --test — uiiq_boardroom_tts and uiiq_boardroom_tts_poll on the Chatterbox fallback (UiiQ-platform, Lucas B12-M3):
-// the route takes a signed poll token now, never a bare asset id. Against a local stand-in for UiiQ (a throwaway HOME
-// with a fake session), so no real login is read or sent anywhere.
+// node --test — uiiq_boardroom_tts against UiiQ's ElevenLabs-only route (UiiQ-platform fix/boardroom-tts-off-personal-login,
+// Lucas R105): the Chatterbox backup and its poll are gone, so speak answers with audio or with the route's
+// { audio: false, reason }, and there is no poll tool. Against a local stand-in for UiiQ (a throwaway HOME with a fake
+// session), so no real login is read or sent anywhere.
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import http from "node:http";
@@ -8,7 +9,6 @@ import { mkdtempSync, mkdirSync, readdirSync, readFileSync, realpathSync, writeF
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-const TOKEN = "dHA6NTU1OnRfMTox+OTk5/OmFiYw=";
 let server, home, cwd, reply, seen, tools;
 
 before(async () => {
@@ -18,7 +18,7 @@ before(async () => {
     req.on("end", () => {
       seen.push({ method: req.method, path: req.url.replace(/^\/api/, ""), ...(body ? { body: JSON.parse(body) } : {}) });
       if (reply.audio) {
-        res.writeHead(200, { "content-type": "audio/wav" });
+        res.writeHead(200, { "content-type": "audio/mpeg", "x-tts-provider": "elevenlabs" });
         res.end(Buffer.from([1, 2, 3]));
         return;
       }
@@ -49,40 +49,33 @@ after(async () => {
 });
 
 const call = (name, r, args) => { reply = r; seen = []; return tools[name].handler(args); };
+const saved = () => readdirSync(cwd).filter((f) => f.startsWith("tts-"));
 
-test("speak hands back the poll token the route returned", async () => {
-  const out = await call("uiiq_boardroom_tts", { status: 200, json: { pollToken: TOKEN } }, { text: "Hello" });
-  assert.deepEqual(out, { pollToken: TOKEN });
+test("speak saves the ElevenLabs audio", async () => {
+  const out = await call("uiiq_boardroom_tts", { audio: true }, { text: "Hello", agentSlug: "cara" });
+  assert.deepEqual(seen, [{ method: "POST", path: "/boardroom/tts", body: { text: "Hello", agentSlug: "cara" } }]);
+  assert.deepEqual(out, { path: join(cwd, "tts-cara.mp3"), bytes: 3, provider: "elevenlabs" });
+  assert.deepEqual([...readFileSync(join(cwd, "tts-cara.mp3"))], [1, 2, 3]);
+  rmSync(join(cwd, "tts-cara.mp3"));
+});
+
+test("speak with no voice hands back the route's { audio: false, reason } and saves nothing", async () => {
+  const out = await call("uiiq_boardroom_tts", { status: 200, json: { audio: false, reason: "no-voice" } }, { text: "Hello" });
+  assert.deepEqual(out, { audio: false, reason: "no-voice" });
   assert.deepEqual(seen, [{ method: "POST", path: "/boardroom/tts", body: { text: "Hello" } }]);
+  assert.deepEqual(saved(), []);
 });
 
-test("the tools ask for and describe a poll token, never an assetId", () => {
-  const poll = tools.uiiq_boardroom_tts_poll;
-  assert.deepEqual(poll.inputSchema.required, ["pollToken"]);
-  assert.ok(poll.inputSchema.properties.pollToken);
-  assert.equal(poll.inputSchema.properties.assetId, undefined);
-  for (const tool of [poll, tools.uiiq_boardroom_tts]) {
-    assert.match(tool.description, /pollToken/);
-    assert.doesNotMatch(tool.description, /assetId/);
-  }
+test("speak shows the route's refusal", async () => {
+  await assert.rejects(call("uiiq_boardroom_tts", { status: 403, json: { error: "No tenant" } }, { text: "Hello" }), /No tenant/);
 });
 
-test("poll sends the token, encoded, and never an assetId", async () => {
-  const out = await call("uiiq_boardroom_tts_poll", { status: 200, json: { ready: false } }, { pollToken: TOKEN });
-  assert.deepEqual(out, { ready: false });
-  assert.deepEqual(seen, [{ method: "GET", path: `/boardroom/tts?pollToken=${encodeURIComponent(TOKEN)}` }]);
-});
-
-test("poll saves the audio under a name that does not carry the token", async () => {
-  const out = await call("uiiq_boardroom_tts_poll", { audio: true }, { pollToken: TOKEN });
-  const saved = readdirSync(cwd).filter((f) => f.endsWith(".wav"));
-  assert.equal(saved.length, 1);
-  assert.match(saved[0], /^tts-\d+\.wav$/);
-  assert.equal(out.path, join(cwd, saved[0]));
-  assert.equal(out.bytes, 3);
-  assert.deepEqual([...readFileSync(join(cwd, saved[0]))], [1, 2, 3]);
-});
-
-test("poll shows the route's refusal", async () => {
-  await assert.rejects(call("uiiq_boardroom_tts_poll", { status: 403, json: { error: "Not permitted" } }, { pollToken: "expired" }), /Not permitted/);
+test("there is no poll tool, and speak describes the answer without Chatterbox or a poll token", () => {
+  assert.equal(tools.uiiq_boardroom_tts_poll, undefined);
+  const { description } = tools.uiiq_boardroom_tts;
+  assert.match(description, /ElevenLabs only/);
+  assert.match(description, /\{ audio: false, reason \}/);
+  assert.doesNotMatch(description, /chatterbox|pollToken|poll/i);
+  const source = readFileSync(new URL("../src/tools/boardroom.js", import.meta.url), "utf8");
+  assert.doesNotMatch(source, /pollToken|chatterbox/i);
 });
