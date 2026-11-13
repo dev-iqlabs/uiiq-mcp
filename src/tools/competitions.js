@@ -193,7 +193,7 @@ export const competitionTools = [
   },
   {
     name: "uiiq_competition_get",
-    description: "One competition with its rounds, each with its phase (upcoming, open, closed, decided) and the entry form link for that round; pendingForgets { count, oldest } counts the workspace's commenter erasures IQEX hasn't confirmed forgetting yet (share the round's link, never the bare form). A DRAW's rounds have no form link; each has lastCollectedAt, when its comments were last read into entries (null: not yet). A NOMINATION's rounds have nominateReplies: the \"Comment NOMINATE\" private replies, { sent, failed, waiting, reasons } (reasons by code, e.g. too_old_here, maybe_sent, off), or null when none were sent.",
+    description: "One competition with its rounds, each with its phase (upcoming, open, closed, decided) and the entry form link for that round; pendingForgets { count, oldest } counts the workspace's commenter erasures IQEX hasn't confirmed forgetting yet (share the round's link, never the bare form). A DRAW's rounds have no form link; each has lastCollectedAt, when its comments were last read into entries (null: not yet). A NOMINATION's rounds have nominateReplies: the \"Comment NOMINATE\" private replies, { sent, failed, waiting, reasons } (reasons by code, e.g. too_old_here, maybe_sent, off), or null when none were sent. deleteBlockers: what stops uiiq_competition_delete ([] when it can be deleted; [\"running\"] while it's ACTIVE; otherwise what it has had: entries, posts, draw, votes, replies, objections, counts).",
     inputSchema: { type: "object", required: ["id"], properties: { id: { type: "string" }, tenant: TENANT_PROP } },
     async handler({ id, tenant }) {
       return call(tenant, `/competitions/${seg(id)}`);
@@ -251,6 +251,20 @@ export const competitionTools = [
     },
     async handler({ id, tenant, ...body }) {
       return call(tenant, `/competitions/${seg(id)}`, send("PATCH", body));
+    },
+  },
+  {
+    name: "uiiq_competition_delete",
+    description: "Delete a competition that never had an entry (owner/admin), e.g. a test run: only a DRAFT or ARCHIVED one that has never had entries (erased or purged ones count), social posts (drafts included), a draw, votes, comment replies, report objections or buy-or-book counts. Its rounds and published terms versions go with it; the audit keeps its name and each terms version's label and hash. Anything else is refused (409, `blockers` saying what it has had); a running one must be archived first (uiiq_competition_update status ARCHIVED), and one that ran for real stays archived. Nothing at IQEX changes: its forms stay as they are. Can't be undone. Without confirm: true it's a dry run: it reads the competition, says whether it could be deleted (`deleteBlockers`, [] when it can) and changes nothing.",
+    inputSchema: { type: "object", required: ["id"], properties: { id: { type: "string" }, confirm: CONFIRM_PROP, tenant: TENANT_PROP } },
+    async handler({ id, confirm, tenant }) {
+      const path = `/competitions/${seg(id)}`;
+      if (confirm !== true) {
+        const c = await call(tenant, path);
+        const blockers = Array.isArray(c?.deleteBlockers) ? c.deleteBlockers : null;
+        return dryRun("delete_competition", tenant, { competitionId: id, name: c?.name ?? null, status: c?.status ?? null, rounds: Array.isArray(c?.rounds) ? c.rounds.length : null, deleteBlockers: blockers, canDelete: blockers !== null && blockers.length === 0 }, "Deleting can't be undone. Check it's the right competition and workspace; one with deleteBlockers would be refused.");
+      }
+      return call(tenant, path, { method: "DELETE" });
     },
   },
   // The generated terms (UiiQ-platform competitions v2, 5b): Kim's terms and

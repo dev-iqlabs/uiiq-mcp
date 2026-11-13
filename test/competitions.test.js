@@ -56,8 +56,8 @@ test("every tool is named uiiq_competition_* and describes itself", () => {
     assert.ok(t.description.length > 20, name);
     assert.equal(t.inputSchema.type, "object", name);
   }
-  // 40 with uiiq_competition_designs (UiiQ-platform competitions 5a) and uiiq_competition_leave_out_by_email.
-  assert.equal(Object.keys(tools).length, 40);
+  // 41 with uiiq_competition_designs (UiiQ-platform competitions 5a), uiiq_competition_leave_out_by_email and uiiq_competition_delete.
+  assert.equal(Object.keys(tools).length, 41);
 });
 
 test("each tool calls its own route, with its own method and body", async () => {
@@ -75,6 +75,7 @@ test("each tool calls its own route, with its own method and body", async () => 
     ["uiiq_competition_entry_update", { entryId: "e1", scores: { story: 8 } }, "PATCH", "/competitions/entries/e1", { scores: { story: 8 } }],
     ["uiiq_competition_nominee_confirm", { entryId: "e1", answeredBy: "nominee", how: "phone", items: {} }, "POST", "/competitions/entries/e1/nominee-confirmation", { answeredBy: "nominee", how: "phone", items: {} }],
     ["uiiq_competition_entry_erase", { entryId: "e1", confirm: true }, "DELETE", "/competitions/entries/e1", undefined],
+    ["uiiq_competition_delete", { id: "c1", confirm: true }, "DELETE", "/competitions/c1", undefined],
     ["uiiq_competition_entry_leave_out", { entryId: "e1" }, "POST", "/competitions/entries/e1/leave-out", undefined],
     ["uiiq_competition_leave_out_by_email", { id: "c1", email: " gone@example.com " }, "POST", "/competitions/c1/leave-out", { email: "gone@example.com" }],
     ["uiiq_competition_update", { id: "c1", conversionReport: true, publishTerms: true }, "PATCH", "/competitions/c1", { conversionReport: true, publishTerms: true }],
@@ -872,4 +873,33 @@ test("post designs (UiiQ-platform competitions 5a): the designs listing reads on
   assert.match(tools.uiiq_competition_post_draft.description, /IQEX never receives a name/);
   assert.match(tools.uiiq_competition_post_draft.description, /every finalist's number, the vote's card is plain/);
   assert.deepEqual(tools.uiiq_competition_post_draft.inputSchema.properties.stage.enum, ["call", "shortlist", "winner", "vote", "last_chance", "story"]);
+});
+
+test("delete (UiiQ-platform: one that never had an entry): a dry run reads the competition and says whether it can go; only confirm: true deletes", async () => {
+  for (const confirm of [undefined, false, "true", 1]) {
+    const { result, requests } = await call("uiiq_competition_delete", { id: "c1", confirm }, [200, { id: "c1", name: "Test run", status: "ARCHIVED", rounds: [{ id: "r1" }], deleteBlockers: [] }]);
+    assert.deepEqual(requests, [{ method: "GET", path: "/competitions/c1" }], `confirm=${confirm}`);
+    assert.equal(result.dryRun, true);
+    assert.equal(result.changed, false);
+    assert.equal(result.wouldDo, "delete_competition");
+    assert.equal(result.tenant, "your own workspace");
+    assert.deepEqual({ competitionId: result.competitionId, name: result.name, status: result.status, rounds: result.rounds, deleteBlockers: result.deleteBlockers, canDelete: result.canDelete }, { competitionId: "c1", name: "Test run", status: "ARCHIVED", rounds: 1, deleteBlockers: [], canDelete: true });
+    assert.match(result.note, /Nothing was changed.*confirm: true/);
+  }
+  // One that has had entries, and an older UiiQ that doesn't say: never "can delete".
+  let r = await call("uiiq_competition_delete", { id: "c1" }, [200, { id: "c1", status: "ARCHIVED", rounds: [], deleteBlockers: ["entries", "posts"] }]);
+  assert.deepEqual([r.result.deleteBlockers, r.result.canDelete], [["entries", "posts"], false]);
+  r = await call("uiiq_competition_delete", { id: "c1" }, [200, { id: "c1", status: "DRAFT", rounds: [] }]);
+  assert.deepEqual([r.result.deleteBlockers, r.result.canDelete], [null, false]);
+  assert.ok(tools.uiiq_competition_delete.inputSchema.properties.confirm);
+});
+
+test("delete: UiiQ's refusal comes back in its own words; an id that isn't one is refused before anything is sent", async () => {
+  await assert.rejects(
+    call("uiiq_competition_delete", { id: "c1", confirm: true }, [409, { error: "This competition can't be deleted because it has had entries.", code: "competition_in_use", blockers: ["entries"] }]),
+    /^Error: This competition can't be deleted because it has had entries\.$/,
+  );
+  seen = [];
+  await assert.rejects(tools.uiiq_competition_delete.handler({ id: "..", confirm: true }), /must be an id/);
+  assert.equal(seen.length, 0);
 });
