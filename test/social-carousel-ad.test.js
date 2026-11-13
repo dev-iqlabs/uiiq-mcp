@@ -213,6 +213,9 @@ test("a competition call post's dry run shows the text UiiQ will send (its terms
     ticked: false,
     targeting: { end_time: "2026-11-19T23:59:00.000Z", age_min: 18 },
   });
+  // Pasted in the middle with more after them: they go on the end again (Lucas R111-5).
+  const middle = await call({ id: "post_call", ...CALL_AD, primaryText: `Hook\n\n${TERMS}\n\nBuy one to double your chances` }, [200, CALL_CONTEXT]);
+  assert.equal(middle.result.competitionCall.primaryText, `Hook\n\n${TERMS}\n\nBuy one to double your chances\n\n${TERMS}`);
   // Already ending with them: as it is, never twice; ticked as passed.
   const again = await call({ id: "post_call", ...CALL_AD, primaryText: `Hook\n\n${TERMS}`, videoDisclaimerTicked: true }, [200, CALL_CONTEXT]);
   assert.equal(again.result.competitionCall.primaryText, `Hook\n\n${TERMS}`);
@@ -229,6 +232,9 @@ test("videoDisclaimerTicked goes to UiiQ as given (true only), and only when giv
   assert.deepEqual(ticked.requests[0].body.collectionVideo, { assetId: 4762 });
   const unticked = await call({ id: "post_call", ...CALL_AD, confirm: true }, [200, made]);
   assert.equal("videoDisclaimerTicked" in unticked.requests[0].body, false);
+  // R111-1: no button of the tool's own: left out, none is sent, and UiiQ refuses anything but Learn more on a call ad.
+  const noCta = await call({ id: "post_call", ...CALL_AD, ctaType: undefined, confirm: true }, [200, made]);
+  assert.equal("ctaType" in noCta.requests[0].body, false);
   // UiiQ's refusal without it comes back in its words.
   const why = "This ad can't be made yet: Meta may show it where its text is cut short, so tick \"The video's end card says it isn't sponsored, endorsed or run by Meta or TikTok\" (videoDisclaimerTicked: true), once you've checked the video.";
   await assert.rejects(call({ id: "post_call", ...CALL_AD, requestId: "ad-call", confirm: true }, [400, { error: why }]), (e) => e.message === `${why} (requestId: ad-call)`);
@@ -238,6 +244,14 @@ test("the description and schema: a competition call post, its video, its tick (
   const t = tools.uiiq_social_post_carousel_ad;
   assert.match(t.description, /or from a competition's PUBLISHED call post/);
   assert.match(t.description, /COMPETITION CALL.*collectionVideo \{ assetId \} alone.*videoDisclaimerTicked: true is required.*never by yourself.*competitionTerms.*competitionTargeting/);
+  // Lucas R111-1, -4, -5 and the 24 hours (iqex-backend #1802): the button, plain product cards, every word field, done only when confirmed.
+  assert.match(t.description, /unless primaryText already ENDS with them word for word/);
+  assert.match(t.description, /any word field \(primaryText, headline, collectionName\)/);
+  assert.match(t.description, /ctaType must be LEARN_MORE \(nothing is for sale\), and the product cards are plain shop cards: never send their name or description/);
+  assert.match(t.description, /a round closing in under 24 hours is refused/);
+  assert.match(t.description, /done only when IQEX confirms Meta holds the end date and age; otherwise uiiq_social_carousel_ad_status says unknown/);
+  // R111-1: the tool has no button of its own: the caller's, or none (UiiQ then refuses).
+  assert.equal(t.inputSchema.properties.ctaType.default, undefined);
   assert.deepEqual(t.inputSchema.properties.videoDisclaimerTicked.type, "boolean");
   assert.match(t.inputSchema.properties.videoDisclaimerTicked.description, /Never true by yourself/);
 });
