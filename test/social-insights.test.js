@@ -25,7 +25,7 @@ before(async () => {
       const parsed = (() => { try { return JSON.parse(body); } catch { return body; } })();
       seen.push({ method: req.method, path, cookie: req.headers.cookie ?? "", ...(body ? { body: parsed } : {}) });
       const json = (status, data, headers = {}) => { res.writeHead(status, { "content-type": "application/json", ...headers }); res.end(JSON.stringify(data)); };
-      if (path === "/admin/tenants") return json(200, TENANTS);
+      if (path.split("?")[0] === "/admin/tenants") return json(200, TENANTS); // ?search=<ref>&limit=500
       if (path === "/admin/impersonate" && req.method === "POST") return json(200, { ok: true }, { "set-cookie": `${IMP}; Path=/; HttpOnly` });
       if (path === "/admin/impersonate/exit") return json(200, { ok: true });
       if (path === "/auth/csrf") return json(200, { csrfToken: "csrf-test" }, { "set-cookie": "authjs.csrf-token=csrf-test; Path=/" });
