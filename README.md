@@ -596,7 +596,7 @@ Dashboard → Ads → Competitors. Needs the `ads_search` feature and the ads ti
 | Tool | What it does |
 | --- | --- |
 | `uiiq_media_list` | List the tenant's Media Vault (images and video, stored in IQEX). |
-| `uiiq_media_upload` | Upload an image or video into the tenant's Media Vault from a local file path or a URL. |
+| `uiiq_media_upload` | Upload an image or video into the tenant's Media Vault from a local file path (Windows, or Git Bash's `/c/…` form) or a URL. Files over 4 MB are refused before sending: the upload goes through UiiQ's hosting, which refuses about 4.4 MB and up with no message. For a bigger file, make it smaller or use `uiiq_media_presign` (the workspace's own storage, not the Media Vault). |
 | `uiiq_media_reframe` | Make ready-sized copies of one of the workspace's OWN images: square (1080, cards), landscape (1600×900, heroes), og (1200×630, link previews) and thumb (480). |
 | `uiiq_media_derivatives` | The ready-sized copies already made for one image (target, url, webpUrl, width, height, bytes, format, status, method, untouched), from stored records only — nothing is fetched or made. |
 | `uiiq_media_generate` | Generate an image or video with AI into the tenant's Media Vault (IQEX does the generating and charges the org's credits). |

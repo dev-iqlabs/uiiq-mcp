@@ -65,8 +65,8 @@ test("UIIQ's own message comes through: a refusal, and 'no such feature' with th
   await failsWith([409, { error: "This workspace hasn't accepted the Prospect Campaigns terms (version 2) yet." }], { id: "ten_1", enable: "prospect_campaigns" }, /Prospect Campaigns terms/);
 });
 
-test("an empty 4xx/5xx body still names the status", async () => {
-  await failsWith([503, null], { id: "ten_1", enable: "till" }, /^HTTP 503$/);
+test("an empty 4xx/5xx body still names the status (and its reason, from the shared caller)", async () => {
+  await failsWith([503, null], { id: "ten_1", enable: "till" }, /^HTTP 503 Service Unavailable, with no body$/);
 });
 
 test("reading the flags: a refusal is reported as what it is, not 'not found'", async () => {

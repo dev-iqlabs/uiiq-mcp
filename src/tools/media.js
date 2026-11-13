@@ -1,6 +1,7 @@
-import { readFile } from "node:fs/promises";
+import { readFile, stat } from "node:fs/promises";
 import { basename } from "node:path";
-import { apiClient } from "../auth.js";
+import { STATUS_CODES } from "node:http";
+import { apiClient, noBodyText } from "../auth.js";
 
 // The tenant's Media Vault. The files themselves live in IQEX's asset store —
 // UIIQ (and therefore this MCP) browses, uploads, generates and deletes
@@ -16,6 +17,45 @@ const MIME_BY_EXT = {
   jpg: "image/jpeg", jpeg: "image/jpeg", png: "image/png", gif: "image/gif",
   webp: "image/webp", mp4: "video/mp4", mov: "video/quicktime", webm: "video/webm",
 };
+
+// /api/assets/upload takes the bytes through UiiQ's hosting (an Amplify server
+// function): 6 MB a request, base64-encoded, so about 4.4 MB of file. A bigger
+// request is refused before UiiQ's route runs, with no body, so it is not sent.
+export const MAX_UPLOAD_BYTES = 4 * 1024 * 1024;
+
+const WAY_ROUND =
+  "Make it smaller than 4 MB (a video: shorter, or re-encoded at a lower bitrate) and upload it again, " +
+  "or put it in the workspace's own storage with uiiq_media_presign and a local path (videos up to 200 MB, sent straight to storage) " +
+  "and use the fileUrl it returns; that copy is not in the Media Vault.";
+
+const mb = (bytes) => (bytes / (1024 * 1024)).toFixed(1);
+
+function refuseIfTooBig(bytes, filename) {
+  if (bytes <= MAX_UPLOAD_BYTES) return;
+  throw new Error(
+    `${filename} is ${mb(bytes)} MB, over the 4 MB the Media Vault upload takes. ` +
+      `UiiQ's hosting refuses a request over about 4.4 MB of file before UiiQ sees it, with no message, so it wasn't sent. ${WAY_ROUND}`,
+  );
+}
+
+/** The upload's own error: the status and UiiQ's words, and with no body (or a 413) what that almost always means. */
+function uploadFailed(res, text) {
+  const head = `${res.status} ${res.statusText || STATUS_CODES[res.status] || ""}`.trim();
+  const empty = !text || text === noBodyText(res.status, res.statusText);
+  if (!empty && res.status !== 413) return `${head}: ${text}`;
+  const said = empty ? `${head}, with no body` : `${head}: ${text}`;
+  return `${said}. Probably the hosting refusing a file over UiiQ's upload size (about 4.4 MB) before UiiQ's route ran. ${WAY_ROUND}`;
+}
+
+/**
+ * Git Bash hands Windows paths over as /c/Users/…, which Node on Windows reads
+ * as \c\Users\… on the current drive. A single-letter first segment is the drive.
+ */
+export function localPath(p, platform = process.platform) {
+  if (platform !== "win32" || typeof p !== "string") return p;
+  const m = /^\/([a-z])(?:\/(.*))?$/i.exec(p);
+  return m ? `${m[1].toUpperCase()}:\\${(m[2] ?? "").replace(/\//g, "\\")}` : p;
+}
 
 /**
  * The shared caller forces `Content-Type: application/json`, which corrupts
@@ -67,11 +107,12 @@ export const mediaTools = [
   {
     name: "uiiq_media_upload",
     description:
-      "Upload an image or video into the tenant's Media Vault from a local file path or a URL. Set category 'sting' to make it the tenant's logo sting (must be a video; the most recent sting is the one appended to rendered videos). Returns the created asset.",
+      "Upload an image or video into the tenant's Media Vault from a local file path or a URL. Set category 'sting' to make it the tenant's logo sting (must be a video; the most recent sting is the one appended to rendered videos). Returns the created asset. " +
+      "Files over 4 MB are refused before sending: the upload goes through UiiQ's hosting, which refuses about 4.4 MB and up with no message. For a bigger file, make it smaller, or use uiiq_media_presign (the workspace's own storage, not the Media Vault).",
     inputSchema: {
       type: "object",
       properties: {
-        path: { type: "string", description: "Local file path to upload. One of path or url is required." },
+        path: { type: "string", description: "Local file path to upload (Windows, or Git Bash's /c/… form). One of path or url is required." },
         url: { type: "string", description: "http(s) URL to fetch and upload. One of path or url is required." },
         name: { type: "string", description: "Display name for the asset. Defaults to the file name." },
         category: { type: "string", description: "Asset category, e.g. 'library' (default) or 'sting'." },
@@ -93,10 +134,12 @@ export const mediaTools = [
 
       let bytes, filename, mime;
       if (path) {
-        bytes = await readFile(path);
-        filename = basename(path);
+        const file = localPath(path);
+        filename = basename(file);
         mime = MIME_BY_EXT[filename.split(".").pop()?.toLowerCase() ?? ""];
         if (!mime) throw new Error(`Unsupported file type: ${filename} — use jpg/png/gif/webp/mp4/mov/webm.`);
+        refuseIfTooBig((await stat(file)).size, filename);
+        bytes = await readFile(file);
       } else {
         if (!/^https?:\/\//i.test(url)) throw new Error("URL must be http(s).");
         const res = await fetch(url);
@@ -105,8 +148,14 @@ export const mediaTools = [
         if (!Object.values(MIME_BY_EXT).includes(mime)) {
           throw new Error(`Unsupported content type from URL: ${mime || "unknown"}.`);
         }
-        bytes = Buffer.from(await res.arrayBuffer());
         filename = decodeURIComponent(new URL(url).pathname.split("/").pop() || "upload");
+        const declared = Number(res.headers.get("content-length"));
+        if (declared > MAX_UPLOAD_BYTES) {
+          await res.body?.cancel().catch(() => {});
+          refuseIfTooBig(declared, filename);
+        }
+        bytes = Buffer.from(await res.arrayBuffer());
+        refuseIfTooBig(bytes.length, filename);
       }
 
       if (category === "sting" && !mime.startsWith("video/")) {
@@ -124,7 +173,7 @@ export const mediaTools = [
         body,
         headers: { "Content-Type": contentType },
       });
-      if (!res.ok) throw new Error(await res.text());
+      if (!res.ok) throw new Error(uploadFailed(res, await res.text()));
       const asset = await res.json();
 
       if (reframe && mime.startsWith("image/") && asset?.id) {
@@ -247,7 +296,7 @@ export const mediaTools = [
     inputSchema: {
       type: "object",
       properties: {
-        path: { type: "string", description: "Local file to upload straight away (fileName and contentType are taken from it)." },
+        path: { type: "string", description: "Local file to upload straight away (fileName and contentType are taken from it). Windows, or Git Bash's /c/… form." },
         fileName: { type: "string", description: "Required without path." },
         contentType: { type: "string", description: "MIME type; required without path." },
         folder: { type: "string", enum: ["uploads", "logos", "covers", "experiences", "thumbnails", "causes", "events", "displays", "social", "staff"], description: "Default uploads." },
@@ -255,6 +304,7 @@ export const mediaTools = [
       },
     },
     async handler({ path, fileName, contentType, folder, tenant } = {}) {
+      path = localPath(path);
       if (path) {
         fileName = fileName || basename(path);
         contentType = contentType || MIME_BY_EXT[fileName.split(".").pop()?.toLowerCase() ?? ""];
