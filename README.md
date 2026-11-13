@@ -115,7 +115,7 @@ Claude config: `{ "command": "node", "args": ["<path>/src/index.js"] }`.
 | `UIIQ_TILL_DEVICE_TOKEN` | Till tools: the paired device token |
 | `UIIQ_CONNECT_API_KEY` | `uiiq_prospect_ingest`: the tenant's Connect key (or pass `apiKey`) |
 
-**Tenant handling.** Most tools take an optional `tenant` (id, slug or exact name). Without it the call lands in the tenant the login belongs to; with it the server impersonates that tenant for the one call (SUPER_ADMIN only, audit-logged, 30-minute session). `/api/admin/*` tools are operator-scoped and take no `tenant`.
+**Tenant handling.** Most tools take an optional `tenant` (id, slug or exact name). Without it the call lands in the tenant the login belongs to; with it the server impersonates that tenant for the one call (SUPER_ADMIN only, audit-logged, 30-minute session). An id is looked up directly. A slug or name is checked against every tenant's id, slug and name: names aren't unique and owners can rename their own, so a slug or name more than one tenant answers to is refused with each listed (pass the id), as is a lookup with too many matches to check. Prefer the id for any cross-tenant write. `/api/admin/*` tools are operator-scoped and take no `tenant`.
 
 Not exposed on purpose: the platform-to-platform callbacks under `/api/platform/**` and `/api/play/[token]/kiosk-event` (machine-to-machine, secret-authenticated).
 

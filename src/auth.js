@@ -1,7 +1,12 @@
 import fs from "fs";
 import os from "os";
 import path from "path";
+import { createRequire } from "module";
 import { BASE } from "./config.js";
+
+// Says which tool made each request, so UiiQ's ImpersonationLog can tell the
+// MCP from the CLI or a script (Lucas R112-5).
+const USER_AGENT = `uiiq-mcp/${createRequire(import.meta.url)("../package.json").version}`;
 
 const CREDS_PATH = path.join(os.homedir(), ".uiiq", "credentials.json");
 
@@ -71,7 +76,7 @@ async function relogin(creds) {
       "UIIQ session expired and no stored password to auto-relogin. Run: uiiq login"
     );
   }
-  const csrfRes = await fetch(`${base}/api/auth/csrf`);
+  const csrfRes = await fetch(`${base}/api/auth/csrf`, { headers: { "User-Agent": USER_AGENT } });
   if (!csrfRes.ok) throw new Error(`Could not reach ${base} for re-login`);
   const { csrfToken } = await csrfRes.json();
   const csrfCookie = csrfRes.headers.get("set-cookie") ?? "";
@@ -89,7 +94,7 @@ async function relogin(creds) {
   });
   const res = await fetch(`${base}/api/auth/callback/credentials`, {
     method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded", Cookie: csrfCookie },
+    headers: { "Content-Type": "application/x-www-form-urlencoded", "User-Agent": USER_AGENT, Cookie: csrfCookie },
     body: body.toString(),
     redirect: "manual",
   });
@@ -183,9 +188,15 @@ export function impersonationState() {
   return { present: true, honoured: true, reason: "honoured", imp };
 }
 
-let tenantIndex = null;
-let tenantIndexAt = 0;
+// Resolved ids by ref, for a few minutes, so a run of calls for one tenant looks it up once.
+const resolvedTenants = new Map();
 const TENANT_INDEX_TTL_MS = 5 * 60 * 1000;
+
+/** How many rows a slug or name lookup reads: UiiQ's most. A full page could have left out the one meant. */
+export const TENANT_SEARCH_LIMIT = 500;
+
+// Tenant names are set by their owners: no control or direction characters in an error.
+const clean = (v) => String(v ?? "").replace(/[\u0000-\u001f\u007f-\u009f\u200e\u200f\u202a-\u202e\u2066-\u2069]/g, "");
 
 function setCookies(res) {
   return typeof res.headers.getSetCookie === "function"
@@ -193,29 +204,54 @@ function setCookies(res) {
     : [res.headers.get("set-cookie") ?? ""];
 }
 
+/**
+ * The one tenant a ref names, by id, slug or exact name (Lucas R112-1; the
+ * uiiq-cli lookup is the same). An id is looked up directly. A slug or name is
+ * searched, and EVERY tenant whose id, slug or name equals it counts: names
+ * aren't unique and an owner can rename theirs, so a newer tenant renamed to
+ * another's slug must be refused by name, never picked. More than one is
+ * refused with each listed; a full page is refused (the one meant may be past
+ * it); none is unknown. Every lookup is made as the operator (`[]`), never as
+ * whatever tenant a CLI session happens to be pointed at.
+ */
 async function resolveTenantId(call, ref) {
-  const wanted = String(ref).trim().toLowerCase();
-  if (!tenantIndex || Date.now() - tenantIndexAt > TENANT_INDEX_TTL_MS) {
-    // `[]` — a control-plane lookup, made as the operator, not as whatever
-    // tenant a CLI session happens to be pointed at.
-    const res = await call("/admin/tenants", {}, []);
+  const wanted = String(ref).trim();
+  const key = wanted.toLowerCase();
+  const known = resolvedTenants.get(key);
+  if (known && Date.now() - known.at <= TENANT_INDEX_TTL_MS) return known.id;
+
+  let id = null;
+  const direct = await call(`/admin/tenants/${encodeURIComponent(wanted)}`, {}, []);
+  if (direct.ok) {
+    const t = await direct.json().catch(() => null);
+    if (t?.id != null && String(t.id).toLowerCase() === key) id = t.id;
+  } else {
+    await direct.text().catch(() => {});
+  }
+  if (id == null) {
+    const res = await call(`/admin/tenants?search=${encodeURIComponent(wanted)}&limit=${TENANT_SEARCH_LIMIT}`, {}, []);
     if (!res.ok) {
       throw new Error(
-        "Could not list tenants — cross-tenant work needs a SUPER_ADMIN login. " + (await res.text()),
+        "Could not look up tenants — cross-tenant work needs a SUPER_ADMIN login. " + (await res.text()),
       );
     }
-    const data = await res.json();
-    tenantIndex = Array.isArray(data) ? data : data.tenants ?? [];
-    tenantIndexAt = Date.now();
+    const data = await res.json().catch(() => null);
+    const rows = Array.isArray(data) ? data : data?.tenants ?? [];
+    const hits = [...new Map(
+      rows.filter((t) => [t.id, t.slug, t.name].some((v) => String(v ?? "").toLowerCase() === key)).map((t) => [t.id, t]),
+    ).values()];
+    if (hits.length > 1) {
+      const each = hits.map((t) => `${clean(t.name)} (${clean(t.slug)}, ${clean(t.id)})`).join(", ");
+      throw new Error(`Tenant "${clean(wanted)}" matches ${hits.length} tenants: ${each}. Pass the id. Nothing was sent.`);
+    }
+    if (rows.length >= TENANT_SEARCH_LIMIT) {
+      throw new Error(`Too many tenants match "${clean(wanted)}" to be sure of the one meant. Pass the id. Nothing was sent.`);
+    }
+    if (!hits.length) throw new Error(`Unknown tenant: ${clean(wanted)} (pass a tenant id, slug or exact name)`);
+    id = hits[0].id;
   }
-  const hit = tenantIndex.find(
-    (t) =>
-      String(t.id).toLowerCase() === wanted ||
-      String(t.slug ?? "").toLowerCase() === wanted ||
-      String(t.name ?? "").toLowerCase() === wanted,
-  );
-  if (!hit) throw new Error(`Unknown tenant: ${ref} (pass a tenant id, slug or exact name)`);
-  return hit.id;
+  resolvedTenants.set(key, { id, at: Date.now() });
+  return id;
 }
 
 // Returns the impersonation cookie to ride along with, or null when the target
@@ -298,6 +334,7 @@ function baseCaller() {
       redirect: "manual",
       headers: {
         "Content-Type": "application/json",
+        "User-Agent": USER_AGENT,
         ...(init.headers ?? {}),
         Cookie: [
           `${c.cookieName ?? "__Secure-authjs.session-token"}=${c.sessionToken}`,
