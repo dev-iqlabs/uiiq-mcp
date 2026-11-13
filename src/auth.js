@@ -196,7 +196,7 @@ const TENANT_INDEX_TTL_MS = 5 * 60 * 1000;
 export const TENANT_SEARCH_LIMIT = 500;
 
 // Tenant names are set by their owners: no control or direction characters in an error.
-const clean = (v) => String(v ?? "").replace(/[\u0000-\u001f\u007f-\u009f‎‏‪-‮⁦-⁩]/g, "");
+const clean = (v) => String(v ?? "").replace(/[\u0000-\u001f\u007f-\u009f\u200e\u200f\u202a-\u202e\u2066-\u2069]/g, "");
 
 function setCookies(res) {
   return typeof res.headers.getSetCookie === "function"

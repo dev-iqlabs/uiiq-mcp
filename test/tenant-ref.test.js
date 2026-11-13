@@ -113,6 +113,15 @@ test("a full page is refused, even with one exact match: what was cut off could 
   assert.ok(!lines().includes("POST /admin/impersonate"));
 });
 
+test("names from UiiQ go into the error without control or direction characters (owners set them)", async () => {
+  const ESC = String.fromCharCode(27), RLO = String.fromCharCode(0x202e);
+  tenants = [{ id: "ten_x", slug: "sly", name: `Sly${RLO}${ESC}[31mCo` }, { id: "ten_y", slug: "sly-2", name: "sly" }];
+  await assert.rejects(list("sly"), (e) => {
+    assert.equal(e.message, 'Tenant "sly" matches 2 tenants: Sly[31mCo (sly, ten_x), sly (sly-2, ten_y). Pass the id. Nothing was sent.');
+    return true;
+  });
+});
+
 test("an unknown ref is refused", async () => {
   await assert.rejects(list("nosuchplace"), /^Error: Unknown tenant: nosuchplace \(pass a tenant id, slug or exact name\)$/);
   assert.deepEqual(lines(), LOOKUP("nosuchplace"));
