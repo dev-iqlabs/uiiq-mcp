@@ -886,6 +886,9 @@ test("a person's confirmation needs appearsUnder18, refused before sending, neve
   // Sent as given: true with a tick goes through, so UiiQ's refusal (in Kim's words) is what staff see.
   const { requests } = await call("uiiq_competition_nominee_confirm", { entryId: "e1", answeredBy: "guardian", appearsUnder18: true, how: "phone", items: { ...items, publishFirstName: true } }, [200, { id: "e1" }]);
   assert.deepEqual(requests[0].body, { answeredBy: "guardian", appearsUnder18: true, how: "phone", items: { ...items, publishFirstName: true } });
+  // Lucas R113-6: an agent never answers it for staff.
+  assert.match(tools.uiiq_competition_nominee_confirm.description, /The person you're working for must give this answer; never infer it from the nomination, the name or the consent form./);
+  await assert.rejects(call("uiiq_competition_nominee_confirm", { entryId: "e1", answeredBy: "nominee", how: "phone", items }, [200, { id: "e1" }]), /never infer it from the nomination, the name or the consent form. Ask them./);
   // Kim's description, word for word.
   assert.equal(tools.uiiq_competition_nominee_confirm.inputSchema.properties.appearsUnder18.description, 'Required. true if the nominee is, or might be, under 18 (if unsure, true). With true, every publish item must be false. answeredBy "guardian" needs true.');
 });
