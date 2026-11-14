@@ -2,6 +2,7 @@ import fs from "fs";
 import os from "os";
 import path from "path";
 import { createRequire } from "module";
+import { STATUS_CODES } from "http";
 import { BASE } from "./config.js";
 
 // Says which tool made each request, so UiiQ's ImpersonationLog can tell the
@@ -58,6 +59,25 @@ async function readRefusal(res) {
 function verdict(res, body) {
   if (res.status === 403 && body?.code === CHILD_RECORDS_CODE) return "refused";
   return authExpired(res) ? "expired" : "ok";
+}
+
+/** The text a failed answer with no body is given: its status, so no tool throws an empty error. */
+export function noBodyText(status, statusText) {
+  return `HTTP ${status} ${statusText || STATUS_CODES[status] || ""}`.trim() + ", with no body";
+}
+
+// Most tools throw `await res.text()` as their error. A request the hosting
+// refuses before UiiQ's route runs (a 413 on an upload over its size) has no
+// body, so that error was empty. Every failed answer is read here, and one
+// with no body carries its status instead.
+async function withErrorText(res) {
+  if (res.status < 400) return res;
+  const text = await res.text();
+  return new Response(text || noBodyText(res.status, res.statusText), {
+    status: res.status,
+    statusText: res.statusText,
+    headers: res.headers,
+  });
 }
 
 function childRecordsRefused(body) {
@@ -366,17 +386,17 @@ function baseCaller() {
 
   return async (p, init = {}, extraCookies) => {
     let { res, expired } = await attempt(p, init, extraCookies);
-    if (!expired) return res;
+    if (!expired) return withErrorText(res);
 
     const onDisk = freshFromDisk();
     if (onDisk) {
       creds = onDisk;
       ({ res, expired } = await attempt(p, init, extraCookies));
-      if (!expired) return res;
+      if (!expired) return withErrorText(res);
     }
 
     creds = await relogin(creds);
-    return (await attempt(p, init, extraCookies)).res;
+    return withErrorText((await attempt(p, init, extraCookies)).res);
   };
 }
 

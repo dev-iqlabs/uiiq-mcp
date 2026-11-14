@@ -193,7 +193,7 @@ export const competitionTools = [
   },
   {
     name: "uiiq_competition_get",
-    description: "One competition with its rounds, each with its phase (upcoming, open, closed, decided) and the entry form link for that round; pendingForgets { count, oldest } counts the workspace's commenter erasures IQEX hasn't confirmed forgetting yet (share the round's link, never the bare form). A DRAW's rounds have no form link; each has lastCollectedAt, when its comments were last read into entries (null: not yet). A NOMINATION's rounds have nominateReplies: the \"Comment NOMINATE\" private replies, { sent, failed, waiting, reasons } (reasons by code, e.g. too_old_here, maybe_sent, off), or null when none were sent.",
+    description: "One competition with its rounds, each with its phase (upcoming, open, closed, decided) and the entry form link for that round; pendingForgets { count, oldest } counts the workspace's commenter erasures IQEX hasn't confirmed forgetting yet (share the round's link, never the bare form). A DRAW's rounds have no form link; each has lastCollectedAt, when its comments were last read into entries (null: not yet). A NOMINATION's rounds have nominateReplies: the \"Comment NOMINATE\" private replies, { sent, failed, waiting, reasons } (reasons by code, e.g. too_old_here, maybe_sent, off), or null when none were sent. deleteBlockers: what stops uiiq_competition_delete ([] when it can be deleted; [\"running\"] while it's ACTIVE; otherwise what UiiQ holds a sign of: entries, posts, draw, votes, replies, objections, counts).",
     inputSchema: { type: "object", required: ["id"], properties: { id: { type: "string" }, tenant: TENANT_PROP } },
     async handler({ id, tenant }) {
       return call(tenant, `/competitions/${seg(id)}`);
@@ -251,6 +251,20 @@ export const competitionTools = [
     },
     async handler({ id, tenant, ...body }) {
       return call(tenant, `/competitions/${seg(id)}`, send("PATCH", body));
+    },
+  },
+  {
+    name: "uiiq_competition_delete",
+    description: "Delete a competition that never had an entry (owner/admin), e.g. a test run: only a DRAFT or ARCHIVED one where UiiQ holds no sign of entries (erased or purged ones count, and so does a round that was decided or had its vote token made), social posts (drafts included), a draw, votes, comment replies, report objections or buy-or-book counts. UiiQ can only go by what it holds: a competition post deleted in Social leaves no sign, so it no longer stops a delete. Its rounds and published terms versions go with it; the audit keeps its name and each terms version whole (its words as published, label, hash and date). Anything else is refused (409, `blockers` saying what UiiQ holds a sign of); a running one must be archived first (uiiq_competition_update status ARCHIVED), and one that ran for real stays archived. Nothing at IQEX changes: its forms stay as they are. Can't be undone. Without confirm: true it's a dry run: it reads the competition, says whether it could be deleted (`deleteBlockers`, [] when it can) and changes nothing.",
+    inputSchema: { type: "object", required: ["id"], properties: { id: { type: "string" }, confirm: CONFIRM_PROP, tenant: TENANT_PROP } },
+    async handler({ id, confirm, tenant }) {
+      const path = `/competitions/${seg(id)}`;
+      if (confirm !== true) {
+        const c = await call(tenant, path);
+        const blockers = Array.isArray(c?.deleteBlockers) ? c.deleteBlockers : null;
+        return dryRun("delete_competition", tenant, { competitionId: id, name: c?.name ?? null, status: c?.status ?? null, rounds: Array.isArray(c?.rounds) ? c.rounds.length : null, deleteBlockers: blockers, canDelete: blockers !== null && blockers.length === 0 }, "Deleting can't be undone. Check it's the right competition and workspace; one with deleteBlockers would be refused.");
+      }
+      return call(tenant, path, { method: "DELETE" });
     },
   },
   // The generated terms (UiiQ-platform competitions v2, 5b): Kim's terms and
@@ -702,13 +716,14 @@ export const competitionTools = [
   },
   {
     name: "uiiq_competition_nominee_confirm",
-    description: "Record what was agreed directly with the nominee, or with their parent or guardian if under 18, e.g. at the prize handover (owner/admin): the only thing that lets their name, the quote or a photo be published. All four items must be given; a later record replaces this one, a withdrawal included. For an ACT competition (act-consent-v1) it's what was confirmed directly with the act: answeredBy solo or member (a member or the manager, 18 or over, whom the act let answer for it), the five act items (publishAct, publishPhotos, publishClip, publishReason, publishAds: nothing but publishAct may be yes unless publishAct is), rightsConfirmed (needed for photos or a clip: the act's own, original music only), minorMembers (none, or guardian_agreed) and termsSeen: true (Kim, Addendum 20: refused without it), and it may be confirmed by direct-message. Audited. Answers with the entry's id, status, weightedScore and publishable, and any postWarnings (what changed on the round's posts); the full entry is on uiiq_competition_entry_get.",
+    description: "Record what was agreed directly with the nominee, or with their parent or guardian if under 18, e.g. at the prize handover (owner/admin): the only thing that lets their name, the quote or a photo be published, and never about anyone who is or might be under 18 (Kim S2). A person (nominee or guardian) needs appearsUnder18, refused before sending without it. The person you're working for must give this answer; never infer it from the nomination, the name or the consent form. if the consent form gave the guardian answer and appearsUnder18 is false, note must say how you know they're 18 or over; a record made before appearsUnder18 existed publishes nothing until it's recorded again. An act doesn't take it (its members under 18 are minorMembers). All four items must be given; a later record replaces this one, a withdrawal included. For an ACT competition (act-consent-v1) it's what was confirmed directly with the act: answeredBy solo or member (a member or the manager, 18 or over, whom the act let answer for it), the five act items (publishAct, publishPhotos, publishClip, publishReason, publishAds: nothing but publishAct may be yes unless publishAct is), rightsConfirmed (needed for photos or a clip: the act's own, original music only), minorMembers (none, or guardian_agreed) and termsSeen: true (Kim, Addendum 20: refused without it), and it may be confirmed by direct-message. Audited. Answers with the entry's id, status, weightedScore and publishable, and any postWarnings (what changed on the round's posts); the full entry is on uiiq_competition_entry_get.",
     inputSchema: {
       type: "object",
       required: ["entryId", "answeredBy", "how", "items"],
       properties: {
         entryId: { type: "string" },
         answeredBy: { type: "string", enum: ["nominee", "guardian", "solo", "member"], description: "A person: nominee or guardian. An act: solo or member" },
+        appearsUnder18: { type: "boolean", description: "Required. true if the nominee is, or might be, under 18 (if unsure, true). With true, every publish item must be false. answeredBy \"guardian\" needs true." },
         how: { type: "string", enum: ["in-person", "phone", "email", "letter", "direct-message"], description: "direct-message: an act only (as staff send an act its link)" },
         items: {
           type: "object",
@@ -735,6 +750,10 @@ export const competitionTools = [
       // An act's termsSeen is the person's own answer, never filled in here (Lucas I3 on UiiQ-platform #1310).
       if ((body.answeredBy === "solo" || body.answeredBy === "member") && typeof body.termsSeen !== "boolean") {
         throw new Error("termsSeen is required for an act: make sure the act has seen the terms of the permission before you record its answers (use Copy the terms to send them, or read them out), then send termsSeen: true");
+      }
+      // Never defaulted here: it's staff's own answer (Kim S2; UiiQ-platform PR U0).
+      if ((body.answeredBy === "nominee" || body.answeredBy === "guardian") && typeof body.appearsUnder18 !== "boolean") {
+        throw new Error("appearsUnder18 is required for a person: true if the nominee is, or might be, under 18 (if unsure, true). With true, every publish item must be false. answeredBy \"guardian\" needs true. The person you're working for must give this answer; never infer it from the nomination, the name or the consent form. Ask them.");
       }
       return entrySummary(await call(tenant, `/competitions/entries/${seg(entryId)}/nominee-confirmation`, send("POST", body)));
     },
