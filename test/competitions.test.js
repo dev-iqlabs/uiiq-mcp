@@ -73,7 +73,7 @@ test("each tool calls its own route, with its own method and body", async () => 
     ["uiiq_competition_entries", { id: "c1" }, "GET", "/competitions/c1/entries", undefined],
     ["uiiq_competition_entry_get", { entryId: "e1" }, "GET", "/competitions/entries/e1", undefined],
     ["uiiq_competition_entry_update", { entryId: "e1", scores: { story: 8 } }, "PATCH", "/competitions/entries/e1", { scores: { story: 8 } }],
-    ["uiiq_competition_nominee_confirm", { entryId: "e1", answeredBy: "nominee", how: "phone", items: {} }, "POST", "/competitions/entries/e1/nominee-confirmation", { answeredBy: "nominee", how: "phone", items: {} }],
+    ["uiiq_competition_nominee_confirm", { entryId: "e1", answeredBy: "nominee", appearsUnder18: false, how: "phone", items: {} }, "POST", "/competitions/entries/e1/nominee-confirmation", { answeredBy: "nominee", appearsUnder18: false, how: "phone", items: {} }],
     ["uiiq_competition_entry_erase", { entryId: "e1", confirm: true }, "DELETE", "/competitions/entries/e1", undefined],
     ["uiiq_competition_entry_leave_out", { entryId: "e1" }, "POST", "/competitions/entries/e1/leave-out", undefined],
     ["uiiq_competition_leave_out_by_email", { id: "c1", email: " gone@example.com " }, "POST", "/competitions/c1/leave-out", { email: "gone@example.com" }],
@@ -234,8 +234,8 @@ test("rounds: one round, or weekly with themes", async () => {
 
 test("the nominee confirmation sends exactly what was agreed, all four items", async () => {
   const items = { publishFirstName: true, publishReason: true, publishPhoto: false, publishDelivery: false };
-  const r = await call("uiiq_competition_nominee_confirm", { entryId: "e1", answeredBy: "guardian", how: "in-person", items, note: "At the handover" });
-  assert.deepEqual(r.requests[0], { method: "POST", path: "/competitions/entries/e1/nominee-confirmation", body: { answeredBy: "guardian", how: "in-person", items, note: "At the handover" } });
+  const r = await call("uiiq_competition_nominee_confirm", { entryId: "e1", answeredBy: "nominee", appearsUnder18: false, how: "in-person", items, note: "At the handover" });
+  assert.deepEqual(r.requests[0], { method: "POST", path: "/competitions/entries/e1/nominee-confirmation", body: { answeredBy: "nominee", appearsUnder18: false, how: "in-person", items, note: "At the handover" } });
   // A person and an act give different items (3b), so UiiQ checks that every one of the right set is given; the schema names both sets.
   assert.match(tools.uiiq_competition_nominee_confirm.inputSchema.properties.items.description, /publishFirstName, publishReason, publishPhoto, publishDelivery.*publishAct, publishPhotos, publishClip, publishReason, publishAds/);
 });
@@ -453,7 +453,7 @@ test("a change to an entry answers without the entrant's or commenter's details 
   const items = { publishFirstName: false, publishReason: false, publishPhoto: false, publishDelivery: false };
   for (const [name, args] of [
     ["uiiq_competition_entry_update", { entryId: "e7", status: "REJECTED" }],
-    ["uiiq_competition_nominee_confirm", { entryId: "e7", answeredBy: "nominee", how: "phone", items }],
+    ["uiiq_competition_nominee_confirm", { entryId: "e7", answeredBy: "nominee", appearsUnder18: false, how: "phone", items }],
   ]) {
     const { result } = await call(name, args, [200, full]);
     assert.deepEqual(result, expected, name);
@@ -638,7 +638,7 @@ test("an act's confirmation without termsSeen is refused before sending, never f
     }
   }
   // A person's confirmation never asks it.
-  const person = await call("uiiq_competition_nominee_confirm", { entryId: "e1", answeredBy: "nominee", how: "phone", items: {} }, [200, { id: "e1" }]);
+  const person = await call("uiiq_competition_nominee_confirm", { entryId: "e1", answeredBy: "nominee", appearsUnder18: false, how: "phone", items: {} }, [200, { id: "e1" }]);
   assert.equal(person.requests.length, 1);
 });
 
@@ -872,4 +872,23 @@ test("post designs (UiiQ-platform competitions 5a): the designs listing reads on
   assert.match(tools.uiiq_competition_post_draft.description, /IQEX never receives a name/);
   assert.match(tools.uiiq_competition_post_draft.description, /every finalist's number, the vote's card is plain/);
   assert.deepEqual(tools.uiiq_competition_post_draft.inputSchema.properties.stage.enum, ["call", "shortlist", "winner", "vote", "last_chance", "story"]);
+});
+
+test("a person's confirmation needs appearsUnder18, refused before sending, never filled in (Kim S2; UiiQ-platform PR U0)", async () => {
+  const items = { publishFirstName: false, publishReason: false, publishPhoto: false, publishDelivery: false };
+  for (const answeredBy of ["nominee", "guardian"]) {
+    for (const appearsUnder18 of [undefined, "true", "false", 0, null]) {
+      seen = [];
+      await assert.rejects(call("uiiq_competition_nominee_confirm", { entryId: "e1", answeredBy, how: "phone", items, ...(appearsUnder18 === undefined ? {} : { appearsUnder18 }) }, [200, { id: "e1" }]), /appearsUnder18 is required for a person/, `${answeredBy} ${appearsUnder18}`);
+      assert.equal(seen.length, 0, `${answeredBy} ${appearsUnder18}`);
+    }
+  }
+  // Sent as given: true with a tick goes through, so UiiQ's refusal (in Kim's words) is what staff see.
+  const { requests } = await call("uiiq_competition_nominee_confirm", { entryId: "e1", answeredBy: "guardian", appearsUnder18: true, how: "phone", items: { ...items, publishFirstName: true } }, [200, { id: "e1" }]);
+  assert.deepEqual(requests[0].body, { answeredBy: "guardian", appearsUnder18: true, how: "phone", items: { ...items, publishFirstName: true } });
+  // Lucas R113-6: an agent never answers it for staff.
+  assert.match(tools.uiiq_competition_nominee_confirm.description, /The person you're working for must give this answer; never infer it from the nomination, the name or the consent form./);
+  await assert.rejects(call("uiiq_competition_nominee_confirm", { entryId: "e1", answeredBy: "nominee", how: "phone", items }, [200, { id: "e1" }]), /never infer it from the nomination, the name or the consent form. Ask them./);
+  // Kim's description, word for word.
+  assert.equal(tools.uiiq_competition_nominee_confirm.inputSchema.properties.appearsUnder18.description, 'Required. true if the nominee is, or might be, under 18 (if unsure, true). With true, every publish item must be false. answeredBy "guardian" needs true.');
 });
