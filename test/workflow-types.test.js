@@ -26,7 +26,7 @@ before(async () => {
       seen.push({ method: req.method, path, cookie: req.headers.cookie ?? "", ...(body ? { body: parsed } : {}) });
       const json = (status, data, headers = {}) => { res.writeHead(status, { "content-type": "application/json", ...headers }); res.end(JSON.stringify(data)); };
       // The impersonation the client makes for `tenant`.
-      if (path === "/admin/tenants") return json(200, TENANTS);
+      if (path.split("?")[0] === "/admin/tenants") return json(200, TENANTS); // ?search=<ref>&limit=500
       if (path === "/admin/impersonate" && req.method === "POST") return json(200, { ok: true }, { "set-cookie": `${IMP}; Path=/; HttpOnly` });
       if (path === "/admin/impersonate/exit") return json(200, { ok: true });
       // The client's one re-login after a 401.
