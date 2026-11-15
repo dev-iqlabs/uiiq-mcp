@@ -922,3 +922,149 @@ test("a person's confirmation needs appearsUnder18, refused before sending, neve
   // Kim's description, word for word.
   assert.equal(tools.uiiq_competition_nominee_confirm.inputSchema.properties.appearsUnder18.description, 'Required. true if the nominee is, or might be, under 18 (if unsure, true). With true, every publish item must be false. answeredBy "guardian" needs true.');
 });
+
+// ── The competition call, UiiQ-platform PR A: the entry page, the prize product, the round's question ──
+
+// Kim's words as UiiQ gives them (UiiQ-platform entry-page.ts ENTRY_PAGE_TICK, design-words QUESTION_WORDS).
+const ENTRY_PAGE_TICK = "This page is for this competition: it shows how to enter (or links to our entry form) and links to the full rules.";
+// Lucas R126-7, word for word: a tick is the person's own statement, never an AI session's.
+const PRIZE_TICK_RULE = "Only when the person using you has looked at every picture of the product themselves and told you so in this conversation. Never set it on your own judgement.";
+const PAGE_TICK_RULE = "Only when the person using you has opened the page themselves and told you so in this conversation. Never set it on your own judgement.";
+const QUESTION_CHILDREN = "The question can't point at children: nominees are named and quoted only with their own agreement, which a child can't give.";
+
+test("the entry page: entryPageUrl goes as given on create and update; entryPageConfirmed only when given", async () => {
+  const page = "https://ultimatecoins.co.uk/competitions/coin-of-the-week/";
+  let { requests } = await call("uiiq_competition_update", { id: "c1", entryPageUrl: page }, [200, {}]);
+  assert.deepEqual(requests, [{ method: "PATCH", path: "/competitions/c1", body: { entryPageUrl: page } }]);
+  ({ requests } = await call("uiiq_competition_update", { id: "c1", entryPageUrl: page, entryPageConfirmed: true }, [200, {}]));
+  assert.deepEqual(requests[0].body, { entryPageUrl: page, entryPageConfirmed: true });
+  // The stored page ticked on its own, and taken away.
+  ({ requests } = await call("uiiq_competition_update", { id: "c1", entryPageConfirmed: true }, [200, {}]));
+  assert.deepEqual(requests[0].body, { entryPageConfirmed: true });
+  ({ requests } = await call("uiiq_competition_update", { id: "c1", entryPageUrl: null }, [200, {}]));
+  assert.deepEqual(requests[0].body, { entryPageUrl: null });
+  ({ requests } = await call("uiiq_competition_create", { name: "Coin of the Week", slug: "coin-of-the-week", entryPageUrl: page }, [201, { id: "c2" }]));
+  assert.deepEqual(requests[0].body, { name: "Coin of the Week", slug: "coin-of-the-week", entryPageUrl: page });
+  for (const t of ["uiiq_competition_create", "uiiq_competition_update"]) {
+    const props = tools[t].inputSchema.properties;
+    assert.deepEqual(props.entryPageUrl.type, ["string", "null"], t);
+    assert.equal(props.entryPageConfirmed.type, "boolean", t);
+    // Kim's tick word for word, and never an agent's own.
+    assert.ok(props.entryPageConfirmed.description.includes(ENTRY_PAGE_TICK), t);
+    assert.ok(props.entryPageConfirmed.description.includes(PAGE_TICK_RULE), t);
+    assert.match(props.entryPageUrl.description, /OWN site/, t);
+    assert.match(props.entryPageUrl.description, /clears the tick/, t);
+  }
+});
+
+test("the entry page: UiiQ's refusal comes back in its own words; an older UiiQ's too", async () => {
+  const notOwn = "The entry page must be on your own website: a site this workspace owns, or its website (Settings, Workspace)";
+  await assert.rejects(call("uiiq_competition_update", { id: "c1", entryPageUrl: "https://elsewhere.example/page" }, [400, { error: notOwn }]), (e) => e.message === notOwn);
+  await assert.rejects(call("uiiq_competition_update", { id: "c1", entryPageConfirmed: true }, [400, { error: "entryPageConfirmed ticks the entry page: set entryPageUrl too" }]), (e) => e.message === "entryPageConfirmed ticks the entry page: set entryPageUrl too");
+  // Today's UiiQ doesn't know the field: its own answer, as it gives it.
+  await assert.rejects(call("uiiq_competition_update", { id: "c1", entryPageUrl: "https://ultimatecoins.co.uk/c/" }, [400, { error: "Nothing to update" }]), (e) => e.message === "Nothing to update");
+});
+
+test("the prize product: postDesigns goes whole, prizeProduct as given, confirmed only when given; null clears it", async () => {
+  const designs = { call: "compcall", colours: { bg_colour: "#0B1F3A" }, prizeProduct: { productId: "UC-ROBIN", article: "a" } };
+  let { requests } = await call("uiiq_competition_update", { id: "c1", postDesigns: designs }, [200, {}]);
+  assert.deepEqual(requests, [{ method: "PATCH", path: "/competitions/c1", body: { postDesigns: designs } }]);
+  assert.equal("confirmed" in requests[0].body.postDesigns.prizeProduct, false);
+  const ticked = { ...designs, prizeProduct: { productId: "UC-ROBIN", article: "", confirmed: true } };
+  ({ requests } = await call("uiiq_competition_update", { id: "c1", postDesigns: ticked }, [200, {}]));
+  assert.deepEqual(requests[0].body.postDesigns.prizeProduct, { productId: "UC-ROBIN", article: "", confirmed: true });
+  ({ requests } = await call("uiiq_competition_update", { id: "c1", postDesigns: { call: "compcall", prizeProduct: null } }, [200, {}]));
+  assert.deepEqual(requests[0].body, { postDesigns: { call: "compcall", prizeProduct: null } });
+  // UiiQ's refusals, in its words: an unticked new product, one not in the feed, and an older UiiQ that doesn't know the key.
+  for (const why of [
+    "Tick the prize product's box first: \"This photo shows the prize itself, and there's no person in it, not even on the product.\"",
+    "That product isn't in your shop's product feed: pick it from the list",
+    "Unknown postDesigns key \"prizeProduct\"",
+  ]) {
+    await assert.rejects(call("uiiq_competition_update", { id: "c1", postDesigns: designs }, [400, { error: why }]), (e) => e.message === why, why);
+  }
+  const pd = tools.uiiq_competition_update.inputSchema.properties.postDesigns;
+  assert.deepEqual(pd.properties.prizeProduct.type, ["object", "null"]);
+  assert.equal(pd.properties.prizeProduct.additionalProperties, false);
+  assert.deepEqual(Object.keys(pd.properties.prizeProduct.properties).sort(), ["article", "confirmed", "productId"]);
+  assert.deepEqual(pd.properties.prizeProduct.properties.article.enum, ["a", "an", ""]);
+  assert.ok(pd.properties.prizeProduct.properties.confirmed.description.includes(PRIZE_TICK_RULE));
+  // What a save does with what it leaves out (UiiQ-platform parsePostDesigns): said, so nothing is cleared by surprise.
+  assert.match(pd.description, /postDesigns is the WHOLE choice: a stage, the colours or the photo left out are cleared/);
+  assert.match(pd.description, /only prizeProduct is kept when left out/);
+  assert.ok(pd.description.includes(PRIZE_TICK_RULE));
+  assert.match(pd.description, /its title comes from the shop, never from you/);
+});
+
+test("the prize product picker: designs with products: true asks for ?products=1, with a stage or without; never otherwise", async () => {
+  let { requests, result } = await call("uiiq_competition_designs", { id: "c1", products: true }, [200, { enabled: false, designs: [], prizeProducts: { products: [{ id: "UC-ROBIN", title: "Robin coin", images: ["https://shop.example/robin.jpg"] }] } }]);
+  assert.deepEqual(requests, [{ method: "GET", path: "/competitions/c1/designs?products=1" }]);
+  assert.deepEqual(result.prizeProducts.products[0].images, ["https://shop.example/robin.jpg"]);
+  ({ requests } = await call("uiiq_competition_designs", { id: "c1", stage: "call", products: true }, [200, { enabled: true, designs: [] }]));
+  assert.deepEqual(requests, [{ method: "GET", path: "/competitions/c1/designs?stage=call&products=1" }]);
+  for (const products of [undefined, false, "true", 1]) {
+    ({ requests } = await call("uiiq_competition_designs", { id: "c1", ...(products === undefined ? {} : { products }) }, [200, { enabled: true, designs: [] }]));
+    assert.deepEqual(requests, [{ method: "GET", path: "/competitions/c1/designs" }], String(products));
+  }
+  // The feed that can't be read is an answer, passed on as it is.
+  ({ result } = await call("uiiq_competition_designs", { id: "c1", products: true }, [200, { enabled: true, designs: [], prizeProducts: { error: "The shop's feed couldn't be read" } }]));
+  assert.deepEqual(result.prizeProducts, { error: "The shop's feed couldn't be read" });
+  assert.equal(tools.uiiq_competition_designs.inputSchema.properties.products.type, "boolean");
+  assert.match(tools.uiiq_competition_designs.description, /prizeProducts.*\{ products: \[\{ id, title, images \}\] \}.*\{ error \}/);
+  assert.ok(tools.uiiq_competition_designs.description.includes(`Show the person every picture of the one they pick: postDesigns.prizeProduct's confirmed: true is theirs to give. ${PRIZE_TICK_RULE}`));
+});
+
+test("the round's question: sent as given, \"\" clears it; Kim's refusal comes back word for word; not on rounds_add", async () => {
+  let { requests } = await call("uiiq_competition_round_update", { id: "c1", roundId: "r1", question: "What makes their coin collection special?" }, [200, { number: 1 }]);
+  assert.deepEqual(requests, [{ method: "PATCH", path: "/competitions/c1/rounds/r1", body: { question: "What makes their coin collection special?" } }]);
+  ({ requests } = await call("uiiq_competition_round_update", { id: "c1", roundId: "r1", question: "" }, [200, { number: 1 }]));
+  assert.deepEqual(requests[0].body, { question: "" });
+  await assert.rejects(call("uiiq_competition_round_update", { id: "c1", roundId: "r1", question: "Which child deserves it?" }, [400, { error: QUESTION_CHILDREN }]), (e) => e.message === QUESTION_CHILDREN);
+  assert.equal(tools.uiiq_competition_round_update.inputSchema.properties.question.type, "string");
+  assert.equal(tools.uiiq_competition_rounds_add.inputSchema.properties.question, undefined);
+  assert.match(tools.uiiq_competition_round_update.description, /question: the round's question, the call post's first line, up to 80 characters, "" to clear it/);
+  assert.match(tools.uiiq_competition_round_update.description, /refuses one that fails \(400, in her words\)/);
+});
+
+test("the call draft: a question that fails Kim's guard is a 409 in her words; the bio-link note comes back among the warnings", async () => {
+  const why = `Round 2's question: ${QUESTION_CHILDREN} Change it on the round (Edit).`;
+  await assert.rejects(call("uiiq_competition_post_draft", { id: "c1", roundId: "r2", stage: "call" }, [409, { error: why }]), (e) => e.message === why);
+  const note = "Before this goes out: check the link in your Instagram bio opens https://ultimatecoins.co.uk/competitions/coin-of-the-week/, and leave it there until 6pm, Friday 20 November. The post tells people to use it.";
+  const { result } = await call("uiiq_competition_post_draft", { id: "c1", roundId: "r2", stage: "call" }, [201, { postId: "p1", created: true, warnings: [note] }]);
+  assert.deepEqual(result.warnings, [note]);
+  const d = tools.uiiq_competition_post_draft.description;
+  assert.match(d, /the round's question first/);
+  assert.match(d, /"Free to enter\." at the start of its conditions/);
+  assert.match(d, /"Comments, likes and shares aren't nominations: only the form counts\."/);
+  assert.match(d, /the follow line in its own paragraph \("Follow our page to see who wins\." on Facebook/);
+  assert.match(d, /links to the competition's entry page once ticked \(entryPageConfirmed\), else to UiiQ's competition page/);
+  assert.match(d, /Kim's note to check the bio link/);
+  assert.match(d, /refused \(409, her words\)/);
+});
+
+test("get says what the entry page, the rounds' questions and the host video are", () => {
+  const d = tools.uiiq_competition_get.description;
+  for (const k of ["entryPageUrl", "entryPageConfirmedAt", "entryPageConfirmedById", "connectPages", "question", "hostVideo is null"]) assert.ok(d.includes(k), k);
+});
+
+test("Lucas R126-7: the prize product's tick and the entry page's are the person's, never an AI session's, in every tool and parameter that takes them", () => {
+  for (const name of ["uiiq_competition_create", "uiiq_competition_update"]) {
+    const t = tools[name];
+    const props = t.inputSchema.properties;
+    // The tool's own description.
+    assert.ok(t.description.includes(`entryPageConfirmed: ${PAGE_TICK_RULE}`), `${name} description: entry page`);
+    assert.ok(t.description.includes(`postDesigns.prizeProduct.confirmed: ${PRIZE_TICK_RULE}`), `${name} description: prize product`);
+    // Each parameter's.
+    assert.ok(props.entryPageConfirmed.description.includes(PAGE_TICK_RULE), `${name} entryPageConfirmed`);
+    assert.ok(props.postDesigns.properties.prizeProduct.properties.confirmed.description.includes(PRIZE_TICK_RULE), `${name} prizeProduct.confirmed`);
+    assert.ok(props.postDesigns.description.includes(PRIZE_TICK_RULE), `${name} postDesigns`);
+  }
+  // Where the pictures are listed.
+  assert.ok(tools.uiiq_competition_designs.description.includes(PRIZE_TICK_RULE));
+});
+
+test("Lucas R126-7 in the README: both ticks are the person's, never the agent's own", () => {
+  const readme = fs.readFileSync(new URL("../README.md", import.meta.url), "utf8");
+  assert.ok(readme.includes("sent only when the person using the MCP has opened the page themselves and said so in the conversation, never on the agent's own judgement (Lucas R126-7)"));
+  assert.ok(readme.includes("`confirmed: true` only when the person using the MCP has looked at every one of its pictures themselves and said so in the conversation, never on the agent's own judgement (Lucas R126-7)"));
+});
