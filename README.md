@@ -1035,7 +1035,7 @@ Every product's target against its actual, by week, month or fiscal year, colour
 
 | Tool | What it does |
 |---|---|
-| `uiiq_ads_overview` | The Ads & Search overview: spend, results and status per channel, keyword ranks, local pack, reviews. |
+| `uiiq_ads_overview` | The Ads & Search overview: each paid channel and whether it is connected, the latest brief, tracked keyword and LinkedIn lead counts. Meta shows real figures for the last 30 days; other channels say no figures yet. Never sample figures. |
 | `uiiq_ads_advert_briefs` | The workspace's guided Ad-Brief adverts (channel + generated copy) from IQEX. |
 | `uiiq_ads_diagram_start` | Start a diagram from text (Napkin, via IQEX): content = the text to draw, context = what it is for, numberOfVisuals 1 or 2, format svg (default) or png. |
 | `uiiq_ads_diagram_poll` | Check on a diagram with the requestId and token from uiiq_ads_diagram_start (name = what to file it as). |

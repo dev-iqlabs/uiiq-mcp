@@ -48,7 +48,7 @@ export const adsTools = [
   // ── Overview ──
   {
     name: "uiiq_ads_overview",
-    description: "The Ads & Search overview: spend, results and status per channel, keyword ranks, local pack, reviews. Figures for a channel that is not connected are samples, and are labelled so.",
+    description: "The Ads & Search overview: each paid channel and whether it is connected, the latest brief, and the tracked keyword and LinkedIn lead counts. Meta shows the workspace's real figures for the last 30 days (figures \"live\", period \"last_30_days\"); any other channel, or Meta when IQEX can't answer, has null figures with figures \"none\" and a reason. Never sample figures or zeros.",
     inputSchema: { type: "object", properties: { tenant: TENANT_PROP } },
     async handler({ tenant } = {}) {
       const res = await api(tenant)("/ads/overview");
