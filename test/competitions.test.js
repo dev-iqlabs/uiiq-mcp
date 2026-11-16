@@ -56,8 +56,9 @@ test("every tool is named uiiq_competition_* and describes itself", () => {
     assert.ok(t.description.length > 20, name);
     assert.equal(t.inputSchema.type, "object", name);
   }
-  // 41 with uiiq_competition_designs (UiiQ-platform competitions 5a), uiiq_competition_leave_out_by_email and uiiq_competition_delete.
-  assert.equal(Object.keys(tools).length, 41);
+  // 41 with uiiq_competition_designs (UiiQ-platform competitions 5a), uiiq_competition_leave_out_by_email and uiiq_competition_delete;
+  // 45 with the call campaign's get, price, status and attach (UiiQ-platform competition call PR B).
+  assert.equal(Object.keys(tools).length, 45);
 });
 
 test("each tool calls its own route, with its own method and body", async () => {
@@ -87,6 +88,12 @@ test("each tool calls its own route, with its own method and body", async () => 
     ["uiiq_competition_prize_issue", { entryId: "e1", confirm: true }, "POST", "/competitions/entries/e1/prize", undefined],
     ["uiiq_competition_round_lock", { id: "c1", roundId: "r1", confirm: true }, "POST", "/competitions/c1/rounds/r1/lock", undefined],
     ["uiiq_competition_round_draw", { id: "c1", roundId: "r1", confirm: true }, "POST", "/competitions/c1/rounds/r1/draw", undefined],
+    // A round's call campaign (UiiQ-platform competition call PR B): never the press.
+    ["uiiq_competition_call_campaign_get", { id: "c1", roundId: "r1" }, "GET", "/competitions/c1/rounds/r1/call-campaign", undefined],
+    ["uiiq_competition_call_campaign_price", { id: "c1", roundId: "r1", assetId: 7 }, "POST", "/competitions/c1/rounds/r1/call-campaign", { baseVideo: { assetId: 7 } }],
+    ["uiiq_competition_call_campaign_status", { id: "c1", roundId: "r1" }, "GET", "/competitions/c1/rounds/r1/call-campaign/status", undefined],
+    ["uiiq_competition_call_campaign_status", { id: "c1", roundId: "r1", run: "run_1" }, "GET", "/competitions/c1/rounds/r1/call-campaign/status?run=run_1", undefined],
+    ["uiiq_competition_call_campaign_attach", { id: "c1", roundId: "r1", run: "run_1", confirm: true }, "POST", "/competitions/c1/rounds/r1/call-campaign/attach", { run: "run_1" }],
     // The public vote (UiiQ-platform competitions v2, phase 4).
     ["uiiq_competition_round_vote_get", { id: "c1", roundId: "r1" }, "GET", "/competitions/c1/rounds/r1/vote", undefined],
     // The window is the round's now (UiiQ-platform, Kim's Addendum 21): the finalists alone.
@@ -1067,4 +1074,152 @@ test("Lucas R126-7 in the README: both ticks are the person's, never the agent's
   const readme = fs.readFileSync(new URL("../README.md", import.meta.url), "utf8");
   assert.ok(readme.includes("sent only when the person using the MCP has opened the page themselves and said so in the conversation, never on the agent's own judgement (Lucas R126-7)"));
   assert.ok(readme.includes("`confirmed: true` only when the person using the MCP has looked at every one of its pictures themselves and said so in the conversation, never on the agent's own judgement (Lucas R126-7)"));
+});
+
+// A round's call campaign (UiiQ-platform competition call PR B). Lucas R126-7: Kim's K8 tick is a person's
+// statement that they watched the whole video; an AI session can't watch one, so this MCP never presses.
+const CALL_PRESS_RULE = "This MCP never makes the call video, and neither does the uiiq CLI. It's made only in UiiQ's dashboard, by the person who has watched the whole video: they press \"Make the call campaign\" on the round, then \"Make it\". Kim's K8 tick (watched) is their statement that they watched all of it, and an AI session can't watch a video, so no tool here sends watched or confirm, whatever it is asked (Lucas R126-7, R127-5).";
+const CALL_PREVIEW_RULE = "previewUrl is IQEX's private link to watch the made video for 15 minutes, before it's on the call post. It's for watching, never a download: never offer, describe or pass it on as one (Kim §7.5).";
+const CALL_OFF = "The call campaign isn't switched on yet, so nothing was made or charged.";
+const CALL_TOOLS = ["uiiq_competition_call_campaign_get", "uiiq_competition_call_campaign_price", "uiiq_competition_call_campaign_status", "uiiq_competition_call_campaign_attach"];
+const PRESS_ASKS = { watched: true, confirm: true, price: 300, baseVideo: { assetId: 99 } };
+
+test("the call campaign: the four tools are the only ones, and none is the press", () => {
+  assert.deepEqual(Object.keys(tools).filter((n) => n.includes("call_campaign")).sort(), [...CALL_TOOLS].sort());
+  for (const name of Object.keys(tools)) assert.equal(tools[name].inputSchema.properties?.watched, undefined, name);
+  const price = tools.uiiq_competition_call_campaign_price.inputSchema;
+  assert.deepEqual(Object.keys(price.properties).sort(), ["assetId", "id", "roundId", "tenant"]);
+  assert.equal(price.additionalProperties, false);
+  assert.equal(price.properties.assetId.type, "integer");
+  // Nothing in the source sends watched (no such key anywhere in the tools), and no call campaign handler names it or sends confirm: true.
+  const src = fs.readFileSync(new URL("../src/tools/competitions.js", import.meta.url), "utf8");
+  assert.doesNotMatch(src, /\bwatched\s*:/);
+  for (const name of CALL_TOOLS) {
+    assert.doesNotMatch(tools[name].handler.toString(), /\bwatched\b/, name);
+    assert.doesNotMatch(tools[name].handler.toString(), /\bconfirm\s*:\s*true\b/, name);
+  }
+});
+
+test("Lucas R126-7: the price sends the video's id alone, whatever it's given; no call campaign tool sends watched, confirm or price", async () => {
+  let { requests, result } = await call("uiiq_competition_call_campaign_price", { id: "c1", roundId: "r1", ...PRESS_ASKS, assetId: 7 }, [200, { price: 300, words: { headline: "A robin coin" }, name: "Competition call: Coin of the Week, round 2: post only with its UiiQ caption" }]);
+  assert.deepEqual(requests, [{ method: "POST", path: "/competitions/c1/rounds/r1/call-campaign", body: { baseVideo: { assetId: 7 } } }]);
+  assert.equal(result.price, 300);
+  for (const name of CALL_TOOLS) {
+    ({ requests } = await call(name, { id: "c1", roundId: "r1", run: "run_1", ...PRESS_ASKS, assetId: 7, confirm: true }, [200, {}]));
+    assert.ok(requests.length === 1, name);
+    for (const q of requests) {
+      assert.equal(q.body?.watched, undefined, name);
+      assert.equal(q.body?.confirm, undefined, name);
+      assert.equal(q.body?.price, undefined, name);
+    }
+  }
+});
+
+test("the call campaign's descriptions say the person who watched the video makes it in UiiQ's dashboard only, never this MCP or the CLI (Lucas R126-7, R127-5)", () => {
+  for (const name of ["uiiq_competition_call_campaign_get", "uiiq_competition_call_campaign_price"]) {
+    assert.ok(tools[name].description.includes(CALL_PRESS_RULE), name);
+    assert.ok(tools[name].description.includes(`COMPETITION_CALL_CAMPAIGN switch: while it's off UiiQ refuses (409, "${CALL_OFF}"), and a UiiQ without the call campaign answers 404; either comes back in UiiQ's words.`), name);
+  }
+  assert.match(tools.uiiq_competition_call_campaign_price.description, /IQEX's dry run, so nothing is made or charged/);
+  assert.match(tools.uiiq_competition_call_campaign_price.description, /Sends the video's id and nothing else/);
+  assert.match(tools.uiiq_competition_call_campaign_get.description, /Show the person each video's address, so they can watch the whole of the one they choose/);
+});
+
+test("the price: UiiQ's answer with a note that nothing was made; a run already standing is passed on as it is, with how to follow it", async () => {
+  let { result } = await call("uiiq_competition_call_campaign_price", { id: "c1", roundId: "r1", assetId: 7 }, [200, { price: 300, words: { headline: "A robin coin" }, name: "n" }]);
+  assert.deepEqual(result, { price: 300, words: { headline: "A robin coin" }, name: "n", note: "Nothing was made or charged: this is the price only. The person who has watched the whole video makes it in UiiQ's dashboard (\"Make the call campaign\", then \"Make it\"); neither this MCP nor the uiiq CLI can." });
+  const run = { id: "run_1", status: "running", step: "join", error: null, credits: null, name: "n", baseVideo: { assetId: 7 } };
+  ({ result } = await call("uiiq_competition_call_campaign_price", { id: "c1", roundId: "r1", assetId: 7 }, [200, { run, reused: true }]));
+  assert.deepEqual(result.run, run);
+  assert.equal(result.reused, true);
+  assert.match(result.note, /already stands for exactly this video and these words, so nothing new was asked for or charged: follow it with uiiq_competition_call_campaign_status/);
+});
+
+test("the price: an assetId that isn't a whole number is refused before anything is sent", async () => {
+  for (const assetId of [undefined, null, 0, -1, 1.5, "7", Number.NaN]) {
+    reply = () => [200, { price: 300 }];
+    seen = [];
+    await assert.rejects(tools.uiiq_competition_call_campaign_price.handler({ id: "c1", roundId: "r1", ...(assetId === undefined ? {} : { assetId }) }), /assetId must be a video's id in the media library/, String(assetId));
+    assert.deepEqual(seen, [], String(assetId));
+  }
+});
+
+test("attach makes the video public, so it's a dry run until confirm: true and sends nothing; then { run } to its route", async () => {
+  for (const confirm of [undefined, false, "true", 1]) {
+    const { result, requests } = await call("uiiq_competition_call_campaign_attach", { id: "c1", roundId: "r1", run: "run_1", ...(confirm === undefined ? {} : { confirm }) });
+    assert.equal(requests.length, 0, String(confirm));
+    assert.equal(result.dryRun, true, String(confirm));
+    assert.equal(result.wouldDo, "attach_call_video");
+    assert.equal(result.run, "run_1");
+    assert.match(result.note, /^Nothing was changed\. Putting it on the call post makes the video PUBLIC at IQEX \(it's private until then\), and the call post's other pictures and videos come off/);
+    assert.match(result.note, /Then call again with confirm: true\.$/);
+  }
+  const answer = { postId: "p1", run: { id: "run_1", status: "done", attachedAt: "2026-11-20T10:00:00.000Z", socialPostId: "p1" }, warnings: ["The call post's other pictures and videos came off: Facebook can't post a photo and a video together."] };
+  const { result, requests } = await call("uiiq_competition_call_campaign_attach", { id: "c1", roundId: "r1", run: "run_1", confirm: true }, [200, answer]);
+  assert.deepEqual(requests, [{ method: "POST", path: "/competitions/c1/rounds/r1/call-campaign/attach", body: { run: "run_1" } }]);
+  assert.deepEqual(result, answer);
+  const d = tools.uiiq_competition_call_campaign_attach.description;
+  assert.match(d, /IQEX makes the video PUBLIC first/);
+  assert.match(d, /Without confirm: true it's a dry run that sends nothing/);
+  assert.match(d, /never schedules or publishes the post/);
+});
+
+test("the status: the run named, else the latest; previewUrl passed on as given, described as for watching, never a download (Kim §7.5)", async () => {
+  const answer = { run: { id: "run_1", status: "done", name: "n" }, previewUrl: "https://media.example/private/run_1.mp4?sig=1" };
+  const { result } = await call("uiiq_competition_call_campaign_status", { id: "c1", roundId: "r1", run: "run_1" }, [200, answer]);
+  assert.deepEqual(result, answer);
+  const d = tools.uiiq_competition_call_campaign_status.description;
+  assert.ok(d.includes(CALL_PREVIEW_RULE));
+  assert.match(d, /it never starts a new run or charges again/);
+  assert.doesNotMatch(d.replace(CALL_PREVIEW_RULE, ""), /download/i);
+});
+
+test("the call campaign's ids are ids: a run, a competition or a round that isn't one never reaches a route", async () => {
+  for (const [name, args] of [
+    ["uiiq_competition_call_campaign_status", { id: "c1", roundId: "r1", run: "../attach" }],
+    ["uiiq_competition_call_campaign_status", { id: "c1", roundId: "r1", run: "" }],
+    ["uiiq_competition_call_campaign_attach", { id: "c1", roundId: "r1", run: "run 1", confirm: true }],
+    ["uiiq_competition_call_campaign_attach", { id: "c1", roundId: "r1", confirm: true }],
+    ["uiiq_competition_call_campaign_get", { id: "..", roundId: "r1" }],
+    ["uiiq_competition_call_campaign_price", { id: "c1", roundId: "r/1", assetId: 7 }],
+  ]) {
+    reply = () => [200, {}];
+    seen = [];
+    await assert.rejects(tools[name].handler(args), /must be an id/, name);
+    assert.deepEqual(seen, [], name);
+  }
+});
+
+test("the call campaign's refusals come back in UiiQ's words: switched off, not ready, too many, IQEX's publish, and an older UiiQ's 404", async () => {
+  const notReady = "The call campaign can't be made yet: the competition's terms aren't published.";
+  for (const [name, args, status, error] of [
+    ["uiiq_competition_call_campaign_get", { id: "c1", roundId: "r1" }, 409, CALL_OFF],
+    ["uiiq_competition_call_campaign_price", { id: "c1", roundId: "r1", assetId: 7 }, 409, CALL_OFF],
+    ["uiiq_competition_call_campaign_status", { id: "c1", roundId: "r1" }, 409, CALL_OFF],
+    ["uiiq_competition_call_campaign_attach", { id: "c1", roundId: "r1", run: "run_1", confirm: true }, 409, CALL_OFF],
+    ["uiiq_competition_call_campaign_price", { id: "c1", roundId: "r1", assetId: 7 }, 409, notReady],
+    ["uiiq_competition_call_campaign_price", { id: "c1", roundId: "r1", assetId: 7 }, 400, "That isn't a video in this workspace's media library"],
+    ["uiiq_competition_call_campaign_price", { id: "c1", roundId: "r1", assetId: 7 }, 429, "That's a lot of call videos for one hour. Try again later."],
+    ["uiiq_competition_call_campaign_status", { id: "c1", roundId: "r1" }, 404, "No call video has been asked for on this round"],
+    ["uiiq_competition_call_campaign_attach", { id: "c1", roundId: "r1", run: "run_1", confirm: true }, 409, "This video's end card no longer matches the round (the prize, the closing time or the rules have changed since it was made), so it can't go on the call post. Make the call video again."],
+    ["uiiq_competition_call_campaign_attach", { id: "c1", roundId: "r1", run: "run_1", confirm: true }, 502, "IQEX couldn't make the video public, so it isn't on the call post. Try again."],
+    // An older UiiQ, before the call campaign: its 404, as it answers.
+    ["uiiq_competition_call_campaign_get", { id: "c1", roundId: "r1" }, 404, "Not found"],
+    ["uiiq_competition_call_campaign_price", { id: "c1", roundId: "r1", assetId: 7 }, 404, "Not found"],
+    ["uiiq_competition_call_campaign_status", { id: "c1", roundId: "r1", run: "run_1" }, 404, "Not found"],
+    ["uiiq_competition_call_campaign_attach", { id: "c1", roundId: "r1", run: "run_1", confirm: true }, 404, "Not found"],
+  ]) {
+    await assert.rejects(call(name, args, [status, { error }]), (e) => e.message === error, `${name} ${status}`);
+  }
+});
+
+test("the call campaign in the README: the four tools, and the press is a person's, never the MCP's (Lucas R126-7)", () => {
+  const readme = fs.readFileSync(new URL("../README.md", import.meta.url), "utf8");
+  for (const name of CALL_TOOLS) assert.ok(readme.includes("| `" + name + "` |"), name);
+  assert.ok(readme.includes("**This MCP never makes the call video, and neither does the uiiq CLI: it's made only in UiiQ's dashboard (Steve; Lucas R127-5, R126-7).** Kim's K8 tick (`watched`) is a person's statement that they watched all of the video, and an AI session can't watch a video, so no tool sends `watched` or `confirm` to the press, whatever it's asked."));
+  assert.ok(readme.includes("A made video's `previewUrl` is IQEX's private 15-minute link to watch it, never a download (Kim §7.5)"));
+  assert.ok(readme.includes("Putting the video on the call post makes it public at IQEX, so it's a dry run until `confirm: true`."));
+  // The press is UiiQ's dashboard only (Lucas R127-5): nothing here points at a CLI press.
+  assert.doesNotMatch(readme, /--watched/);
+  for (const name of CALL_TOOLS) assert.doesNotMatch(tools[name].description, /--watched|--yes/, name);
 });
