@@ -134,7 +134,7 @@ export const adsTools = [
   // ── Local search ──
   {
     name: "uiiq_ads_local",
-    description: "The workspace's local-search state: the Google Business profile, tracked local keywords and their map-pack positions, recent reviews.",
+    description: "The workspace's local-search state, real data only: `location`, its Google Business Profile listing (null with `figures: \"none\"` and a `reason` until a profile is connected; never sample data); `localPackPosition`, the best latest map-pack position among its tracked local keywords (null when none has ranked); and `recentReviews`, its newest five synced Google reviews ([] until reviews are synced). The tracked keywords themselves: uiiq_ads_local_keywords.",
     inputSchema: { type: "object", properties: { tenant: TENANT_PROP } },
     async handler({ tenant } = {}) {
       const res = await api(tenant)("/ads/local");
