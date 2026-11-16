@@ -255,3 +255,15 @@ test("the description and schema: a competition call post, its video, its tick (
   assert.deepEqual(t.inputSchema.properties.videoDisclaimerTicked.type, "boolean");
   assert.match(t.inputSchema.properties.videoDisclaimerTicked.description, /Never true by yourself/);
 });
+
+test("a call ad with a ticked entry page: linkUrl as given, and UiiQ's refusal of any other link in its words (UiiQ-platform competition call PR A)", async () => {
+  const page = "https://ultimatecoins.co.uk/competitions/coin-of-the-week/";
+  const made = { campaignId: "c1", adSetId: "s1", adId: "a1", adsManagerUrl: null, status: "PAUSED", duplicate: false };
+  const sent = await call({ id: "post_call", ...CALL_AD, linkUrl: page, videoDisclaimerTicked: true, confirm: true }, [200, made]);
+  assert.equal(sent.requests[0].body.linkUrl, page);
+  const why = `A competition call's ad links to its entry page: set linkUrl to ${page}`;
+  await assert.rejects(call({ id: "post_call", ...CALL_AD, linkUrl: "https://ultimatecoins.co.uk/", videoDisclaimerTicked: true, requestId: "ad-link", confirm: true }, [400, { error: why }]), (e) => e.message === `${why} (requestId: ad-link)`);
+  const t = tools.uiiq_social_post_carousel_ad;
+  assert.match(t.description, /Once the competition has a ticked entry page \(uiiq_competition_get entryPageUrl with entryPageConfirmedAt\), linkUrl must be that page, exactly/);
+  assert.match(t.inputSchema.properties.linkUrl.description, /A competition call with a ticked entry page: that page, exactly/);
+});
