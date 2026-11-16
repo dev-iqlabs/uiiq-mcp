@@ -126,6 +126,18 @@ const PRIZE_WORDING_ONLY_PROP = { type: "boolean", description: "With publishTer
 const PRIZE_TICK_RULE = "Only when the person using you has looked at every picture of the product themselves and told you so in this conversation. Never set it on your own judgement.";
 const PAGE_TICK_RULE = "Only when the person using you has opened the page themselves and told you so in this conversation. Never set it on your own judgement.";
 
+// A round's call campaign (UiiQ-platform competition call PR B): IQEX makes the round's square call video from a
+// video in the workspace's media library and an end card with the round's own words (Kim's), and it goes on the
+// round's DRAFT call post. Lucas R126-7: Kim's K8 tick (watched) is a person's statement that they watched the
+// whole video, and an AI session can't watch one; R127-5 (Steve): the press is UiiQ's dashboard only. So no tool
+// here makes the video: the price, its progress and putting it on the post are offered, and nothing sends watched
+// or confirm to the press.
+const CALL_PRESS_RULE = "This MCP never makes the call video, and neither does the uiiq CLI. It's made only in UiiQ's dashboard, by the person who has watched the whole video: they press \"Make the call campaign\" on the round, then \"Make it\". Kim's K8 tick (watched) is their statement that they watched all of it, and an AI session can't watch a video, so no tool here sends watched or confirm, whatever it is asked (Lucas R126-7, R127-5).";
+const CALL_SWITCH = "Needs UiiQ's COMPETITION_CALL_CAMPAIGN switch: while it's off UiiQ refuses (409, \"The call campaign isn't switched on yet, so nothing was made or charged.\"), and a UiiQ without the call campaign answers 404; either comes back in UiiQ's words.";
+const CALL_PREVIEW_RULE = "previewUrl is IQEX's private link to watch the made video for 15 minutes, before it's on the call post. It's for watching, never a download: never offer, describe or pass it on as one (Kim §7.5).";
+const CALL_PRICE_NOTE = "Nothing was made or charged: this is the price only. The person who has watched the whole video makes it in UiiQ's dashboard (\"Make the call campaign\", then \"Make it\"); neither this MCP nor the uiiq CLI can.";
+const CALL_STANDING_NOTE = "A call video already stands for exactly this video and these words, so nothing new was asked for or charged: follow it with uiiq_competition_call_campaign_status.";
+
 const COMPETITION_PROPS = {
   name: { type: "string" },
   slug: { type: "string", description: "Lower-case letters, numbers and hyphens, unique in the workspace" },
@@ -664,6 +676,66 @@ export const competitionTools = [
       const path = `/competitions/${seg(id)}/rounds/${seg(roundId)}/posts/${seg(stage)}`;
       if (confirm !== true) return dryRun("clear_post_mark", tenant, { competitionId: id, roundId, stage }, "Make sure the post is down on every platform it went to (or checked, if it couldn't be).");
       return call(tenant, path, send("PATCH", { takenDown: true }));
+    },
+  },
+  {
+    name: "uiiq_competition_call_campaign_get",
+    description: `A round's call campaign (reads only): whether its call video can be made now (ready) and every reason it can't (why, in UiiQ's words); the end card's words as they'd be sent (words: headline, the ribbon with the prize; question_line; how_line; url; follow_line; closes_line; small_print), Kim's, from the competition and the round; the made video's name (name: post it only with its UiiQ caption, Kim §7.5); Kim's K8 tick and its helper line (tick, tickHelp), for the person to read; the media library's videos it can start from (videos: [{ assetId, name, url }], or videosError); the round's latest runs (id, status requested|running|done|failed|unknown, step, error, credits, name, baseVideo, createdAt, finishedAt, attachedAt, socialPostId, videoUrl once it's on the post); the round's call post (postId, status, published, videoRunId) and that post's carousel ad (status, adsManagerUrl, error), read only. Show the person each video's address, so they can watch the whole of the one they choose. ${CALL_SWITCH} ${CALL_PRESS_RULE}`,
+    inputSchema: { type: "object", required: ["id", "roundId"], properties: { id: { type: "string" }, roundId: { type: "string" }, tenant: TENANT_PROP } },
+    async handler({ id, roundId, tenant }) {
+      return call(tenant, `/competitions/${seg(id)}/rounds/${seg(roundId)}/call-campaign`);
+    },
+  },
+  {
+    name: "uiiq_competition_call_campaign_price",
+    description: `The price of a round's call video, from one video in the workspace's media library (assetId, from videos on uiiq_competition_call_campaign_get): IQEX's dry run, so nothing is made or charged. Answers { price (IQEX credits), words (the end card's), name (the video's) }, or { run, reused: true } when a run already stands for exactly this video and these words (it's never charged twice: follow it with uiiq_competition_call_campaign_status). Refusals come back in UiiQ's words: 400 (not a video in the library), 403 (no IQEX organisation), 409 (switched off, or the round, its terms, social accounts, prize product or end card words aren't ready), 429 (too many prices in an hour, or IQEX is busy), 502. Sends the video's id and nothing else. ${CALL_SWITCH} ${CALL_PRESS_RULE}`,
+    inputSchema: {
+      type: "object",
+      required: ["id", "roundId", "assetId"],
+      additionalProperties: false,
+      properties: {
+        id: { type: "string" },
+        roundId: { type: "string" },
+        assetId: { type: "integer", minimum: 1, description: "The video's id in the workspace's media library (videos[].assetId on uiiq_competition_call_campaign_get)" },
+        tenant: TENANT_PROP,
+      },
+    },
+    // The price only, its body built here from the id alone: never the K8 tick, confirm or a price, whatever else was given (Lucas R126-7).
+    async handler({ id, roundId, assetId, tenant }) {
+      const path = `/competitions/${seg(id)}/rounds/${seg(roundId)}/call-campaign`;
+      if (!Number.isSafeInteger(assetId) || assetId < 1) throw new Error("assetId must be a video's id in the media library: a whole number (videos[].assetId on uiiq_competition_call_campaign_get)");
+      const out = await call(tenant, path, send("POST", { baseVideo: { assetId } }));
+      if (out && typeof out === "object" && "price" in out) return { ...out, note: CALL_PRICE_NOTE };
+      if (out && typeof out === "object" && out.reused === true) return { ...out, note: CALL_STANDING_NOTE };
+      return out;
+    },
+  },
+  {
+    name: "uiiq_competition_call_campaign_status",
+    description: `Where a round's call video is: the run named (run), else the round's latest. Answers { run, progress? (0 to 100), previewUrl? }. A live run is asked of IQEX and recorded, for a login that may change competitions (anyone else sees it as recorded); it never starts a new run or charges again. Poll every 5 seconds, then every 15 after a minute. run.status: requested, running, done, failed (its credits were given back; error says why, in UiiQ's words) or unknown (IQEX hasn't said how it ended: made again with the same video, it's never charged twice). run.name is the made video's name (post it only with its UiiQ caption, Kim §7.5). ${CALL_PREVIEW_RULE} 404: no such round, no run on it, or a UiiQ without the call campaign; 409 while it's switched off; each in UiiQ's words.`,
+    inputSchema: {
+      type: "object",
+      required: ["id", "roundId"],
+      properties: { id: { type: "string" }, roundId: { type: "string" }, run: { type: "string", description: "The run's id (runs[].id on uiiq_competition_call_campaign_get); left out, the round's latest" }, tenant: TENANT_PROP },
+    },
+    async handler({ id, roundId, run, tenant }) {
+      const qs = run === undefined ? "" : `?run=${seg(run, "run")}`;
+      return call(tenant, `/competitions/${seg(id)}/rounds/${seg(roundId)}/call-campaign/status${qs}`);
+    },
+  },
+  {
+    name: "uiiq_competition_call_campaign_attach",
+    description: "Put a made call video (run) on the round's DRAFT call post. IQEX makes the video PUBLIC first (it's private until now); then the call post (a draft, or one that failed; never one scheduled, queued or sent) carries that video alone: its other pictures and videos come off (Facebook can't post a photo and a video together; warnings says so). It never schedules or publishes the post: check it and schedule it in Social, and post the video only with its UiiQ caption (Kim §7.5). Refused when the video's end card no longer matches the round (the prize, the closing time or the rules changed since it was made: make it again). Answers { postId, run, warnings }. Refusals in UiiQ's words: 404 (no such round, or no such run on it), 409 (switched off; not made; out of date; no call post, or it isn't a draft), 502 (IQEX couldn't make it public). Without confirm: true it's a dry run that sends nothing.",
+    inputSchema: {
+      type: "object",
+      required: ["id", "roundId", "run"],
+      properties: { id: { type: "string" }, roundId: { type: "string" }, run: { type: "string", description: "The made run's id (runs[].id on uiiq_competition_call_campaign_get)" }, confirm: CONFIRM_PROP, tenant: TENANT_PROP },
+    },
+    async handler({ id, roundId, run, confirm, tenant }) {
+      const path = `/competitions/${seg(id)}/rounds/${seg(roundId)}/call-campaign/attach`;
+      seg(run, "run");
+      if (confirm !== true) return dryRun("attach_call_video", tenant, { competitionId: id, roundId, run }, "Putting it on the call post makes the video PUBLIC at IQEX (it's private until then), and the call post's other pictures and videos come off: it carries this video alone. Check the run is made (uiiq_competition_call_campaign_status) and that it's the one to post.");
+      return call(tenant, path, send("POST", { run }));
     },
   },
   {
