@@ -5,18 +5,26 @@
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import http from "node:http";
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-let server, home, seen, tools;
+let server, home, seen, tools, reply;
 const ROWS = [{ id: "c1", email: "sam@example.com", tags: ["newsletter"], subscribed: true, source: "website_signup" }];
 
 before(async () => {
   server = http.createServer((req, res) => {
-    seen.push(req.url.replace(/^\/api/, ""));
-    res.writeHead(200, { "content-type": "application/json" });
-    res.end(JSON.stringify(ROWS));
+    req.resume();
+    req.on("end", () => {
+      const path = req.url.replace(/^\/api/, "");
+      const json = (status, data, headers = {}) => { res.writeHead(status, { "content-type": "application/json", ...headers }); res.end(JSON.stringify(data)); };
+      // The client's one re-login after a 401.
+      if (path === "/auth/csrf") return json(200, { csrfToken: "csrf-test" }, { "set-cookie": "authjs.csrf-token=csrf-test; Path=/" });
+      if (path === "/auth/callback/credentials") return json(200, { url: "/" }, { "set-cookie": "authjs.session-token=renewed; Path=/; HttpOnly" });
+      seen.push(path);
+      const [status, data] = reply ?? [200, ROWS];
+      json(status, data);
+    });
   });
   await new Promise((r) => server.listen(0, "127.0.0.1", r));
   const base = `http://127.0.0.1:${server.address().port}`;
@@ -54,4 +62,85 @@ test("subscribed false is sent; filters left out are not", async () => {
   assert.equal((await list({ subscribed: false })).url.searchParams.get("subscribed"), "false");
   const { url } = await list({});
   assert.deepEqual([...url.searchParams.keys()], ["limit"]);
+});
+
+// ── Tags: several, contacts with EVERY one (UiiQ-platform feat/contact-source-tags, Lucas R132) ──
+const COMP = "Competition: Coin of the Week";
+const ROUND = "Coin of the Week, round 1";
+
+test("one tag in tags: a single tag=, encoded (a colon, spaces)", async () => {
+  const { url } = await list({ tags: [COMP] });
+  assert.deepEqual(url.searchParams.getAll("tag"), [COMP]);
+  assert.match(url.search, /[?&]tag=Competition%3A\+Coin\+of\+the\+Week(&|$)/);
+});
+
+test("several tags: tag= repeated in order, each encoded (a comma, a colon, an ampersand), never joined into one", async () => {
+  const odd = "Fish & chips #1";
+  const { result, url } = await list({ tags: [COMP, ROUND, odd] });
+  assert.deepEqual(url.searchParams.getAll("tag"), [COMP, ROUND, odd]);
+  assert.ok(url.search.includes("tag=Competition%3A+Coin+of+the+Week&tag=Coin+of+the+Week%2C+round+1&tag=Fish+%26+chips+%231"), url.search);
+  assert.deepEqual(result, ROWS);
+});
+
+test("tag and tags together: tag first; trimmed, blanks and repeats dropped, as UiiQ reads them", async () => {
+  const { url } = await list({ tag: "newsletter", tags: [` ${COMP} `, "", "newsletter", COMP, "  "] });
+  assert.deepEqual(url.searchParams.getAll("tag"), ["newsletter", COMP]);
+});
+
+test("more than UiiQ reads (10), or tags that aren't text: refused before anything is sent", async () => {
+  const eleven = Array.from({ length: 11 }, (_, i) => `t${i}`);
+  for (const [args, why] of [[{ tags: eleven }, /^At most 10 tags: UiiQ reads no more\. Nothing was sent\.$/], [{ tag: "x", tags: eleven.slice(1) }, /At most 10 tags/], [{ tags: "a,b" }, /tags is a list/], [{ tags: [COMP, 7] }, /tags is a list/]]) {
+    seen = [];
+    await assert.rejects(tools.uiiq_contact_list.handler(args), (e) => why.test(e.message));
+    assert.deepEqual(seen, []);
+  }
+  const { url } = await list({ tags: eleven.slice(1) });
+  assert.equal(url.searchParams.getAll("tag").length, 10);
+});
+
+test("an older UiiQ that ignores tag: the rows it sends come back, no error", async () => {
+  // The stand-in reads no filter at all and answers its rows, as a UiiQ before the filter does.
+  const { result } = await list({ tags: [COMP, ROUND] });
+  assert.deepEqual(result, ROWS);
+});
+
+test("the description, schema and README: every tag must match, the competition's source tags, at most 10", () => {
+  const t = tools.uiiq_contact_list;
+  assert.ok(t.description.includes("tags: contacts with EVERY one of them (all must match, each as typed or in lower case; at most 10, with tag counted among them)."), t.description);
+  assert.ok(t.description.includes('A competition tags each contact it makes or matches with its source tags, "Competition: <competition name>" and "<competition name>, round <n>", e.g. tags ["Competition: Coin of the Week", "Coin of the Week, round 1"].'), t.description);
+  assert.ok(t.description.includes("A UiiQ before contact source tags reads only the first tag, so there several give everyone with the first."), t.description);
+  assert.deepEqual(t.inputSchema.properties.tags, { type: "array", items: { type: "string" }, maxItems: 10, description: t.inputSchema.properties.tags.description });
+  assert.match(t.inputSchema.properties.tags.description, /EVERY one of these tags \(sent as repeated tag\)/);
+  const row = readFileSync(new URL("../README.md", import.meta.url), "utf8").split("\n").find((l) => l.startsWith("| `uiiq_contact_list` |"));
+  assert.match(row, /`tags` \(contacts with EVERY one, sent as repeated `tag`, at most 10\)/);
+  assert.match(row, /"Competition: <competition name>" and "<competition name>, round <n>"/);
+});
+
+// ── A refusal is UiiQ's words, never [] (it read as "no contacts") ──
+test("a 403 is UiiQ's words, thrown, never an empty list", async () => {
+  for (const [data, words] of [[{ error: "You don't have permission to do that.", code: "role_access" }, "You don't have permission to do that."], [{ error: "The contact database isn't switched on for this workspace" }, "The contact database isn't switched on for this workspace"]]) {
+    reply = [403, data];
+    seen = [];
+    try {
+      await assert.rejects(tools.uiiq_contact_list.handler({ tags: [COMP] }), (e) => e.message === words);
+      assert.equal(seen.length, 1);
+    } finally {
+      reply = undefined;
+    }
+  }
+});
+
+test("a 401 after the one re-login is UiiQ's 'Unauthorized', never an empty list", async () => {
+  const creds = join(home, ".uiiq", "credentials.json");
+  const plain = JSON.parse(readFileSync(creds, "utf8"));
+  writeFileSync(creds, JSON.stringify({ ...plain, email: "operator@example.com", password: "test-only" }));
+  reply = [401, { error: "Unauthorized" }];
+  seen = [];
+  try {
+    await assert.rejects(tools.uiiq_contact_list.handler({}), (e) => e.message === "Unauthorized");
+    assert.equal(seen.filter((p) => p.startsWith("/contacts?")).length, 2);
+  } finally {
+    reply = undefined;
+    writeFileSync(creds, JSON.stringify(plain));
+  }
 });

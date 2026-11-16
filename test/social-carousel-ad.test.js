@@ -7,7 +7,7 @@
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import http from "node:http";
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -266,4 +266,35 @@ test("a call ad with a ticked entry page: linkUrl as given, and UiiQ's refusal o
   const t = tools.uiiq_social_post_carousel_ad;
   assert.match(t.description, /Once the competition has a ticked entry page \(uiiq_competition_get entryPageUrl with entryPageConfirmedAt\), linkUrl must be that page, exactly/);
   assert.match(t.inputSchema.properties.linkUrl.description, /A competition call with a ticked entry page: that page, exactly/);
+});
+
+// ── Card 1's video (UiiQ-platform #1506, Lucas R127-8 and R127-13) ──
+const STALE = "This video's end card no longer matches the round: make the call video again, or lead with another video.";
+const NOT_PROMO = "That video is a competition's call video: it can lead only that round's call ad, made from its call post.";
+
+test("card 1's refusals come back in UiiQ's words as a 409 (the request has ended); the dry run only reads the context", async () => {
+  await assert.rejects(call({ id: "post_call", ...CALL_AD, videoDisclaimerTicked: true, requestId: "ad-stale", confirm: true }, [409, { error: STALE }]),
+    (e) => e.message.startsWith(`${STALE} (requestId: ad-stale has ended`));
+  await assert.rejects(call({ id: "post_1", ...AD, collectionVideo: { assetId: 4762 }, requestId: "ad-promo", confirm: true }, [409, { error: NOT_PROMO }]),
+    (e) => e.message.startsWith(`${NOT_PROMO} (requestId: ad-promo has ended`));
+  // The dry run asks nothing about card 1's video: one GET of the context, never the POST.
+  const { result, requests } = await call({ id: "post_1", ...AD, collectionVideo: { assetId: 4762 } }, [200, CONTEXT]);
+  assert.equal(result.dryRun, true);
+  assert.deepEqual(requests, [{ method: "GET", path: "/socials/posts/post_1/carousel-ad" }]);
+  // A re-send stopped because card 1 went out of date: unknown, with UiiQ's words, as it came.
+  const unknown = { status: "unknown", requestId: "ad-stale", error: STALE };
+  assert.deepEqual((await status({ id: "post_call", requestId: "ad-stale" }, [200, unknown])).result, unknown);
+});
+
+test("the descriptions: card 1's checks (a call video, a promo ad's lead), the dry run can't see them, and status unknown when card 1 went out of date", () => {
+  const d = tools.uiiq_social_post_carousel_ad.description;
+  assert.ok(d.includes("CARD 1'S VIDEO: a call video as card 1 is refused (409, UiiQ's words) when it belongs to another round, isn't finished, or its end card no longer matches the round; and a promo ad never leads with a competition call video, nor with a call or last-chance post's own video (409). The dry run can't detect either: only the real request (confirm: true) is checked."), d);
+  const s = tools.uiiq_social_carousel_ad_status.description;
+  assert.ok(s.includes("unknown also comes, with UiiQ's words in error, when a re-send was stopped because card 1 went out of date (its call video belongs to another round, isn't finished, or its end card no longer matches the round): it is never sent again, and the first send may have made it."), s);
+  const readme = readFileSync(new URL("../README.md", import.meta.url), "utf8").split("\n");
+  const ad = readme.find((l) => l.startsWith("| `uiiq_social_post_carousel_ad` |"));
+  assert.match(ad, /card 1 is the call's video \(`collectionVideo` \{ assetId \}\), refused \(409, UiiQ's words\) when that video belongs to another round, isn't finished, or its end card no longer matches the round/);
+  assert.match(ad, /A promo ad never leads with a competition call video, nor with a call or last-chance post's own video \(409\)\. The dry run can't detect either card 1 refusal/);
+  const st = readme.find((l) => l.startsWith("| `uiiq_social_carousel_ad_status` |"));
+  assert.match(st, /Unknown also comes, in UiiQ's words, when a re-send was stopped because card 1 went out of date/);
 });
