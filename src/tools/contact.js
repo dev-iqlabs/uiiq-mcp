@@ -9,6 +9,11 @@ const TENANT_PROP = {
   description: "Tenant id, slug or exact name to act in. Omit for your own tenant.",
 };
 const api = (tenant) => apiClient(tenant ? { tenant } : {});
+async function fail(res) {
+  const text = await res.text();
+  try { const j = JSON.parse(text); if (j?.error) return new Error(j.error); } catch { /* not JSON */ }
+  return new Error(text || `HTTP ${res.status}`);
+}
 // UiiQ reads at most this many tags in one filter (lib/contact-tag-filter TAG_FILTER_MAX) and drops the rest.
 const TAG_FILTER_MAX = 10;
 
@@ -53,6 +58,8 @@ export const contactTools = [
       if (typeof subscribed === "boolean") params.set("subscribed", String(subscribed));
       for (const t of wanted) params.append("tag", t);
       const res = await api(tenant)(`/contacts?${params}`);
+      // A refusal is UiiQ's words, never an empty list that reads as "no contacts".
+      if (!res.ok) throw await fail(res);
       const data = await res.json();
       return Array.isArray(data) ? data : data.contacts ?? [];
     }

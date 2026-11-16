@@ -9,14 +9,22 @@ import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync } from "nod
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-let server, home, seen, tools;
+let server, home, seen, tools, reply;
 const ROWS = [{ id: "c1", email: "sam@example.com", tags: ["newsletter"], subscribed: true, source: "website_signup" }];
 
 before(async () => {
   server = http.createServer((req, res) => {
-    seen.push(req.url.replace(/^\/api/, ""));
-    res.writeHead(200, { "content-type": "application/json" });
-    res.end(JSON.stringify(ROWS));
+    req.resume();
+    req.on("end", () => {
+      const path = req.url.replace(/^\/api/, "");
+      const json = (status, data, headers = {}) => { res.writeHead(status, { "content-type": "application/json", ...headers }); res.end(JSON.stringify(data)); };
+      // The client's one re-login after a 401.
+      if (path === "/auth/csrf") return json(200, { csrfToken: "csrf-test" }, { "set-cookie": "authjs.csrf-token=csrf-test; Path=/" });
+      if (path === "/auth/callback/credentials") return json(200, { url: "/" }, { "set-cookie": "authjs.session-token=renewed; Path=/; HttpOnly" });
+      seen.push(path);
+      const [status, data] = reply ?? [200, ROWS];
+      json(status, data);
+    });
   });
   await new Promise((r) => server.listen(0, "127.0.0.1", r));
   const base = `http://127.0.0.1:${server.address().port}`;
@@ -106,4 +114,33 @@ test("the description, schema and README: every tag must match, the competition'
   const row = readFileSync(new URL("../README.md", import.meta.url), "utf8").split("\n").find((l) => l.startsWith("| `uiiq_contact_list` |"));
   assert.match(row, /`tags` \(contacts with EVERY one, sent as repeated `tag`, at most 10\)/);
   assert.match(row, /"Competition: <competition name>" and "<competition name>, round <n>"/);
+});
+
+// ── A refusal is UiiQ's words, never [] (it read as "no contacts") ──
+test("a 403 is UiiQ's words, thrown, never an empty list", async () => {
+  for (const [data, words] of [[{ error: "You don't have permission to do that.", code: "role_access" }, "You don't have permission to do that."], [{ error: "The contact database isn't switched on for this workspace" }, "The contact database isn't switched on for this workspace"]]) {
+    reply = [403, data];
+    seen = [];
+    try {
+      await assert.rejects(tools.uiiq_contact_list.handler({ tags: [COMP] }), (e) => e.message === words);
+      assert.equal(seen.length, 1);
+    } finally {
+      reply = undefined;
+    }
+  }
+});
+
+test("a 401 after the one re-login is UiiQ's 'Unauthorized', never an empty list", async () => {
+  const creds = join(home, ".uiiq", "credentials.json");
+  const plain = JSON.parse(readFileSync(creds, "utf8"));
+  writeFileSync(creds, JSON.stringify({ ...plain, email: "operator@example.com", password: "test-only" }));
+  reply = [401, { error: "Unauthorized" }];
+  seen = [];
+  try {
+    await assert.rejects(tools.uiiq_contact_list.handler({}), (e) => e.message === "Unauthorized");
+    assert.equal(seen.filter((p) => p.startsWith("/contacts?")).length, 2);
+  } finally {
+    reply = undefined;
+    writeFileSync(creds, JSON.stringify(plain));
+  }
 });
