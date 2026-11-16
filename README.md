@@ -164,7 +164,7 @@ A tenant is the organisation: list, detail and feature flags are `uiiq_tenant_li
 
 | Tool | What it does |
 | --- | --- |
-| `uiiq_contact_list` | List UIIQ contacts. |
+| `uiiq_contact_list` | List UIIQ contacts: search by name or email; filter by source, subscribed, a `tag`, or `tags` (contacts with EVERY one, sent as repeated `tag`, at most 10). A competition tags the contacts it makes or matches "Competition: <competition name>" and "<competition name>, round <n>" (e.g. "Competition: Coin of the Week", "Coin of the Week, round 1"). A UiiQ before contact source tags reads only the first tag. |
 | `uiiq_contact_get` | Get a UIIQ contact by ID. |
 | `uiiq_contact_create` | Add one contact by hand. |
 | `uiiq_contact_update` | Edit one contact, or archive / restore it. |

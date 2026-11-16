@@ -9,6 +9,8 @@ const TENANT_PROP = {
   description: "Tenant id, slug or exact name to act in. Omit for your own tenant.",
 };
 const api = (tenant) => apiClient(tenant ? { tenant } : {});
+// UiiQ reads at most this many tags in one filter (lib/contact-tag-filter TAG_FILTER_MAX) and drops the rest.
+const TAG_FILTER_MAX = 10;
 
 
 export const contactTools = [
@@ -18,7 +20,11 @@ export const contactTools = [
       "List UIIQ contacts, each with where it came from (source). Optionally search by name or email, " +
       "and filter by source (e.g. website_signup for the website newsletter form), subscribed (true/false) " +
       "or a tag (e.g. newsletter), so 'did any newsletter sign-ups arrive?' is one call. Tag and source match as typed or " +
-      "in lower case. subscribed is the contact's own flag: it doesn't check the do-not-email list, which every send checks again.",
+      "in lower case. subscribed is the contact's own flag: it doesn't check the do-not-email list, which every send checks again. " +
+      "tags: contacts with EVERY one of them (all must match, each as typed or in lower case; at most " + TAG_FILTER_MAX + ", with tag counted among them). " +
+      "A competition tags each contact it makes or matches with its source tags, \"Competition: <competition name>\" and " +
+      "\"<competition name>, round <n>\", e.g. tags [\"Competition: Coin of the Week\", \"Coin of the Week, round 1\"]. " +
+      "A UiiQ before contact source tags reads only the first tag, so there several give everyone with the first.",
     inputSchema: {
       type: "object",
       additionalProperties: false,
@@ -27,11 +33,16 @@ export const contactTools = [
         source: { type: "string", description: "Where the contact came from, exactly: website_signup (newsletter form), woo_checkout, iqex-enquiry, ..." },
         subscribed: { type: "boolean", description: "Only subscribed (true) or unsubscribed (false) contacts" },
         tag: { type: "string", description: "Only contacts with this tag, e.g. newsletter" },
+        tags: { type: "array", items: { type: "string" }, maxItems: TAG_FILTER_MAX, description: "Only contacts with EVERY one of these tags (sent as repeated tag), e.g. [\"Competition: Coin of the Week\", \"Coin of the Week, round 1\"]" },
         limit: { type: "number", description: "Max results (default 50)" },
         tenant: TENANT_PROP,
       }
     },
-    async handler({ search, source, subscribed, tag, limit = 50, tenant } = {}) {
+    async handler({ search, source, subscribed, tag, tags, limit = 50, tenant } = {}) {
+      if (tags !== undefined && (!Array.isArray(tags) || tags.some((t) => typeof t !== "string"))) throw new Error("tags is a list of tags, each text. Nothing was sent.");
+      // As UiiQ reads them: trimmed, blanks and repeats dropped. More than it reads would quietly widen the list.
+      const wanted = [...new Set([tag, ...(tags ?? [])].map((t) => String(t ?? "").trim()).filter(Boolean))];
+      if (wanted.length > TAG_FILTER_MAX) throw new Error(`At most ${TAG_FILTER_MAX} tags: UiiQ reads no more. Nothing was sent.`);
       const params = new URLSearchParams({ limit });
       // The API reads `q`, not `search`. This sent `search`, which the API
       // ignored — so a filtered call returned page one alphabetically with a
@@ -40,7 +51,7 @@ export const contactTools = [
       if (search) params.set("q", search);
       if (source) params.set("source", source);
       if (typeof subscribed === "boolean") params.set("subscribed", String(subscribed));
-      if (tag) params.set("tag", tag);
+      for (const t of wanted) params.append("tag", t);
       const res = await api(tenant)(`/contacts?${params}`);
       const data = await res.json();
       return Array.isArray(data) ? data : data.contacts ?? [];
