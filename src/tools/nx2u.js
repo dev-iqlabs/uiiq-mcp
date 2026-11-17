@@ -234,6 +234,16 @@ export const nx2uTools = [
     },
   },
   {
+    name: "uiiq_nx2u_library_verify",
+    description: "Check again whether the tenant's video library ENFORCES token authentication with its stored signing key (owner/admin): UIIQ asks the pull zone for an unsigned and a signed address and records the answer. PIN and UNLISTED streams play only while it is verified; run it after switching token authentication on in the library, and on every library with a key after UiiQ's R150 follow-up is deployed. Returns { library: { tokenAuthVerified, tokenAuthCheckedAt, … }, tokenAuth: { verified, reason } }.",
+    inputSchema: { type: "object", properties: { tenant: TENANT_PROP } },
+    async handler({ tenant } = {}) {
+      const res = await api(tenant)("/nx2u/library/verify", { method: "POST" });
+      if (!res.ok) throw await fail(res);
+      return res.json();
+    },
+  },
+  {
     name: "uiiq_nx2u_usage",
     description: "The tenant's last twelve months of NX2U delivery: viewer-seconds, GB, events.",
     inputSchema: { type: "object", properties: { tenant: TENANT_PROP } },
