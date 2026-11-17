@@ -1222,6 +1222,7 @@ Needs the `competitions` feature. Setting up, rounds, the nominee confirmation a
 | `uiiq_nx2u_event_end` | The event is over: the replay window starts and the recording is looked for. |
 | `uiiq_nx2u_event_replay_check` | Ask the provider again for the recording of an ended event. |
 | `uiiq_nx2u_library` | The tenant's video library (Bunny or Cloudflare), keys masked. |
+| `uiiq_nx2u_library_verify` | Check again that the video library ENFORCES token authentication with its stored key (owner/admin). PIN and UNLISTED streams play only while it is verified. |
 | `uiiq_nx2u_library_set` | Record (or re-key) the tenant's video library (owner/admin). |
 | `uiiq_nx2u_usage` | The tenant's last twelve months of NX2U delivery: viewer-seconds, GB, events. |
 
