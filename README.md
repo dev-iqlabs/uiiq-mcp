@@ -1211,8 +1211,8 @@ Needs the `competitions` feature. Setting up, rounds, the nominee confirmation a
 | `uiiq_nx2u_channel_delete` | Delete a channel (owner/admin). |
 | `uiiq_nx2u_event_list` | The tenant's events, newest first, optionally one channel's. |
 | `uiiq_nx2u_event_get` | The control room's view of one event: the provider is asked, so status and viewers are live. |
-| `uiiq_nx2u_event_create` | A new event. |
-| `uiiq_nx2u_event_update` | Edit an event: title, kind, scheduledStart, scheduledEnd, access, tier, replayDays, licenceRef. |
+| `uiiq_nx2u_event_create` | A new event. A FUNERAL is PIN only; a SHOPPING event (a presenter selling the shop's own products) is PUBLIC or UNLISTED, never PIN. An UNLISTED event's link carries a random slug. |
+| `uiiq_nx2u_event_update` | Edit an event: title, kind, scheduledStart, scheduledEnd, access, tier, replayDays, licenceRef. A SHOPPING event never becomes PIN; switching to UNLISTED gives a new random slug. |
 | `uiiq_nx2u_event_provision` | Create the stream on the provider and return the encoder settings, KEY INCLUDED (owner/admin; audit-logged). |
 | `uiiq_nx2u_event_ingest` | Show the encoder settings (with the key) again for a provisioned event. |
 | `uiiq_nx2u_event_pin_rotate` | A new PIN for a PIN-protected event, returned once; the old one stops working at once, so the family needs the new link. |

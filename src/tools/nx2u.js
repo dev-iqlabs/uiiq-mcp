@@ -18,7 +18,7 @@ async function fail(res) {
 // switches, which are OFF until Steve turns them on; until then the API
 // refuses with a clear message. Stream keys and PINs are returned once, by
 // deliberate acts that are audit-logged — never stored by these tools.
-const EVENT_KINDS = ["OPEN_MIC", "FUNERAL", "WEDDING", "SHOW", "CORPORATE", "CHARITY", "AUCTION", "OTHER"];
+const EVENT_KINDS = ["OPEN_MIC", "FUNERAL", "WEDDING", "SHOW", "CORPORATE", "CHARITY", "AUCTION", "SHOPPING", "OTHER"];
 const TIERS = ["CREW", "SELF"];
 const ACCESS = ["PUBLIC", "UNLISTED", "PIN"];
 
@@ -95,7 +95,7 @@ export const nx2uTools = [
   {
     name: "uiiq_nx2u_event_create",
     description:
-      `A new event. kind is one of ${EVENT_KINDS.join(", ")}; a FUNERAL must be PIN access. access PUBLIC, UNLISTED (default) or PIN — a PIN is minted and returned ONCE in this response. Provisioning the stream is a separate owner/admin step (uiiq_nx2u_event_provision). Returns { event: { id, slug, watchUrl }, pin }.`,
+      `A new event. kind is one of ${EVENT_KINDS.join(", ")}; a FUNERAL must be PIN access; a SHOPPING event (a presenter selling the shop's own products) must be PUBLIC or UNLISTED, never PIN. access PUBLIC, UNLISTED (default) or PIN — a PIN is minted and returned ONCE in this response. An UNLISTED event's link carries a random slug, nothing from the title. Provisioning the stream is a separate owner/admin step (uiiq_nx2u_event_provision). Returns { event: { id, slug, watchUrl }, pin }.`,
     inputSchema: {
       type: "object",
       required: ["title", "scheduledStart"],
@@ -114,7 +114,7 @@ export const nx2uTools = [
   },
   {
     name: "uiiq_nx2u_event_update",
-    description: "Edit an event: title, kind, scheduledStart, scheduledEnd, access, tier, replayDays, licenceRef. Switching access to PIN mints one, returned once.",
+    description: "Edit an event: title, kind, scheduledStart, scheduledEnd, access, tier, replayDays, licenceRef. Switching access to PIN mints one, returned once. A FUNERAL stays PIN and a SHOPPING event never becomes PIN (checked against the stored event too). Switching to UNLISTED gives the event a new random slug, so its old link stops working.",
     inputSchema: {
       type: "object",
       required: ["id"],
