@@ -66,14 +66,17 @@ test("another is an optional boolean, sent only when true", async () => {
   assert.deepEqual(r.requests[0].body, { kind: "MANUAL_SHOW", title: ARGS.title, showAt: ARGS.showAt, reason: ARGS.reason, another: true });
 });
 
-test("UiiQ's 409 \"Already added ...\" is the tool's error, with how to say it is another show", async () => {
+test("UiiQ's 409 \"Already added ...\" is the tool's error, saying first that the line named is likely the same show (NX2U-C-01)", async () => {
+  const hint = "If line ln_1 is the show you meant, it is already added: do nothing. Only a different show takes another: true.";
   let r = await call(ARGS, [409, { error: ALREADY }]);
   assert.equal(r.requests.length, 1);
-  assert.equal(r.error.message, `${ALREADY} If it is another show, send it again with another: true.`);
-  // UiiQ's own words already say how: not said twice.
+  assert.equal(r.error.message, `${ALREADY} ${hint}`);
+  // UiiQ's own words name another: true too: the do-nothing case is still said.
   const own = `${ALREADY} If this is another show, send it again with another: true`;
   r = await call(ARGS, [409, { error: own }]);
-  assert.equal(r.error.message, own);
+  assert.equal(r.error.message, `${own}. ${hint}`);
+  r = await call(ARGS, [409, { error: "Already added near that time" }]);
+  assert.match(r.error.message, /If that line is the show you meant/);
   // Any other refusal is passed on as UiiQ sent it.
   r = await call(ARGS, [409, { error: "The month is closed" }]);
   assert.match(r.error.message, /The month is closed/);
