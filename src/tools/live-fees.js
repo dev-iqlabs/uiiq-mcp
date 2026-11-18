@@ -109,7 +109,7 @@ export const liveFeesTools = [
   {
     name: "uiiq_admin_live_fee_manual_show_add",
     description:
-      "Add a show to a workspace's OPEN live-fee month by hand (one NX2U didn't stream, such as YouTube only), with a reason. Audited. If NX2U also counted a show that month, closing asks a person why both count. UiiQ refuses one within a show length of a show already added (409 \"Already added ...\"): if it is another show, send it again with another: true (Lucas R159-14). SUPER_ADMIN only.",
+      "Add a show to a workspace's OPEN live-fee month by hand (one NX2U didn't stream, such as YouTube only), with a reason. Audited. If NX2U also counted a show that month, closing asks a person why both count. UiiQ refuses one within a show length of a show already added (409 \"Already added ... (line <id>)\"): if that line is the show you meant, it is already added, so do nothing; only a different show takes another: true (Lucas R159-14, NX2U-C-01). SUPER_ADMIN only.",
     inputSchema: {
       type: "object",
       required: ["tenantId", "period", "title", "showAt", "reason"],
@@ -119,7 +119,7 @@ export const liveFeesTools = [
         title: { type: "string", maxLength: 200 },
         showAt: { type: "string", description: "When the show was, ISO 8601, inside the period." },
         reason: REASON,
-        another: { type: "boolean", description: "It is another show, not the one already added near that time (UiiQ refuses one within a show length of another without it)." },
+        another: { type: "boolean", description: "It is a different show from the one already added near that time (UiiQ refuses one within a show length of another without it). Never set it to add the same show again." },
       },
     },
     async handler({ tenantId, period, title, showAt, reason, another }) {
@@ -129,7 +129,12 @@ export const liveFeesTools = [
         const text = await res.text();
         let why = text;
         try { why = JSON.parse(text)?.error || text; } catch { /* not JSON */ }
-        if (/^Already added/.test(why)) throw new Error(/another: true/.test(why) ? why : `${why} If it is another show, send it again with another: true.`);
+        // NX2U-C-01: the usual cause is the same show sent twice (an agent calling again after a timeout), so say that
+        // first, even when UiiQ's own words already name another: true.
+        if (/^Already added/.test(why)) {
+          const line = why.match(/\(line ([^)\s]+)\)/)?.[1];
+          throw new Error(`${why.replace(/[.\s]*$/, ".")} If ${line ? `line ${line}` : "that line"} is the show you meant, it is already added: do nothing. Only a different show takes another: true.`);
+        }
         throw new Error(text);
       }
       return ok(res);

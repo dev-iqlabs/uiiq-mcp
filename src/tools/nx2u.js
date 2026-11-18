@@ -12,6 +12,37 @@ async function fail(res) {
   return new Error(text || `HTTP ${res.status}`);
 }
 
+// A channel's embed list becomes its watch page's frame-ancestors, so UiiQ saves only exact https origins with a DNS
+// host name (lib/nx2u/embed-origin.ts, Lucas R150-04). UiiQ would read a bare host or a trailing slash as one; here
+// each must already be exact, so what is sent is what is saved. The same check as the CLI's --embed-origins.
+const EMBED_HOST_RE = /^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+(?:[a-z]{2,63}|xn--[a-z0-9-]{1,59})$/;
+export const MAX_EMBED_ORIGINS = 10;
+
+/** Why `o` is not an exact https origin (https://host[:port]) that UiiQ saves as given, or null when it is one. */
+export function embedOriginProblem(o) {
+  let u;
+  try { u = new URL(o); } catch { return "is not a website address: write it as https://host, e.g. https://shop.example.co.uk"; }
+  if (u.protocol !== "https:") return "must start with https://";
+  if (!EMBED_HOST_RE.test(u.hostname)) return "must name the website by its host name (no IP address, wildcard or punctuation)";
+  if (u.origin === o) return null;
+  if (u.pathname === "/" && !u.search && !u.hash && !u.username && !u.password) return `must be written exactly as ${u.origin}`;
+  return "must be the website's origin only: no path, query or login";
+}
+
+function embedOriginsIn(list) {
+  if (!Array.isArray(list)) throw new Error('embedOrigins must be a list of https origins, e.g. ["https://shop.example.co.uk"]');
+  for (const o of list) {
+    const why = typeof o === "string" ? embedOriginProblem(o) : "is not text";
+    if (why) throw new Error(`embedOrigins: ${JSON.stringify(String(o).slice(0, 80))} ${why}. Nothing was sent.`);
+  }
+  const origins = [...new Set(list)];
+  if (origins.length > MAX_EMBED_ORIGINS) throw new Error(`At most ${MAX_EMBED_ORIGINS} websites may embed a channel. Nothing was sent.`);
+  return origins;
+}
+
+const EMBED_ORIGINS_HELP = "The websites that may show the channel's player in a frame (its frame-ancestors): each an exact https origin, https://host[:port] with no path or trailing slash, e.g. https://shop.example.co.uk; at most 10. A bare host, a trailing slash, http, a path, an IP address or a wildcard is refused before anything is sent.";
+const embedOriginsProp = (more = "") => ({ type: "array", items: { type: "string" }, maxItems: MAX_EMBED_ORIGINS, description: `${EMBED_ORIGINS_HELP}${more}` });
+
 // Live shows (Lucas R160-04). An Unlisted NX2U event on a shop's public page is in effect public, and accepting
 // that is a person's own "I understand" (R155-07): it is given in the planner or with the CLI's --i-understand,
 // never by a tool, so it is stripped from anything sent here even if an agent adds it.
@@ -82,13 +113,14 @@ export const nx2uTools = [
   },
   {
     name: "uiiq_nx2u_channel_create",
-    description: "A new channel (owner/admin). visibility PUBLIC (listed) or UNLISTED (default); defaultAccess is what new events get.",
+    description: "A new channel (owner/admin). visibility PUBLIC (listed) or UNLISTED (default); defaultAccess is what new events get; embedOrigins the websites that may frame its player (none by default).",
     inputSchema: {
       type: "object",
       required: ["name"],
-      properties: { name: { type: "string" }, slug: { type: "string" }, visibility: { type: "string", enum: ["PUBLIC", "UNLISTED"] }, defaultAccess: { type: "string", enum: ACCESS }, branding: { type: "object" }, tenant: TENANT_PROP },
+      properties: { name: { type: "string" }, slug: { type: "string" }, visibility: { type: "string", enum: ["PUBLIC", "UNLISTED"] }, defaultAccess: { type: "string", enum: ACCESS }, branding: { type: "object" }, embedOrigins: embedOriginsProp(), tenant: TENANT_PROP },
     },
     async handler({ tenant, ...body }) {
+      if (body.embedOrigins !== undefined) body.embedOrigins = embedOriginsIn(body.embedOrigins);
       const res = await api(tenant)("/nx2u/channels", { method: "POST", body: JSON.stringify(body) });
       if (!res.ok) throw await fail(res);
       return res.json();
@@ -96,13 +128,14 @@ export const nx2uTools = [
   },
   {
     name: "uiiq_nx2u_channel_update",
-    description: "Edit a channel's name, slug, visibility, defaultAccess or branding (owner/admin).",
+    description: "Edit a channel's name, slug, visibility, defaultAccess, branding or embedOrigins (owner/admin). embedOrigins REPLACES the saved list; [] clears it.",
     inputSchema: {
       type: "object",
       required: ["id"],
-      properties: { id: { type: "string" }, name: { type: "string" }, slug: { type: "string" }, visibility: { type: "string", enum: ["PUBLIC", "UNLISTED"] }, defaultAccess: { type: "string", enum: ACCESS }, branding: { type: "object" }, tenant: TENANT_PROP },
+      properties: { id: { type: "string" }, name: { type: "string" }, slug: { type: "string" }, visibility: { type: "string", enum: ["PUBLIC", "UNLISTED"] }, defaultAccess: { type: "string", enum: ACCESS }, branding: { type: "object" }, embedOrigins: embedOriginsProp(" REPLACES the saved list; [] clears it."), tenant: TENANT_PROP },
     },
     async handler({ id, tenant, ...body }) {
+      if (body.embedOrigins !== undefined) body.embedOrigins = embedOriginsIn(body.embedOrigins);
       const res = await api(tenant)(`/nx2u/channels/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify(body) });
       if (!res.ok) throw await fail(res);
       return res.json();

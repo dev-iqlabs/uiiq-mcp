@@ -1207,8 +1207,8 @@ Needs the `competitions` feature. Setting up, rounds, the nominee confirmation a
 | Tool | What it does |
 |---|---|
 | `uiiq_nx2u_channel_list` | The tenant's NX2U channels (each a public face at its own URL) with event counts. |
-| `uiiq_nx2u_channel_create` | A new channel (owner/admin). |
-| `uiiq_nx2u_channel_update` | Edit a channel's name, slug, visibility, defaultAccess or branding (owner/admin). |
+| `uiiq_nx2u_channel_create` | A new channel (owner/admin). `embedOrigins`: the websites that may show its player in a frame (its frame-ancestors), each an exact https origin (`https://host[:port]`, no path or trailing slash), at most 10; a bare host, a trailing slash, http, a path, an IP address or a wildcard is refused before anything is sent. |
+| `uiiq_nx2u_channel_update` | Edit a channel's name, slug, visibility, defaultAccess, branding or `embedOrigins` (owner/admin). `embedOrigins` REPLACES the saved list (`[]` clears it), checked as on create. |
 | `uiiq_nx2u_channel_delete` | Delete a channel (owner/admin). |
 | `uiiq_nx2u_event_list` | The tenant's events, newest first, optionally one channel's. |
 | `uiiq_nx2u_event_get` | The control room's view of one event: the provider is asked, so status and viewers are live. |
@@ -1252,7 +1252,7 @@ Statements only: nothing here charges, finalises, sends or invoices anything (Ui
 | `uiiq_admin_live_fees_platform_set` | Set the show length and the grace, from now on. Audited. |
 | `uiiq_admin_live_fee_statements` | A workspace's statements, newest first, and the next month that may close. |
 | `uiiq_admin_live_fee_statement_get` | One month's statement: closed as closed, open worked out now, with what stops it closing and what closing asks a reason for. `format: "csv"` for the CSV. |
-| `uiiq_admin_live_fee_manual_show_add` | Add a show by hand to an open month, with a reason. Audited. If NX2U also counted a show, closing asks a person why both count. One within a show length of a show already added is refused ("Already added ..."): `another: true` says it is another show. |
+| `uiiq_admin_live_fee_manual_show_add` | Add a show by hand to an open month, with a reason. Audited. If NX2U also counted a show, closing asks a person why both count. One within a show length of a show already added is refused ("Already added ... (line <id>)"): if that line is the show meant, it is already added, so nothing is done; only a different show takes `another: true` (NX2U-C-01). |
 | `uiiq_admin_live_fee_show_exclude` | Exclude an NX2U show from an open month with a reason (a restarted stream, a rehearsal): kept, not charged. Audited. |
 | `uiiq_admin_live_fee_line_remove` | Take a line a platform admin added (manual show, exclusion, correction) off an open month. Audited. |
 | `uiiq_billing_live_fees` | The workspace's own closed statements, read-only, while its retailer switch is on (owner/admin). |
