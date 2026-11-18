@@ -12,6 +12,33 @@ async function fail(res) {
   return new Error(text || `HTTP ${res.status}`);
 }
 
+// Live shows (Lucas R160-04). An Unlisted NX2U event on a shop's public page is in effect public, and accepting
+// that is a person's own "I understand" (R155-07): it is given in the planner or with the CLI's --i-understand,
+// never by a tool, so it is stripped from anything sent here even if an agent adds it.
+const UNLISTED_NOTE = "An UNLISTED NX2U event is in effect public on the shop's page: UiiQ refuses it until a person accepts that in the planner (Dashboard → Live shows) or with the CLI's --i-understand; this tool can't accept it for them. A PIN event, or any event but a Live shopping one, is refused.";
+const withoutAck = ({ acknowledgeUnlisted: _person, ...body }) => body;
+async function showFail(res) {
+  const text = await res.text();
+  try {
+    const j = JSON.parse(text);
+    if (j?.code === "NX2U_UNLISTED_ACK_REQUIRED") return new Error(`${j.error} This tool can't accept it: ask the person responsible to open the show in Dashboard → Live shows and tick "I understand", or to use the CLI's --i-understand.`);
+    if (j?.error) return new Error(j.error);
+  } catch { /* not JSON */ }
+  return new Error(text || `HTTP ${res.status}`);
+}
+// A change to the shop's public page, or one that can't be undone, needs a person's say-so: without confirm:
+// true, say what would happen and do nothing (the ads tools' convention).
+async function showDryRun(tenant, id, what) {
+  const res = await api(tenant)(`/nx2u/shows/${encodeURIComponent(id)}`);
+  if (!res.ok) throw await fail(res);
+  const { show } = await res.json();
+  return {
+    dryRun: true,
+    message: `Nothing was changed. This show would be ${what}. Pass confirm: true only once the person responsible has said to.`,
+    show: { id: show?.id ?? id, title: show?.title ?? null, start: show?.start ?? null, state: show?.state ?? null, page: show?.shop?.liveUrl ?? null },
+  };
+}
+
 // NX2U — the live streaming engine (Phase 1): channels, events, the control
 // room (provision a stream, running order, slate, end, replay) and the
 // tenant's video library. GATED: needs the `nx2u` feature AND the platform
@@ -255,9 +282,12 @@ export const nx2uTools = [
   },
 
   // ── Live shopping shows (the show planner, NX2U plan step 3): what a shop's /live page shows ──
+  // The planner is its own switch (live_shows), not the NX2U add-on: a YouTube show needs no NX2U.
+  // R160-04: going live, ending and cancelling change a public page (or can't be undone), so they need confirm:
+  // true, else a dry run. An Unlisted NX2U event's "I understand" is a person's, so it is never sent from here.
   {
     name: "uiiq_nx2u_show_list",
-    description: "The tenant's live shopping shows for its Connect shops' /live pages, newest first, with the next show, any on air, and the shops a show can go on. siteId: one shop; eventId: the shows playing one NX2U event; cancelled: include cancelled ones. Needs the nx2u feature.",
+    description: "The tenant's live shopping shows for its Connect shops' /live pages, newest first, with the next show, any on air, and the shops a show can go on. siteId: one shop; eventId: the shows playing one NX2U event; cancelled: include cancelled ones. Needs the Live shows switch (live_shows).",
     inputSchema: { type: "object", properties: { siteId: { type: "string" }, eventId: { type: "string" }, cancelled: { type: "boolean" }, tenant: TENANT_PROP } },
     async handler({ siteId, eventId, cancelled, tenant } = {}) {
       const qs = new URLSearchParams();
@@ -272,7 +302,7 @@ export const nx2uTools = [
   },
   {
     name: "uiiq_nx2u_show_get",
-    description: "One show: its fields, the shop's /live address, its on-screen log (every state and on-screen change, with its time) and the replay's product chapters.",
+    description: "One show: its fields, the shop's /live address, its on-screen log (every state and on-screen change, with its time) and the replay's product chapters. nx2uNotServed says why the shop's page plays YouTube alone instead of a linked NX2U event.",
     inputSchema: { type: "object", required: ["id"], properties: { id: { type: "string" }, tenant: TENANT_PROP } },
     async handler({ id, tenant }) {
       const res = await api(tenant)(`/nx2u/shows/${encodeURIComponent(id)}`);
@@ -282,7 +312,7 @@ export const nx2uTools = [
   },
   {
     name: "uiiq_nx2u_show_create",
-    description: "Plan a show on one of the tenant's Connect shops. youtube is a youtube.com or youtu.be address (always needed: with an NX2U event it is the fallback). products: 1 to 12 WooCommerce product ids from that shop, in running order (checked against the shop's catalogue when UiiQ knows it). coupon: an existing WooCommerce coupon code. An UNLISTED NX2U event is in effect public on the shop's page: the call is refused (409, NX2U_UNLISTED_ACK_REQUIRED) unless acknowledgeUnlisted is true; a PIN event is refused. A DRAFT Socials post is made with it where the tenant's launch stage allows; nothing is published.",
+    description: `Plan a show on one of the tenant's Connect shops. youtube is a youtube.com or youtu.be address (always needed: with an NX2U event it is the fallback). products: 1 to 12 WooCommerce product ids from that shop, in running order (checked against the shop's catalogue when UiiQ knows it). coupon: an existing WooCommerce coupon code. nx2uEventId: a Live shopping NX2U event (needs the nx2u add-on). ${UNLISTED_NOTE} A DRAFT Socials post is made with it where the tenant's launch stage allows; nothing is published.`,
     inputSchema: {
       type: "object",
       required: ["siteId", "title", "start", "youtube", "products"],
@@ -294,7 +324,6 @@ export const nx2uTools = [
         length: { type: "number", description: "Expected minutes, 5 to 720 (default 60)." },
         youtube: { type: "string" },
         nx2uEventId: { type: "string" },
-        acknowledgeUnlisted: { type: "boolean", description: "Accept that an UNLISTED event on the shop's public page is in effect public." },
         products: { type: "array", items: { type: "number" } },
         coupon: { type: "string" },
         delivery: { type: "string" },
@@ -303,14 +332,14 @@ export const nx2uTools = [
       },
     },
     async handler({ tenant, ...body }) {
-      const res = await api(tenant)("/nx2u/shows", { method: "POST", body: JSON.stringify(body) });
-      if (!res.ok) throw await fail(res);
+      const res = await api(tenant)("/nx2u/shows", { method: "POST", body: JSON.stringify(withoutAck(body)) });
+      if (!res.ok) throw await showFail(res);
       return res.json();
     },
   },
   {
     name: "uiiq_nx2u_show_update",
-    description: "Edit a show: any of title, description, start, length, youtube, nx2uEventId (null for none), products, coupon, delivery, image. The shop can't change. Changing the NX2U event, or saving while its event is UNLISTED and not yet accepted, needs acknowledgeUnlisted: true.",
+    description: `Edit a show: any of title, description, start, length, youtube, nx2uEventId (null for none), products, coupon, delivery, image. The shop can't change. ${UNLISTED_NOTE} A new start (or title) takes the show's waiting Socials post back to a draft and rewrites words nobody has edited; the answer's post says which.`,
     inputSchema: {
       type: "object",
       required: ["id"],
@@ -322,7 +351,6 @@ export const nx2uTools = [
         length: { type: "number" },
         youtube: { type: "string" },
         nx2uEventId: { type: ["string", "null"] },
-        acknowledgeUnlisted: { type: "boolean" },
         products: { type: "array", items: { type: "number" } },
         coupon: { type: "string" },
         delivery: { type: "string" },
@@ -331,16 +359,17 @@ export const nx2uTools = [
       },
     },
     async handler({ id, tenant, ...body }) {
-      const res = await api(tenant)(`/nx2u/shows/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify(body) });
-      if (!res.ok) throw await fail(res);
+      const res = await api(tenant)(`/nx2u/shows/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify(withoutAck(body)) });
+      if (!res.ok) throw await showFail(res);
       return res.json();
     },
   },
   {
     name: "uiiq_nx2u_show_cancel",
-    description: "Take a show off the shop's page (end a live one first). Its log and sales stay; a scheduled Socials post for it goes back to a draft.",
-    inputSchema: { type: "object", required: ["id"], properties: { id: { type: "string" }, tenant: TENANT_PROP } },
-    async handler({ id, tenant }) {
+    description: "Take a show off the shop's page for good (end a live one first; it can't be undone). Its log and sales stay; a Socials post still due to go out (scheduled or queued) goes back to a draft. Without confirm: true this is a DRY RUN that says which show would be cancelled and changes nothing; only confirm once the person responsible has said to cancel it.",
+    inputSchema: { type: "object", required: ["id"], properties: { id: { type: "string" }, confirm: { type: "boolean", description: "true to really cancel; anything else is a dry run" }, tenant: TENANT_PROP } },
+    async handler({ id, confirm, tenant }) {
+      if (confirm !== true) return showDryRun(tenant, id, "cancelled and taken off the shop's /live page for good");
       const res = await api(tenant)(`/nx2u/shows/${encodeURIComponent(id)}/cancel`, { method: "POST" });
       if (!res.ok) throw await fail(res);
       return res.json();
@@ -348,13 +377,14 @@ export const nx2uTools = [
   },
   {
     name: "uiiq_nx2u_show_control",
-    description: "On the day: the show's state (scheduled, live, ended) and/or the product on screen now (one of its own product ids; null for none). Going live ends any other live show of the shop. Each change is logged with its time (the replay's chapters). Needs Live write.",
+    description: "On the day: the show's state (scheduled, live, ended) and/or the product on screen now (one of its own product ids; null for none). A state change shows on the shop's public /live page and going live ends any other live show of the shop, so with state it needs confirm: true, else a DRY RUN that changes nothing; the product on screen alone needs no confirm. Each change is logged with its time (the replay's chapters). Needs Live shows write.",
     inputSchema: {
       type: "object",
       required: ["id"],
-      properties: { id: { type: "string" }, state: { type: "string", enum: ["scheduled", "live", "ended"] }, productId: { type: ["number", "null"] }, tenant: TENANT_PROP },
+      properties: { id: { type: "string" }, state: { type: "string", enum: ["scheduled", "live", "ended"] }, productId: { type: ["number", "null"] }, confirm: { type: "boolean", description: "Required (true) to change the state" }, tenant: TENANT_PROP },
     },
-    async handler({ id, state, productId, tenant }) {
+    async handler({ id, state, productId, confirm, tenant }) {
+      if (state !== undefined && confirm !== true) return showDryRun(tenant, id, `set to ${state} on the shop's public /live page${state === "live" ? " (ending any other live show of the shop)" : ""}`);
       const body = {};
       if (state !== undefined) body.state = state;
       if (productId !== undefined) body.productId = productId;
@@ -365,7 +395,7 @@ export const nx2uTools = [
   },
   {
     name: "uiiq_nx2u_show_report",
-    description: "A show's results, counts and sums only: paid orders, lines, units, revenue without VAT and VAT of the lines added from the shop's /live page (cancelled, refunded and failed orders left out, and ones awaiting payment), by before / live / replay, and the linked NX2U event's viewer numbers.",
+    description: "A show's results, counts and sums only: paid orders, lines, units, revenue without VAT and VAT of the lines added from the shop's /live page (cancelled, refunded and failed orders left out, and ones awaiting payment), by before / live / replay, and the linked NX2U event's viewer numbers. Needs Live shows read and Online orders read.",
     inputSchema: { type: "object", required: ["id"], properties: { id: { type: "string" }, tenant: TENANT_PROP } },
     async handler({ id, tenant }) {
       const res = await api(tenant)(`/nx2u/shows/${encodeURIComponent(id)}/report`);

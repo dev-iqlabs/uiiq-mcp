@@ -1225,13 +1225,13 @@ Needs the `competitions` feature. Setting up, rounds, the nominee confirmation a
 | `uiiq_nx2u_library_verify` | Check again that the video library ENFORCES token authentication with its stored key (owner/admin). PIN and UNLISTED streams play only while it is verified. |
 | `uiiq_nx2u_library_set` | Record (or re-key) the tenant's video library (owner/admin). |
 | `uiiq_nx2u_usage` | The tenant's last twelve months of NX2U delivery: viewer-seconds, GB, events. |
-| `uiiq_nx2u_show_list` | Live shopping shows for the tenant's Connect shops' /live pages, with the next show, any on air, and the shops. |
+| `uiiq_nx2u_show_list` | Live shopping shows for the tenant's Connect shops' /live pages, with the next show, any on air, and the shops. Needs the Live shows switch (`live_shows`), not NX2U. |
 | `uiiq_nx2u_show_get` | One show, its on-screen log and the replay's product chapters. |
-| `uiiq_nx2u_show_create` | Plan a show: shop, title, start, length, YouTube video, optional NX2U event, 1 to 12 products in running order, coupon, delivery line, picture. An UNLISTED event needs acknowledgeUnlisted (it is in effect public on the page); PIN is refused. Drafts its Socials post where the launch stage allows. |
-| `uiiq_nx2u_show_update` | Edit a show (not its shop). Changing the NX2U event clears its acknowledgement. |
-| `uiiq_nx2u_show_cancel` | Take a show off the shop's page; a scheduled post for it goes back to a draft. |
-| `uiiq_nx2u_show_control` | On the day: state (scheduled, live, ended) and the product on screen now; every change logged with its time. |
-| `uiiq_nx2u_show_report` | A show's results: paid orders, lines, revenue without VAT and VAT, viewers. Counts and sums only. |
+| `uiiq_nx2u_show_create` | Plan a show: shop, title, start, length, YouTube video, optional Live shopping NX2U event, 1 to 12 products in running order, coupon, delivery line, picture. An UNLISTED event is in effect public on the page: a person accepts that in the planner or the CLI, never this tool. Drafts its Socials post where the launch stage allows. |
+| `uiiq_nx2u_show_update` | Edit a show (not its shop). A new start takes a waiting post back to a draft and rewrites words nobody edited. |
+| `uiiq_nx2u_show_cancel` | Take a show off the shop's page for good; a scheduled or queued post goes back to a draft. Needs `confirm: true`, else a dry run. |
+| `uiiq_nx2u_show_control` | On the day: state (scheduled, live, ended) and the product on screen now; every change logged with its time. A state change needs `confirm: true`, else a dry run. |
+| `uiiq_nx2u_show_report` | A show's results: paid orders, lines, revenue without VAT and VAT, viewers. Counts and sums only. Needs Online orders read too. |
 | `uiiq_nx2u_show_post_draft` | The show's Socials post as a DRAFT, never published or scheduled. |
 
 ### locality — `src/tools/locality.js`
