@@ -1228,19 +1228,19 @@ Needs the `competitions` feature. Setting up, rounds, the nominee confirmation a
 
 ### NX2U live shopping fees — `src/tools/live-fees.js`
 
-Statements only: nothing here charges, finalises, sends or invoices anything (UiiQ has no draft-invoice path for a statement). Every `uiiq_admin_live_fee*` tool is SUPER_ADMIN only, checked live by UiiQ on reads too, and runs as the signed-in operator (no `tenant`, so no impersonation). The platform's "invoicing enabled" switch is not settable here: a person sets it in UiiQ's admin.
+Statements only: nothing here charges, finalises, sends or invoices anything (UiiQ has no draft-invoice path for a statement). Every `uiiq_admin_live_fee*` tool is SUPER_ADMIN only, checked live by UiiQ on reads too, and runs as the signed-in operator (no `tenant`, so no impersonation; UiiQ refuses a live-fee write while impersonating). What only a person may do is not here (Lucas R159-07, R159-08): **closing a month** (it freezes the month for good: the admin UI or `uiiq live-fees close --yes`), **a correction** of any amount (the admin UI or `uiiq live-fees adjust --yes`), **a rate above the soft ceiling** (UiiQ answers 409 `needsConfirmHigh`: confirm it in the admin UI or the CLI), and the platform's **invoicing switch** and **soft ceilings** (the admin UI).
 
 | Tool | What it does |
 |---|---|
-| `uiiq_admin_live_fees_get` | A workspace's percentage on live-show sales before VAT (basis points), flat fee per show, and "Live shopping for retailers" switch, with the defaults (0, 0, off). |
-| `uiiq_admin_live_fees_set` | Set any of those three. Audited. |
-| `uiiq_admin_live_fees_platform_get` | The platform's settings: invoicing (off), show length (60) and grace after a show's planned end (60). |
-| `uiiq_admin_live_fees_platform_set` | Set the show length and the grace. Audited. |
+| `uiiq_admin_live_fees_get` | A workspace's percentage on live-show sales before VAT (basis points), flat fee per show, and "Live shopping for retailers" switch, with the defaults (0, 0, off) and the rate history. |
+| `uiiq_admin_live_fees_set` | Set any of those three, from now on (a sale is charged at the rate in force when it was ordered). Audited. |
+| `uiiq_admin_live_fees_platform_get` | The platform's settings: invoicing (off), show length (60), grace after a show's planned end (60), soft ceilings (20%, £500 a show). |
+| `uiiq_admin_live_fees_platform_set` | Set the show length and the grace, from now on. Audited. |
 | `uiiq_admin_live_fee_statements` | A workspace's statements, newest first, and the next month that may close. |
-| `uiiq_admin_live_fee_statement_get` | One month's statement: closed as closed, open worked out now. `format: "csv"` for the CSV. |
-| `uiiq_admin_live_fee_statement_close` | Close a finished month for good (`confirm` repeats the period). A person's decision; a later refund becomes the next month's adjustment. |
-| `uiiq_admin_live_fee_manual_show_add` | Add a show by hand to an open month NX2U counted none in, with a reason. Audited. |
-| `uiiq_admin_live_fee_manual_show_remove` | Take a manual show off an open month. Audited. |
+| `uiiq_admin_live_fee_statement_get` | One month's statement: closed as closed, open worked out now, with what stops it closing and what closing asks a reason for. `format: "csv"` for the CSV. |
+| `uiiq_admin_live_fee_manual_show_add` | Add a show by hand to an open month, with a reason. Audited. If NX2U also counted a show, closing asks a person why both count. |
+| `uiiq_admin_live_fee_show_exclude` | Exclude an NX2U show from an open month with a reason (a restarted stream, a rehearsal): kept, not charged. Audited. |
+| `uiiq_admin_live_fee_line_remove` | Take a line a platform admin added (manual show, exclusion, correction) off an open month. Audited. |
 | `uiiq_billing_live_fees` | The workspace's own closed statements, read-only, while its retailer switch is on (owner/admin). |
 
 ### locality — `src/tools/locality.js`
