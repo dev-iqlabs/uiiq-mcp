@@ -5,7 +5,7 @@
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import http from "node:http";
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -64,6 +64,20 @@ test("both tools take embedOrigins, a list of at most 10 strings; update says it
     assert.ok(!tools[name].inputSchema.required.includes("embedOrigins"), name);
   }
   assert.match(tools[UPDATE].inputSchema.properties.embedOrigins.description, /REPLACES the saved list; \[\] clears it/);
+});
+
+// Lucas R197-01: this server keeps no allow-list of its own, so the description and the README row are the list a
+// client's owner reads: create and update are never auto-allowed, and have no confirm (a flag the model sets is no check).
+test("R197-01: create and update say never auto-allow this tool, in the description and the README row, and take no confirm", () => {
+  const readme = readFileSync(new URL("../README.md", import.meta.url), "utf8").split(/\r?\n/);
+  for (const name of [CREATE, UPDATE]) {
+    assert.match(tools[name].description, /UiiQ checks only its form, not whose sites they are, so the person's real check is this client's approval prompt: never auto-allow this tool\./, name);
+    assert.ok(!("confirm" in tools[name].inputSchema.properties), name);
+    assert.ok(!("annotations" in tools[name]), name);
+    const row = readme.find((l) => l.startsWith(`| \`${name}\` |`));
+    assert.match(row, /\*\*never auto-allow this tool\*\*.*\(Lucas R197-01\)/, name);
+  }
+  assert.doesNotMatch(tools.uiiq_nx2u_channel_list.description, /auto-allow/);
 });
 
 test("create sends embedOrigins as given (duplicates once); without it, none is sent", async () => {
