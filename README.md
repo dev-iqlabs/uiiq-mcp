@@ -1207,8 +1207,8 @@ Needs the `competitions` feature. Setting up, rounds, the nominee confirmation a
 | Tool | What it does |
 |---|---|
 | `uiiq_nx2u_channel_list` | The tenant's NX2U channels (each a public face at its own URL) with event counts. |
-| `uiiq_nx2u_channel_create` | A new channel (owner/admin). `embedOrigins`: the websites that may show its player in a frame (its frame-ancestors), each an exact https origin (`https://host[:port]`, no path or trailing slash), at most 10; a bare host, a trailing slash, http, a path, an IP address or a wildcard is refused before anything is sent. |
-| `uiiq_nx2u_channel_update` | Edit a channel's name, slug, visibility, defaultAccess, branding or `embedOrigins` (owner/admin). `embedOrigins` REPLACES the saved list (`[]` clears it), checked as on create. |
+| `uiiq_nx2u_channel_create` | A new channel (owner/admin). `embedOrigins`: the websites that may show its player in a frame (its frame-ancestors), each an exact https origin (`https://host[:port]`, no path or trailing slash), at most 10; a bare host, a trailing slash, http, a path, an IP address or a wildcard is refused before anything is sent. A person's act, not an agent's: UiiQ checks the list's form, not whose sites they are, so the real check is your MCP client's approval prompt: **never auto-allow this tool** (Lucas R197-01). It has no `confirm`: a flag the model sets is no check. |
+| `uiiq_nx2u_channel_update` | Edit a channel's name, slug, visibility, defaultAccess, branding or `embedOrigins` (owner/admin). `embedOrigins` REPLACES the saved list (`[]` clears it), checked as on create. A person's act, not an agent's, as on create: **never auto-allow this tool**, whether or not a call sends `embedOrigins` (auto-allow is per tool) (Lucas R197-01). |
 | `uiiq_nx2u_channel_delete` | Delete a channel (owner/admin). |
 | `uiiq_nx2u_event_list` | The tenant's events, newest first, optionally one channel's. |
 | `uiiq_nx2u_event_get` | The control room's view of one event: the provider is asked, so status and viewers are live. |
