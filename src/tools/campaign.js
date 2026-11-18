@@ -279,14 +279,22 @@ export const campaignTools = [
         },
         sends: { type: "array", items: { type: "string", enum: ["invite", "today", "reminder", "replay"] }, description: "Which to make (default all four)" },
         replace: { type: "boolean", description: "Remake the ones still in Drafts" },
+        change: {
+          type: "string",
+          enum: ["moved", "cancelled"],
+          description:
+            "The show has moved (give the show at its new time) or is cancelled (Kim K6.5): its unsent emails are removed, " +
+            "and a moved or cancelled service message is made for everyone who asked for a reminder (with the four made again " +
+            "at the new time for a move). Drafts only. A cancelled message takes each person it reaches off the reminder list.",
+        },
         dryRun: { type: "boolean", description: "Render them and write nothing" },
         tenant: TENANT_PROP,
       },
     },
-    async handler({ show, sends, replace, dryRun, tenant }) {
+    async handler({ show, sends, replace, change, dryRun, tenant }) {
       const res = await api(tenant)("/campaigns/live-show", {
         method: "POST",
-        body: JSON.stringify({ show, sends, replace, dryRun }),
+        body: JSON.stringify({ show, sends, replace, change, dryRun }),
       });
       if (!res.ok) throw new Error(await res.text());
       return res.json();
