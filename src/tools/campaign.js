@@ -223,6 +223,76 @@ export const campaignTools = [
     },
   },
   {
+    name: "uiiq_campaign_live_show_drafts",
+    description:
+      "Make a live shopping show's emails as DRAFT campaigns, in Kim's words: invite (to the 'Live show invites: marketing " +
+      "allowed' segment, advised three days before), today (on the show's day; 'tonight' only from 5pm), reminder (a service " +
+      "message to everyone who asked on /live, tagged live-show:<ref>, sent within the 2 hours before the start) and replay " +
+      "(after the show, at least 2 hours before the offer ends). Nothing is scheduled or sent: staff check and send each one, " +
+      "and every send stays behind the workspace's launch stage. At send time the replay is refused once that margin has " +
+      "passed, and the reminder if its words were changed; anything still holding a [PENDING ...] placeholder is refused. The show is " +
+      "given in Connect's fields: ref, title, start (UTC seconds or ISO with zone), length (minutes), liveUrl (the /live " +
+      "page on one of the workspace's own sites), products [{ name, imageUrl?, pricePence: the current price with VAT }], " +
+      "delivery (the delivery line) and offer? { code, what, endsAt: the coupon's expiry }. Prices are one per product, never " +
+      "a 'was' price. Asking again returns the drafts already made unless replace is set (remakes those still in Drafts). " +
+      "dryRun renders them and writes nothing. 400 a bad show; 409 while the workspace is set to soft opt-in (not built); " +
+      "30 an hour per workspace (429).",
+    inputSchema: {
+      type: "object",
+      required: ["show"],
+      properties: {
+        show: {
+          type: "object",
+          required: ["ref", "title", "start", "liveUrl", "products", "delivery"],
+          properties: {
+            ref: { type: "string", description: "The show's id in Connect (6 to 64 lower-case letters, digits or hyphens)" },
+            plannerId: { type: "string", description: "The NX2U show planner's id, when there is one" },
+            title: { type: "string" },
+            description: { type: "string" },
+            start: { description: "UTC seconds, or an ISO date-time with its zone (Z or +01:00)", oneOf: [{ type: "integer" }, { type: "string" }] },
+            length: { type: "integer", description: "Minutes, 5 to 720 (default 60)" },
+            liveUrl: { type: "string", description: "https address of the shop's /live page" },
+            products: {
+              type: "array",
+              minItems: 1,
+              maxItems: 12,
+              items: {
+                type: "object",
+                required: ["name", "pricePence"],
+                properties: { name: { type: "string" }, imageUrl: { type: "string" }, pricePence: { type: "integer", description: "The current price including VAT, in pence" } },
+              },
+            },
+            delivery: { type: "string", description: "The delivery line shown beside the prices, e.g. \"Free UK delivery\"" },
+            returns: { type: "string", description: "The shop's returns line for the show (Connect's setting)" },
+            youtubeId: { type: "string", description: "The show's YouTube video id, for the reminder's \"Or on YouTube\" line" },
+            offer: {
+              type: "object",
+              required: ["code", "what", "endsAt"],
+              properties: {
+                code: { type: "string" },
+                what: { type: "string", description: "What the code does, from the coupon's settings, e.g. \"10% off\"" },
+                endsAt: { description: "The coupon's expiry: UTC seconds or an ISO date-time with its zone", oneOf: [{ type: "integer" }, { type: "string" }] },
+                conditions: { type: "string", description: "Its key conditions, from the coupon's settings, e.g. \"One use per customer.\"" },
+              },
+            },
+          },
+        },
+        sends: { type: "array", items: { type: "string", enum: ["invite", "today", "reminder", "replay"] }, description: "Which to make (default all four)" },
+        replace: { type: "boolean", description: "Remake the ones still in Drafts" },
+        dryRun: { type: "boolean", description: "Render them and write nothing" },
+        tenant: TENANT_PROP,
+      },
+    },
+    async handler({ show, sends, replace, dryRun, tenant }) {
+      const res = await api(tenant)("/campaigns/live-show", {
+        method: "POST",
+        body: JSON.stringify({ show, sends, replace, dryRun }),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    },
+  },
+  {
     name: "uiiq_segment_list",
     description: "List contact segments.",
     inputSchema: { type: "object", properties: { tenant: TENANT_PROP } },
