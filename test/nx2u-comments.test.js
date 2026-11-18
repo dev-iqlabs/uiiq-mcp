@@ -62,11 +62,25 @@ test("shows and list call the queue routes; list defaults to the waiting comment
   assert.equal(r.requests[0].path, "/nx2u/comments?show=wc-a1b2c3d4e5f6&status=APPROVED");
 });
 
-test("moderate sends only the action and the reply", async () => {
+test("moderate sends only the action, the reply and Kim's rejection reason", async () => {
   let r = await call("uiiq_nx2u_comment_moderate", { id: "c1", action: "approve" }, [200, { comment: {} }]);
   assert.deepEqual(r.requests, [{ method: "PATCH", path: "/nx2u/comments/c1", body: { action: "approve" } }]);
   r = await call("uiiq_nx2u_comment_moderate", { id: "c1", action: "reply", reply: "Ships Monday." }, [200, { comment: {} }]);
   assert.deepEqual(r.requests[0].body, { action: "reply", reply: "Ships Monday." });
+  r = await call("uiiq_nx2u_comment_moderate", { id: "c1", action: "reject", reason: "PERSONAL_DETAILS" }, [200, { comment: {} }]);
+  assert.deepEqual(r.requests[0].body, { action: "reject", reason: "PERSONAL_DETAILS" });
+  r = await call("uiiq_nx2u_comment_moderate", { id: "c1", action: "hold" }, [200, { comment: {} }]);
+  assert.deepEqual(r.requests[0].body, { action: "hold" });
+  const schema = tools.uiiq_nx2u_comment_moderate.inputSchema.properties;
+  assert.deepEqual(schema.action.enum, ["approve", "reject", "reply", "hold", "release"]);
+  assert.deepEqual(schema.reason.enum, ["PERSONAL_DETAILS", "OFFENSIVE", "UNLAWFUL", "SPAM", "OFF_TOPIC", "FALSE_CLAIMS", "UNDER_18"]);
+  assert.match(tools.uiiq_nx2u_comment_moderate.description, /NEVER reject a comment because it is negative/);
+});
+
+test("settings keep the shop's own contact email, and nothing else named like one", async () => {
+  const r = await call("uiiq_nx2u_comment_settings_get", {}, [200, { settings: { contactEmail: "hello@ultimatecoins.co.uk", email: EMAIL, comments: [{ email: EMAIL }] } }]);
+  assert.deepEqual(r.result, { settings: { contactEmail: "hello@ultimatecoins.co.uk", comments: [{}] } });
+  assert.equal(tools.uiiq_nx2u_comment_settings_set.inputSchema.properties.retentionDays.maximum, 30);
 });
 
 test("settings get and set", async () => {
@@ -81,7 +95,7 @@ test("SABOTAGE CHECK: no tool returns a viewer's email, even when UIIQ sends one
     (await call("uiiq_nx2u_comment_list", { show: "wc-a1b2c3d4e5f6" }, [200, { comments: [leaky] }])).result,
     (await call("uiiq_nx2u_comment_moderate", { id: "c1", action: "approve" }, [200, { comment: leaky }])).result,
     (await call("uiiq_nx2u_comment_shows", {}, [200, { shows: [{ showRef: "wc-a1b2c3d4e5f6", email: EMAIL }] }])).result,
-    (await call("uiiq_nx2u_comment_settings_get", {}, [200, { settings: { enabled: true, email: EMAIL } }])).result,
+    (await call("uiiq_nx2u_comment_settings_get", {}, [200, { settings: { enabled: true, email: EMAIL, viewerEmail: EMAIL } }])).result,
   ];
   for (const a of answers) assert.ok(!JSON.stringify(a).includes(EMAIL), JSON.stringify(a));
   assert.deepEqual(answers[0].comments[0], { id: "c1", showRef: "wc-a1b2c3d4e5f6", firstName: "Sam", text: "Lovely", status: "PENDING", reply: { text: "Thanks" } });

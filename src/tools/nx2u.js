@@ -22,12 +22,17 @@ const EVENT_KINDS = ["OPEN_MIC", "FUNERAL", "WEDDING", "SHOW", "CORPORATE", "CHA
 const TIERS = ["CREW", "SELF"];
 const ACCESS = ["PUBLIC", "UNLISTED", "PIN"];
 const COMMENT_STATUSES = ["PENDING", "APPROVED", "REJECTED"];
+// Kim's K5.6 reasons (live-moderation-rules-v1). Never "negative": publishing only the good ones misleads (DMCC Act).
+const REJECT_REASONS = ["PERSONAL_DETAILS", "OFFENSIVE", "UNLAWFUL", "SPAM", "OFF_TOPIC", "FALSE_CLAIMS", "UNDER_18"];
 
-/** A copy with every key that names an email dropped, at any depth: a viewer's email never leaves through a tool. */
-export function withoutEmail(value) {
-  if (Array.isArray(value)) return value.map(withoutEmail);
+/**
+ * A copy with every key that names an email dropped, at any depth: a viewer's email never leaves through a tool.
+ * `keep` names the keys that are no viewer's (the shop's own published contact email in the settings).
+ */
+export function withoutEmail(value, keep = []) {
+  if (Array.isArray(value)) return value.map((v) => withoutEmail(v, keep));
   if (!value || typeof value !== "object") return value;
-  return Object.fromEntries(Object.entries(value).filter(([k]) => !/e[\W_]*mail/i.test(k)).map(([k, v]) => [k, withoutEmail(v)]));
+  return Object.fromEntries(Object.entries(value).filter(([k]) => keep.includes(k) || !/e[\W_]*mail/i.test(k)).map(([k, v]) => [k, withoutEmail(v, keep)]));
 }
 
 export const nx2uTools = [
@@ -291,19 +296,20 @@ export const nx2uTools = [
   },
   {
     name: "uiiq_nx2u_comment_moderate",
-    description: "Approve a viewer's comment so it shows on the shop's /live page while the show is live (optionally with the shop's reply), reject it (its reply goes too), or reply to an approved one (reply: '' takes the reply off). Only the shop can reply; viewers can't reply to each other. Returns { comment }, never the viewer's email.",
+    description: `Kim's moderation rules (K5.6, live-moderation-rules-v1). approve: shows it on the shop's /live page while the show is live (optionally with the shop's reply). reject: needs reason, one of ${REJECT_REASONS.join(", ")}; NEVER reject a comment because it is negative or critical, and never edit one; its reply goes too. reply: to an approved comment ('' takes the reply off); only the shop replies. hold: anything that may be a crime (threats, child abuse material or grooming, terrorism): not shown, not deleted, and tell Steve at once. release: lift a hold (owner/admin). Returns { comment }, never the viewer's email.`,
     inputSchema: {
       type: "object",
       required: ["id", "action"],
       properties: {
         id: { type: "string" },
-        action: { type: "string", enum: ["approve", "reject", "reply"] },
+        action: { type: "string", enum: ["approve", "reject", "reply", "hold", "release"] },
         reply: { type: "string", description: "The shop's reply, plain text, up to 500 characters. Needed for reply; optional with approve." },
+        reason: { type: "string", enum: REJECT_REASONS, description: "Why it is rejected (needed for reject)" },
         tenant: TENANT_PROP,
       },
     },
-    async handler({ id, action, reply, tenant }) {
-      const body = reply === undefined ? { action } : { action, reply };
+    async handler({ id, action, reply, reason, tenant }) {
+      const body = { action, ...(reply === undefined ? {} : { reply }), ...(reason === undefined ? {} : { reason }) };
       const res = await api(tenant)(`/nx2u/comments/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify(body) });
       if (!res.ok) throw await fail(res);
       return withoutEmail(await res.json());
@@ -311,22 +317,22 @@ export const nx2uTools = [
   },
   {
     name: "uiiq_nx2u_comment_settings_get",
-    description: "Whether the shop's /live page takes comments and ratings (off until an owner or admin turns it on), how many days viewers' emails and comments not approved are kept (default 30), and the words for the page, the privacy notice and staff (Kim's; nothing is taken while they are placeholders: wordsReady false).",
+    description: "Whether the shop's /live page takes comments and ratings (off until an owner or admin turns it on), how many days after a show ends its comments and rating tokens are kept (Kim K5.3: 30, or less), the shop's contact email her rules name (comments can't open without it: ready false), and her words (K5.1 rules, K5.2 form, K5.4 privacy addition, K5.5 Online Safety Act note, K5.6 moderation rules) with their version ids.",
     inputSchema: { type: "object", properties: { tenant: TENANT_PROP } },
     async handler({ tenant } = {}) {
       const res = await api(tenant)("/nx2u/comments/settings");
       if (!res.ok) throw await fail(res);
-      return withoutEmail(await res.json());
+      return withoutEmail(await res.json(), ["contactEmail"]);
     },
   },
   {
     name: "uiiq_nx2u_comment_settings_set",
-    description: "Turn live comments and ratings on or off for the shop's /live page, or set the retention period in days, 1 to 90 (owner/admin). A shorter period applies to comments already held; a longer one only to new ones.",
-    inputSchema: { type: "object", properties: { enabled: { type: "boolean" }, retentionDays: { type: "number", minimum: 1, maximum: 90 }, tenant: TENANT_PROP } },
+    description: "Turn live comments and ratings on or off for the shop's /live page (they can't go on without contactEmail), set the shop's contact email shown in the rules (contactEmail, or null), or set how many days after a show ends comments and rating tokens are kept, 1 to 30 (owner/admin).",
+    inputSchema: { type: "object", properties: { enabled: { type: "boolean" }, retentionDays: { type: "number", minimum: 1, maximum: 30 }, contactEmail: { type: ["string", "null"] }, tenant: TENANT_PROP } },
     async handler({ tenant, ...body }) {
       const res = await api(tenant)("/nx2u/comments/settings", { method: "PUT", body: JSON.stringify(body) });
       if (!res.ok) throw await fail(res);
-      return withoutEmail(await res.json());
+      return withoutEmail(await res.json(), ["contactEmail"]);
     },
   },
 ];
