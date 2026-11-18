@@ -1252,7 +1252,7 @@ Statements only: nothing here charges, finalises, sends or invoices anything (Ui
 | `uiiq_admin_live_fees_platform_set` | Set the show length and the grace, from now on. Audited. |
 | `uiiq_admin_live_fee_statements` | A workspace's statements, newest first, and the next month that may close. |
 | `uiiq_admin_live_fee_statement_get` | One month's statement: closed as closed, open worked out now, with what stops it closing and what closing asks a reason for. `format: "csv"` for the CSV. |
-| `uiiq_admin_live_fee_manual_show_add` | Add a show by hand to an open month, with a reason. Audited. If NX2U also counted a show, closing asks a person why both count. |
+| `uiiq_admin_live_fee_manual_show_add` | Add a show by hand to an open month, with a reason. Audited. If NX2U also counted a show, closing asks a person why both count. One within a show length of a show already added is refused ("Already added ..."): `another: true` says it is another show. |
 | `uiiq_admin_live_fee_show_exclude` | Exclude an NX2U show from an open month with a reason (a restarted stream, a rehearsal): kept, not charged. Audited. |
 | `uiiq_admin_live_fee_line_remove` | Take a line a platform admin added (manual show, exclusion, correction) off an open month. Audited. |
 | `uiiq_billing_live_fees` | The workspace's own closed statements, read-only, while its retailer switch is on (owner/admin). |

@@ -109,7 +109,7 @@ export const liveFeesTools = [
   {
     name: "uiiq_admin_live_fee_manual_show_add",
     description:
-      "Add a show to a workspace's OPEN live-fee month by hand (one NX2U didn't stream, such as YouTube only), with a reason. Audited. If NX2U also counted a show that month, closing asks a person why both count. SUPER_ADMIN only.",
+      "Add a show to a workspace's OPEN live-fee month by hand (one NX2U didn't stream, such as YouTube only), with a reason. Audited. If NX2U also counted a show that month, closing asks a person why both count. UiiQ refuses one within a show length of a show already added (409 \"Already added ...\"): if it is another show, send it again with another: true (Lucas R159-14). SUPER_ADMIN only.",
     inputSchema: {
       type: "object",
       required: ["tenantId", "period", "title", "showAt", "reason"],
@@ -119,11 +119,20 @@ export const liveFeesTools = [
         title: { type: "string", maxLength: 200 },
         showAt: { type: "string", description: "When the show was, ISO 8601, inside the period." },
         reason: REASON,
+        another: { type: "boolean", description: "It is another show, not the one already added near that time (UiiQ refuses one within a show length of another without it)." },
       },
     },
-    async handler({ tenantId, period, title, showAt, reason }) {
-      const body = { kind: "MANUAL_SHOW", title, showAt, reason };
-      return ok(await api()(`/admin/tenants/${enc(tenantId)}/live-fees/statements/${enc(period)}/lines`, { method: "POST", body: JSON.stringify(body) }));
+    async handler({ tenantId, period, title, showAt, reason, another }) {
+      const body = { kind: "MANUAL_SHOW", title, showAt, reason, ...(another === true ? { another: true } : {}) };
+      const res = await api()(`/admin/tenants/${enc(tenantId)}/live-fees/statements/${enc(period)}/lines`, { method: "POST", body: JSON.stringify(body) });
+      if (res.status === 409) {
+        const text = await res.text();
+        let why = text;
+        try { why = JSON.parse(text)?.error || text; } catch { /* not JSON */ }
+        if (/^Already added/.test(why)) throw new Error(/another: true/.test(why) ? why : `${why} If it is another show, send it again with another: true.`);
+        throw new Error(text);
+      }
+      return ok(res);
     },
   },
   {
