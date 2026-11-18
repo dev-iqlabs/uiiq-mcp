@@ -69,7 +69,7 @@ UIIQ is one subscription whose modules are grouped as **Sell**, **Grow** and **R
 | Appeals | `uiiq_appeal_*`, `uiiq_admin_appeal_suspend` | Fundraising appeals on a cause: draft, publish under the Fundraising Regulator's Code, match pledges, updates emailed to supporters (needs the `appeals` feature) |
 | Competitions | `uiiq_competition_*` | Competitions in rounds: set up, rounds, entries, judges' scores, Decide (which issues the prize codes when the competition gives them), what a nominee agreed to, the round's posts as drafts, erasure; comment-to-enter draws (type `DRAW`, needs `competition_social`) take entries as comments on the call post, and each round is locked, then drawn; generated terms and conditions, previewed and published as frozen versions (needs the `competitions` feature; deciding, locking, drawing, issuing a prize code, publishing the terms, erasing, clearing a post's mark and putting a call video on the call post are dry runs until `confirm: true`; no post is published); a round's call video (needs UiiQ's `COMPETITION_CALL_CAMPAIGN` switch): its price, its progress and putting it on the draft call post, never making it (that's in UiiQ's dashboard only, by the person who watched the video); a judged round's public vote (needs `competition_vote`): its finalists and times, the count once confirmations close, the count's sign-off and discounting a vote on evidence |
 | Auctions | `uiiq_auction_*` | The seller's side: draft, lots, publish, bids, withdraw, defaults (needs the `auctions` feature; buyers bid through the public API) |
-| NX2U live streaming | `uiiq_nx2u_*` | Channels, events, the control room (provision, running order, slate, end, replay), the video library, usage (needs the `nx2u` feature; platform switches OFF until Steve turns them on) |
+| NX2U live streaming | `uiiq_nx2u_*` | Channels, events, the control room (provision, running order, slate, end, replay), the video library, usage, and moderating viewers' comments from the shop's /live page (approve, reject, reply; never a viewer's email) (needs the `nx2u` feature; platform switches OFF until Steve turns them on) |
 | Funding, estimates, integrations | `uiiq_funding_*`, `uiiq_estimates_*`, `uiiq_integrations_*`, `uiiq_virtual_office_*` | Funding projects, headings, allocations and claims (Xero invoices); estimates with lines and proposals; integration sources and Xero config; compliance reminders |
 | Workflow config | `uiiq_workflow_*` | Workflow types, tiers and keepsakes, connected sites (tokens shown once), the workspace's own types list, the board, email triggers, order assignment and approval requests |
 | Mail | `uiiq_mail_*` | The Office → Mail log: items received, scanned, forwarded, shredded |
@@ -1225,6 +1225,11 @@ Needs the `competitions` feature. Setting up, rounds, the nominee confirmation a
 | `uiiq_nx2u_library_verify` | Check again that the video library ENFORCES token authentication with its stored key (owner/admin). PIN and UNLISTED streams play only while it is verified. |
 | `uiiq_nx2u_library_set` | Record (or re-key) the tenant's video library (owner/admin). |
 | `uiiq_nx2u_usage` | The tenant's last twelve months of NX2U delivery: viewer-seconds, GB, events. |
+| `uiiq_nx2u_comment_shows` | Live shows with viewer comments from the shop's /live page, latest first, with how many wait, are shown and were rejected. |
+| `uiiq_nx2u_comment_list` | One show's comments in one state (PENDING by default: the queue to approve). Never a viewer's email. |
+| `uiiq_nx2u_comment_moderate` | Approve (optionally with the shop's reply), reject, or reply to an approved comment. Only the shop replies. Never returns the viewer's email. |
+| `uiiq_nx2u_comment_settings_get` | Whether the /live page takes comments and ratings, the retention period, and the words (Kim's; nothing is taken while they are placeholders). |
+| `uiiq_nx2u_comment_settings_set` | Turn comments and ratings on or off, or set the retention period, 1 to 90 days (owner/admin). |
 
 ### locality — `src/tools/locality.js`
 
