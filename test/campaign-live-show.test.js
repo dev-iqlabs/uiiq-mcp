@@ -56,6 +56,12 @@ test("uiiq_campaign_live_show_drafts: posts the show and the options to its rout
   assert.deepEqual(result, out);
 });
 
+test("uiiq_campaign_live_show_drafts: a change (moved or cancelled) is passed on", async () => {
+  const { requests } = await call("uiiq_campaign_live_show_drafts", { show, change: "cancelled" }, [201, { drafts: [] }]);
+  assert.deepEqual(requests[0].body, { show, change: "cancelled" });
+  assert.deepEqual(tools.uiiq_campaign_live_show_drafts.inputSchema.properties.change.enum, ["moved", "cancelled"]);
+});
+
 test("uiiq_campaign_live_show_drafts: UiiQ's refusal is the error", async () => {
   await assert.rejects(call("uiiq_campaign_live_show_drafts", { show }, [400, { error: "show.delivery is required" }]), /show\.delivery is required/);
 });
