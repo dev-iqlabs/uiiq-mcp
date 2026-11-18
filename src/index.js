@@ -60,6 +60,7 @@ import { appealsTools }         from "./tools/appeals.js";
 import { competitionTools }     from "./tools/competitions.js";
 import { auctionsTools }        from "./tools/auctions.js";
 import { nx2uTools }            from "./tools/nx2u.js";
+import { liveFeesTools }        from "./tools/live-fees.js";
 import { adminOpsTools } from "./tools/admin-ops.js";
 import { adminPlatformTools } from "./tools/admin-platform.js";
 import { apiTools } from "./tools/api.js";
@@ -139,6 +140,7 @@ const ALL_TOOLS = [
   ...competitionTools,
   ...auctionsTools,
   ...nx2uTools,
+  ...liveFeesTools,
   ...adminOpsTools,
   ...adminPlatformTools,
   ...apiTools,
