@@ -45,6 +45,34 @@ export const CHILD_RECORDS_CODE = "child_records_browser_only";
 const CHILD_RECORDS_STOP =
   " This is UiiQ's rule for children's records (no AI session reads them), not an expired session: don't retry or sign in again. The person uses the UiiQ dashboard in a browser for it.";
 
+// A workspace under the classes data processing agreement (UiiQ-platform R249, Lucas M2): UiiQ refuses a machine
+// session's call to any route that isn't on its no-people list with a 307 to /api/people-browser-only, which answers
+// a 403 with code contacts_browser_only and rule classes-dpa-default-deny. This client asks with redirect: "manual",
+// so it sees the 307. Either is the agreement, not an expired session: never retried, never met with a new sign-in.
+export const PEOPLE_BROWSER_ONLY_CODE = "contacts_browser_only";
+export const PEOPLE_BROWSER_ONLY_RULE = "classes-dpa-default-deny";
+export const PEOPLE_BROWSER_ONLY_PATH = "/api/people-browser-only";
+export const PEOPLE_BROWSER_ONLY_WORDS = "This workspace's people data can only be read in UiiQ in a browser.";
+const PEOPLE_BROWSER_ONLY_STOP = " It is the workspace's data processing agreement, not an expired session: don't retry or sign in again.";
+
+// The refusal, as a redirect to its route or as its own 403.
+function peopleBrowserOnly(res, body) {
+  if (res.status >= 300 && res.status < 400) {
+    try {
+      return new URL(res.headers.get("location") ?? "", "http://uiiq.invalid").pathname === PEOPLE_BROWSER_ONLY_PATH;
+    } catch {
+      return false;
+    }
+  }
+  return res.status === 403 && body?.code === PEOPLE_BROWSER_ONLY_CODE && body?.rule === PEOPLE_BROWSER_ONLY_RULE;
+}
+
+function peopleBrowserOnlyRefused() {
+  const e = new Error(`${PEOPLE_BROWSER_ONLY_WORDS}${PEOPLE_BROWSER_ONLY_STOP}`);
+  e.code = PEOPLE_BROWSER_ONLY_CODE;
+  return e;
+}
+
 // A 403 is read to the end and handed back as a fresh Response, with its JSON body if it has one.
 async function readRefusal(res) {
   if (res.status !== 403) return { res, body: null };
@@ -55,9 +83,10 @@ async function readRefusal(res) {
 }
 
 // What a response means for the session: "refused" (the child-records rule: stop, never sign in
-// again), "expired" (sign in again and retry once) or "ok".
-function verdict(res, body) {
+// again), "browser-only" (the classes-DPA rule: the same), "expired" (sign in again and retry once) or "ok".
+export function verdict(res, body) {
   if (res.status === 403 && body?.code === CHILD_RECORDS_CODE) return "refused";
+  if (peopleBrowserOnly(res, body)) return "browser-only";
   return authExpired(res) ? "expired" : "ok";
 }
 
@@ -381,6 +410,7 @@ function baseCaller() {
     const { res, body } = await readRefusal(await doFetch(creds, p, init, extraCookies));
     const v = verdict(res, body);
     if (v === "refused") throw childRecordsRefused(body);
+    if (v === "browser-only") throw peopleBrowserOnlyRefused();
     return { res, expired: v === "expired" };
   };
 
