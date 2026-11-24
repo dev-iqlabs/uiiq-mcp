@@ -223,6 +223,8 @@ test("busy vs definite: no definite answer keeps the request_id and says to send
     assert.equal(r.error.requestId, id, what);
     assert.ok(r.error.message.includes(`SAME request_id "${id}"`), `${what}: ${r.error.message}`);
     assert.doesNotMatch(r.error.message, /is finished/, what);
+    // Sent once: a second send with a new id would be a second charge (Lucas R300-11).
+    assert.equal(charged(r.requests).length, 1, `${what}: sent once`);
   }
 });
 
