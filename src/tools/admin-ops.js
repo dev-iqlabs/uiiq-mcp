@@ -540,7 +540,7 @@ export const adminOpsTools = [
     inputSchema: { type: "object", properties: { formKey: { type: "string" }, outPath: { type: "string" } } },
     async handler({ formKey, outPath } = {}) {
       const qs = formKey ? `?formKey=${encodeURIComponent(formKey)}` : "";
-      const res = await api()(`/admin/iqex-forms/pdf${qs}`);
+      const res = await api()(`/admin/iqex-forms/pdf${qs}`, { expectHtml: true });
       if (!res.ok) throw await fail(res);
       const html = await res.text();
       if (outPath) return save(outPath, html);
@@ -562,7 +562,7 @@ export const adminOpsTools = [
     inputSchema: { type: "object", properties: { slug: { type: "string" }, outPath: { type: "string" } } },
     async handler({ slug, outPath } = {}) {
       const qs = slug ? `?slug=${encodeURIComponent(slug)}` : "";
-      const res = await api()(`/admin/iqex-forms/system-pdf${qs}`);
+      const res = await api()(`/admin/iqex-forms/system-pdf${qs}`, { expectHtml: true });
       if (!res.ok) throw await fail(res);
       const html = await res.text();
       if (outPath) return save(outPath, html);
