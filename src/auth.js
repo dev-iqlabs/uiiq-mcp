@@ -25,12 +25,16 @@ function saveCreds(data) {
 }
 
 // A response is "auth expired" when the NextAuth middleware bounces an API call
-// to the login page (307 → /login) or returns 401 / an HTML page instead of JSON.
+// to the login page (307 → /login) or returns 401 / an HTML page (below 500) instead of JSON.
 function authExpired(res) {
   if (res.status === 401) return true;
   if (res.status >= 300 && res.status < 400) {
     return (res.headers.get("location") ?? "").includes("/login");
   }
+  // CloudFront's 502, 503 and 504 pages are HTML too, but they aren't an expired session. Signing in again
+  // would send the same request a second time, and a POST may already have done its work behind the error
+  // (Lucas R300-05). A 5xx is handed back as it came.
+  if (res.status >= 500) return false;
   return (res.headers.get("content-type") ?? "").includes("text/html");
 }
 
