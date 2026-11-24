@@ -26,7 +26,7 @@ function saveCreds(data) {
 
 // A response is "auth expired" when the NextAuth middleware bounces an API call
 // to the login page (307 → /login) or returns 401 / an HTML page (below 500) instead of JSON.
-function authExpired(res) {
+function authExpired(res, expectHtml = false) {
   if (res.status === 401) return true;
   if (res.status >= 300 && res.status < 400) {
     return (res.headers.get("location") ?? "").includes("/login");
@@ -35,6 +35,9 @@ function authExpired(res) {
   // would send the same request a second time, and a POST may already have done its work behind the error
   // (Lucas R300-05). A 5xx is handed back as it came.
   if (res.status >= 500) return false;
+  // A call that asks for an HTML page (the IQEX form spec sheets) gets one as its answer, so HTML there isn't an
+  // expired session. UiiQ's own bounce is a 307 to /login, caught above, and a 401 is caught first (Lucas R307-01).
+  if (expectHtml) return false;
   return (res.headers.get("content-type") ?? "").includes("text/html");
 }
 
@@ -88,10 +91,11 @@ async function readRefusal(res) {
 
 // What a response means for the session: "refused" (the child-records rule: stop, never sign in
 // again), "browser-only" (the classes-DPA rule: the same), "expired" (sign in again and retry once) or "ok".
-export function verdict(res, body) {
+// expectHtml: the caller asked for an HTML page, so one isn't read as an expired session (R308).
+export function verdict(res, body, { expectHtml = false } = {}) {
   if (res.status === 403 && body?.code === CHILD_RECORDS_CODE) return "refused";
   if (peopleBrowserOnly(res, body)) return "browser-only";
-  return authExpired(res) ? "expired" : "ok";
+  return authExpired(res, expectHtml) ? "expired" : "ok";
 }
 
 /** The text a failed answer with no body is given: its status, so no tool throws an empty error. */
@@ -410,9 +414,10 @@ function baseCaller() {
   };
 
   // One call and what it means: a child-records refusal throws at once, before anything else is tried.
-  const attempt = async (p, init, extraCookies) => {
+  // init.expectHtml is the caller's word that an HTML page is the answer (R308); it isn't sent.
+  const attempt = async (p, { expectHtml, ...init }, extraCookies) => {
     const { res, body } = await readRefusal(await doFetch(creds, p, init, extraCookies));
-    const v = verdict(res, body);
+    const v = verdict(res, body, { expectHtml });
     if (v === "refused") throw childRecordsRefused(body);
     if (v === "browser-only") throw peopleBrowserOnlyRefused();
     return { res, expired: v === "expired" };
