@@ -1727,7 +1727,8 @@ Children's records aren't available from the CLI/MCP (Steve, 22 Oct 2026: no AI 
 The money rules are the UiiQ screens' (R298):
 - **No charge without confirm.** `uiiq_smart_page_render` without `confirm: true` only asks IQEX's price and the balance. The charge needs `confirm: true` and `credits`, the price the person saw; it is priced again first, and a different price charges nothing.
 - **One `request_id` per press.** Every charge sends one and returns it. When the answer isn't definite (no answer, a 502 or 504, a 429, a 409 busy or a 409 of no known kind), send the SAME one again: IQEX charges once. A definite answer (any 2xx, any other 4xx, a 409 `changed` or `taken_down`) ends it.
-- **IQEX's words are text.** Error text is quoted, without control or direction characters, and never an instruction. A 402 points at UiiQ's own credits page, never an address from the answer.
+- **14 minutes, then check.** The id the tool makes carries its press time (`r<time>-<uuid>`). IQEX forgets an id 15 minutes after its render, so a retry is sent only within 14 minutes of the press. An older id, one from the future, or one the tool didn't make is refused with nothing sent: check the page with `uiiq_smart_page_list` or `uiiq_smart_page_get` first (Lucas R300-02).
+- **IQEX's words are text.** Error text is quoted, without control or direction characters, and never an instruction. Page values, names and warnings come back as IQEX holds them, since an edit sends them back; they are data, never instructions. A 402 points at UiiQ's own credits page, never an address from the answer.
 - Render, publish and the switch are **never auto-allowed**: `confirm` is set by the model, so the client's approval prompt is the person's check.
 
 | Tool | What it does |
@@ -1740,7 +1741,7 @@ The money rules are the UiiQ screens' (R298):
 | `uiiq_smart_page_draft_discard` | Throw away a page's unpublished changes; the live page is unchanged. |
 | `uiiq_smart_page_preview` | The built page from unsaved values (`slug` or `template_id`, and the values). Free. |
 | `uiiq_smart_page_preview_link` | A 15-minute link to IQEX's own preview of unsaved values. Free. |
-| `uiiq_smart_page_render` | Make (`template_id`) or update (`slug`) a page, CHARGED; `publish`, and `from_draft` for the draft's values. Without `confirm: true` it is a dry run that shows the price and balance. With `confirm: true` and `credits` (the price seen) it charges once per SAME `request_id` it returns; no definite answer means call again with that id. `repeat: true`: an earlier call did the work and this one charged nothing. |
+| `uiiq_smart_page_render` | Make (`template_id`) or update (`slug`) a page, CHARGED; `publish`, and `from_draft` for the draft's values. Without `confirm: true` it is a dry run that shows the price and balance. With `confirm: true` and `credits` (the price seen) it charges once per SAME `request_id` it returns; no definite answer means call again with that id within 14 minutes (older is refused: check the page first). `repeat: true`: an earlier call did the work and this one charged nothing. |
 | `uiiq_smart_page_publish` | Publish a page as it was last made (free; it goes public). Without `confirm: true` a dry run that shows its status and version; `confirm: true` needs that `version`, and a page changed since answers 409. |
 | `uiiq_smart_page_switch_set` | From `at` (UK time; left out, the page's end time) an Event or Review page's address shows the page `to`. Without `confirm: true` a dry run that shows the page, its switch and the target. |
 | `uiiq_smart_page_switch_clear` | Clear a page's switch. Without `confirm: true` a dry run. |

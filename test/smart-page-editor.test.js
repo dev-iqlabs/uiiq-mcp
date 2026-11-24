@@ -6,6 +6,7 @@ import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import http from "node:http";
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync } from "node:fs";
+import { randomUUID } from "node:crypto";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -17,11 +18,11 @@ before(async () => {
     req.on("data", (c) => (body += c));
     req.on("end", () => {
       seen.push({ method: req.method, path: req.url.replace(/^\/api/, ""), ...(body ? { body: JSON.parse(body) } : {}) });
-      // One reply per request, in order: [status, json or raw text], or "drop" (the connection is cut).
+      // One reply per request, in order: [status, json or raw text, content type for text], or "drop" (the connection is cut).
       const reply = replies.shift() ?? [500, { error: "the test set no reply for this request" }];
       if (reply === "drop") return req.socket.destroy();
-      const [status, data] = reply;
-      res.writeHead(status, { "content-type": typeof data === "string" ? "text/html" : "application/json" });
+      const [status, data, type] = reply;
+      res.writeHead(status, { "content-type": typeof data === "string" ? type ?? "text/html" : "application/json" });
       res.end(typeof data === "string" ? data : JSON.stringify(data));
     });
   });
@@ -81,6 +82,10 @@ const EDIT = {
   switch: { switch_at: null, switch_to: null }, downloads: [], taken_down: null,
 };
 const ID = /^[A-Za-z0-9-]{8,64}$/;
+/** A request_id as the tool makes it, pressed `ago` milliseconds ago. */
+const stamped = (ago = 0) => `r${(Date.now() - ago).toString(36)}-${randomUUID()}`;
+const MIN = 60_000;
+const HELD = stamped(MIN);
 const UNSHOWN = /[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u2028-\u202e\u2060-\u2069\ufeff]/;
 const charged = (requests) => requests.filter((r) => r.path === "/smart-pages/editor/render" && r.body?.quote === undefined);
 const isChange = (r) => r.method !== "GET" && !(r.path === "/smart-pages/editor/render" && r.body?.quote === true);
@@ -189,9 +194,9 @@ test("a confirmed render charges exactly the body it priced, once, with a fresh 
 });
 
 test("request_id reuse: the one given is sent exactly; a bad one is refused before anything is sent", async () => {
-  const r = await call("uiiq_smart_page_render", confirmed({ request_id: "held-0001-abcd" }), [200, QUOTE], [200, DONE]);
-  assert.equal(charged(r.requests)[0].body.request_id, "held-0001-abcd");
-  assert.equal(r.result.requestId, "held-0001-abcd");
+  const r = await call("uiiq_smart_page_render", confirmed({ request_id: HELD }), [200, QUOTE], [200, DONE]);
+  assert.equal(charged(r.requests)[0].body.request_id, HELD);
+  assert.equal(r.result.requestId, HELD);
   for (const request_id of ["short", "has space 123", "a".repeat(65), 12345678]) {
     const bad = await refused("uiiq_smart_page_render", confirmed({ request_id }), [200, QUOTE], [200, DONE]);
     assert.deepEqual(bad.requests, [], `request_id=${request_id}`);
@@ -207,7 +212,9 @@ test("busy vs definite: no definite answer keeps the request_id and says to send
     ["a 409 busy", [409, { error: "Another smart page for this organisation is being made. Try again in a moment.", kind: "busy" }]],
     ["a 409 of no known kind", [409, { error: "Another smart page for this organisation is being made. Try again in a moment." }]],
     ["a 409 of an unknown kind", [409, { error: "Locked.", kind: "locked" }]],
-    ["a 200 that isn't JSON", [200, "<html>ok</html>"]],
+    ["a 200 page (read as a lapsed sign-in)", [200, "<html>ok</html>"]],
+    ["a 200 that isn't JSON (Lucas R300-04)", [200, "ok", "text/plain"]],
+    ["a 200 with an empty JSON body (Lucas R300-04)", [200, "", "application/json"]],
   ];
   for (const [what, reply] of unclear) {
     const r = await refused("uiiq_smart_page_render", confirmed(), [200, QUOTE], reply);
@@ -238,7 +245,7 @@ test("busy vs definite: a definite refusal ends the request_id, charged nothing,
   }
   const poor = await refused("uiiq_smart_page_render", confirmed(), [200, QUOTE], definite[1]);
   assert.match(poor.error.message, /\/dashboard\/credits/);
-  const retry = await refused("uiiq_smart_page_render", confirmed({ request_id: "held-0001-abcd" }), [200, QUOTE], definite[0]);
+  const retry = await refused("uiiq_smart_page_render", confirmed({ request_id: HELD }), [200, QUOTE], definite[0]);
   assert.match(retry.error.message, /An earlier call with this request_id may still have made the page/);
 });
 
@@ -256,11 +263,11 @@ test("request_id reuse: 502, then busy, then done is one request_id throughout, 
 });
 
 test("a retry whose price has moved charges nothing and says to keep the same request_id", async () => {
-  const r = await refused("uiiq_smart_page_render", confirmed({ request_id: "held-0001-abcd", credits: 150 }), [200, QUOTE]);
+  const r = await refused("uiiq_smart_page_render", confirmed({ request_id: HELD, credits: 150 }), [200, QUOTE]);
   assert.match(r.error.message, /the price is 100 credits, not the 150 confirmed/);
-  assert.match(r.error.message, /the same request_id "held-0001-abcd"/);
-  const down = await refused("uiiq_smart_page_render", confirmed({ request_id: "held-0001-abcd" }), [502, { error: "Smart pages can't reach IQEX just now." }]);
-  assert.match(down.error.message, /keep request_id "held-0001-abcd" for the retry/);
+  assert.ok(r.error.message.includes(`the same request_id "${HELD}"`), r.error.message);
+  const down = await refused("uiiq_smart_page_render", confirmed({ request_id: HELD }), [502, { error: "Smart pages can't reach IQEX just now." }]);
+  assert.ok(down.error.message.includes(`keep request_id "${HELD}" for the retry`), down.error.message);
   assert.deepEqual(charged(down.requests), []);
 });
 
@@ -328,6 +335,38 @@ test("the switch: dry runs read and change nothing; confirm sets or clears it", 
   assert.equal(r.result.wouldDo, "switch_clear");
   r = await call("uiiq_smart_page_switch_clear", { slug: SLUG, confirm: true }, [200, { switch_to: null }]);
   assert.deepEqual(r.requests, [{ method: "DELETE", path: `/smart-pages/editor/p/${SLUG}/switch` }]);
+});
+
+test("Lucas R300-02: a fresh request_id carries its press time, and one passed back is sent only within 14 minutes", async () => {
+  const t0 = Date.now();
+  const r = await call("uiiq_smart_page_render", confirmed(), [200, QUOTE], [200, DONE]);
+  const id = charged(r.requests)[0].body.request_id;
+  assert.match(id, /^r[0-9a-z]{1,11}-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
+  assert.ok(id.length <= 64);
+  const at = parseInt(id.slice(1, id.indexOf("-")), 36);
+  assert.ok(at >= t0 && at <= Date.now(), "stamped with the press time");
+  const ok = stamped(13 * MIN);
+  const sent = await call("uiiq_smart_page_render", confirmed({ request_id: ok }), [200, QUOTE], [200, DONE]);
+  assert.equal(charged(sent.requests)[0].body.request_id, ok, "13 minutes old: sent");
+});
+
+test("Lucas R300-02: a request_id past 14 minutes, from the future, or not made by the tool is refused with nothing sent", async () => {
+  const cases = [
+    ["15 minutes old", stamped(15 * MIN), /from more than 14 minutes ago, so IQEX no longer knows it/],
+    ["14 minutes old", stamped(14 * MIN), /from more than 14 minutes ago/],
+    ["a day old", stamped(24 * 60 * MIN), /from more than 14 minutes ago/],
+    ["from the future", stamped(-5 * MIN), /from more than 14 minutes ago/],
+    ["not the tool's", "held-0001-abcd", /wasn't made by this tool/],
+    ["a bare uuid", randomUUID(), /wasn't made by this tool/],
+  ];
+  for (const [what, request_id, said] of cases) {
+    for (const confirm of [true, undefined]) {
+      const r = await refused("uiiq_smart_page_render", confirmed({ request_id, confirm }), [200, QUOTE], [200, DONE]);
+      assert.match(r.error.message, said, what);
+      assert.match(r.error.message, /Nothing was sent\. Check uiiq_smart_page_list or uiiq_smart_page_get: if the page shows the change, don't render again/, what);
+      assert.deepEqual(r.requests, [], `${what}, confirm=${confirm}: nothing sent`);
+    }
+  }
 });
 
 test("render, publish and the switch say never auto-allow; the README lists every editor tool and the money rules", () => {
