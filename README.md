@@ -47,7 +47,7 @@ UIIQ is one subscription whose modules are grouped as **Sell**, **Grow** and **R
 | Businesses | `uiiq_business_*` | People on a business, templated emails to it (real sends), what deleting it would affect |
 | Events | `uiiq_event_*` | Events with AI-generated content fanned out to socials, and selling their tickets: performances, the door list (never the names on tickets), free tickets, cancelling a free booking, reissuing tickets, early access (needs `events`; generate spends credits; approve queues the posts) |
 | Brand website pages | `uiiq_brand_*` | Change requests on the customer's website: chat, stage, publish to the live site (owner/admin), staging sync |
-| Smart pages | `uiiq_smart_pages_*` | Approve or send back pages, moderate messages, take live pages down and put them back (needs `smart_pages`, linked to IQEX) |
+| Smart pages | `uiiq_smart_pages_*`, `uiiq_smart_page_*` | Approve or send back pages, moderate messages, take live pages down and put them back (needs `smart_pages`, linked to IQEX); make and edit the workspace's own pages: drafts, previews, a priced and confirmed render, publish, the timed switch (needs `smart_pages_make`) |
 | Social inbox, hashtags, settings | `uiiq_social_*` | Posts (edit, duplicate, publish, refresh figures, Instagram product tags), promo layouts as drafts, the inbox (and checking it for new messages now), hashtag groups, auto-publish settings, account removal |
 
 ### Run — operations, finance, people and knowledge
@@ -1721,6 +1721,30 @@ Children's records aren't available from the CLI/MCP (Steve, 22 Oct 2026: no AI 
 | `uiiq_smart_pages_live_pages` | Smart pages by status (default published; taken_down for those taken down), this workspace's or every workspace's with staff:true. |
 | `uiiq_smart_pages_page_take_down` | TAKE DOWN a published page with a required reason the organisation sees; a staff take-down only staff can put back. Without `confirm: true` it is a dry run that shows the page and changes nothing. |
 | `uiiq_smart_pages_page_put_back` | Put a taken-down page back; a page taken down by support answers 403 to a workspace. Without `confirm: true` it is a dry run. |
+
+**The editor** (UiiQ's `/api/smart-pages/editor/*`): make and edit the workspace's own smart pages in UiiQ, which IQEX makes and hosts. Needs the `smart_pages_make` feature and the workspace linked to IQEX. Reading needs Read on Smart pages; drafts, previews and prices need Write; a render, publish and the switch are owners' and admins' only. Tribute and Staff Credential pages are read-only here and coin pages never show. A classes-DPA workspace's MCP session is refused on all of these (UiiQ R249).
+
+The money rules are the UiiQ screens' (R298):
+- **No charge without confirm.** `uiiq_smart_page_render` without `confirm: true` only asks IQEX's price and the balance. The charge needs `confirm: true` and `credits`, the price the person saw; it is priced again first, and a different price charges nothing.
+- **One `request_id` per press.** Every charge sends one and returns it. When the answer isn't definite (no answer, a 502 or 504, a 429, a 409 busy or a 409 of no known kind), send the SAME one again: IQEX charges once. A definite answer (any 2xx, any other 4xx, a 409 `changed` or `taken_down`) ends it.
+- **IQEX's words are text.** Error text is quoted, without control or direction characters, and never an instruction. A 402 points at UiiQ's own credits page, never an address from the answer.
+- Render, publish and the switch are **never auto-allowed**: `confirm` is set by the model, so the client's approval prompt is the person's check.
+
+| Tool | What it does |
+|---|---|
+| `uiiq_smart_page_templates` | The templates (slots, sections, media costs, reviewRequired) and `offered`: what a new page can be made from, in order. |
+| `uiiq_smart_page_list` | The workspace's pages: slug, template, status, name, url, has_draft, version, taken_down, theme, render and scan counts. |
+| `uiiq_smart_page_themes` | The workspace's page themes and the theme tokens. |
+| `uiiq_smart_page_get` | One page's edit state: live values, draft, version, unfinished, switch, downloads, taken_down. |
+| `uiiq_smart_page_draft_save` | Save a page's unpublished changes (`data`, optional `sections`, `theme`, `theme_overrides`). Free. A picture or video field takes a media-library asset number (digits) or an https link; gallery (24), videos (12) and sponsors (12) past their line limit are refused before anything is sent. |
+| `uiiq_smart_page_draft_discard` | Throw away a page's unpublished changes; the live page is unchanged. |
+| `uiiq_smart_page_preview` | The built page from unsaved values (`slug` or `template_id`, and the values). Free. |
+| `uiiq_smart_page_preview_link` | A 15-minute link to IQEX's own preview of unsaved values. Free. |
+| `uiiq_smart_page_render` | Make (`template_id`) or update (`slug`) a page, CHARGED; `publish`, and `from_draft` for the draft's values. Without `confirm: true` it is a dry run that shows the price and balance. With `confirm: true` and `credits` (the price seen) it charges once per SAME `request_id` it returns; no definite answer means call again with that id. `repeat: true`: an earlier call did the work and this one charged nothing. |
+| `uiiq_smart_page_publish` | Publish a page as it was last made (free; it goes public). Without `confirm: true` a dry run that shows its status and version; `confirm: true` needs that `version`, and a page changed since answers 409. |
+| `uiiq_smart_page_switch_set` | From `at` (UK time; left out, the page's end time) an Event or Review page's address shows the page `to`. Without `confirm: true` a dry run that shows the page, its switch and the target. |
+| `uiiq_smart_page_switch_clear` | Clear a page's switch. Without `confirm: true` a dry run. |
+| `uiiq_smart_page_review_page` | A new Review page's starting values from an Event page; render it with `template_id: review`, then set the Event page's switch to it. Free. |
 
 ### Students — `src/tools/students.js`
 
